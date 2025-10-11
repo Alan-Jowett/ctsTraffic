@@ -17,27 +17,27 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <vector>
 #include <string>
 #include <memory>
-// os headers
+
 #include <Windows.h>
 #include <WinSock2.h>
-// ctl headers
+
 #include <ctString.hpp>
-#include <ctWmiInitialize.hpp>
-#include <ctWmiPerformance.hpp>
-// project headers
+#include <ctWmiService.hpp>
+#include <ctPerformanceCounter.hpp>
+
 #include "ctsWriteDetails.h"
 #include "ctsEstats.h"
-// wil headers always included last
+
 #include <wil/stl.h>
 #include <wil/resource.h>
 
 using namespace std;
 using namespace ctl;
 
-HANDLE g_break = nullptr;
-const ctWmiService* g_wmi = nullptr;
+static HANDLE g_break = nullptr;
+static const ctWmiService* g_wmi = nullptr;
 
-BOOL WINAPI BreakHandlerRoutine(DWORD) noexcept
+static BOOL WINAPI BreakHandlerRoutine(DWORD) noexcept
 {
     // regardless of the break type, signal to exit
     SetEvent(g_break);
@@ -79,26 +79,26 @@ constexpr PCWSTR c_usageStatement =
 // 0 is a possible process ID
 constexpr DWORD c_uninitializedProcessId = 0xffffffff;
 
-ctWmiPerformance InstantiateProcessorCounters();
-ctWmiPerformance InstantiateMemoryCounters();
-ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInterfaceDescription);
-ctWmiPerformance InstantiateNetworkInterfaceCounters(const std::wstring& trackInterfaceDescription);
-ctWmiPerformance InstantiateIPCounters();
-ctWmiPerformance InstantiateTCPCounters();
-ctWmiPerformance InstantiateUDPCounters();
-ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackProcess);
-ctWmiPerformance InstantiatePerProcessByPIDCounters(DWORD processId);
+static ctPerformanceCounter InstantiateProcessorCounters();
+static ctPerformanceCounter InstantiateMemoryCounters();
+static ctPerformanceCounter InstantiateNetworkAdapterCounters(const std::wstring& trackInterfaceDescription);
+static ctPerformanceCounter InstantiateNetworkInterfaceCounters(const std::wstring& trackInterfaceDescription);
+static ctPerformanceCounter InstantiateIPCounters();
+static ctPerformanceCounter InstantiateTCPCounters();
+static ctPerformanceCounter InstantiateUDPCounters();
+static ctPerformanceCounter InstantiatePerProcessByNameCounters(const std::wstring& trackProcess);
+static ctPerformanceCounter InstantiatePerProcessByPIDCounters(DWORD processId);
 
-void DeleteProcessorCounters() noexcept;
-void DeleteMemoryCounters() noexcept;
-void DeleteNetworkAdapterCounters() noexcept;
-void DeleteNetworkInterfaceCounters() noexcept;
-void DeleteIPCounters() noexcept;
-void DeleteTCPCounters() noexcept;
-void DeleteUDPCounters() noexcept;
-void DeletePerProcessCounters() noexcept;
+static void DeleteProcessorCounters() noexcept;
+static void DeleteMemoryCounters() noexcept;
+static void DeleteNetworkAdapterCounters() noexcept;
+static void DeleteNetworkInterfaceCounters() noexcept;
+static void DeleteIPCounters() noexcept;
+static void DeleteTCPCounters() noexcept;
+static void DeleteUDPCounters() noexcept;
+static void DeletePerProcessCounters() noexcept;
 
-void DeleteAllCounters() noexcept
+static void DeleteAllCounters() noexcept
 {
     DeleteProcessorCounters();
     DeleteMemoryCounters();
@@ -110,25 +110,25 @@ void DeleteAllCounters() noexcept
     DeletePerProcessCounters();
 }
 
-void ProcessProcessorCounters(ctsPerf::ctsWriteDetails& writer);
-void ProcessMemoryCounters(ctsPerf::ctsWriteDetails& writer);
-void ProcessNetworkAdapterCounters(ctsPerf::ctsWriteDetails& writer);
-void ProcessNetworkInterfaceCounters(ctsPerf::ctsWriteDetails& writer);
-void ProcessIPCounters(ctsPerf::ctsWriteDetails& writer);
-void ProcessTCPCounters(ctsPerf::ctsWriteDetails& writer);
-void ProcessUDPCounters(ctsPerf::ctsWriteDetails& writer);
-void ProcessPerProcessCounters(const wstring& trackProcess, DWORD processId, ctsPerf::ctsWriteDetails& writer);
+static void ProcessProcessorCounters(ctsPerf::ctsWriteDetails& writer);
+static void ProcessMemoryCounters(ctsPerf::ctsWriteDetails& writer);
+static void ProcessNetworkAdapterCounters(ctsPerf::ctsWriteDetails& writer);
+static void ProcessNetworkInterfaceCounters(ctsPerf::ctsWriteDetails& writer);
+static void ProcessIPCounters(ctsPerf::ctsWriteDetails& writer);
+static void ProcessTCPCounters(ctsPerf::ctsWriteDetails& writer);
+static void ProcessUDPCounters(ctsPerf::ctsWriteDetails& writer);
+static void ProcessPerProcessCounters(const wstring& trackProcess, DWORD processId, ctsPerf::ctsWriteDetails& writer);
 
-PCWSTR g_fileName = L"ctsPerf.csv";
-PCWSTR g_networkingFilename = L"ctsNetworking.csv";
-PCWSTR g_processFilename = L"ctsPerProcess.csv";
+static PCWSTR g_fileName = L"ctsPerf.csv";
+static PCWSTR g_networkingFilename = L"ctsNetworking.csv";
+static PCWSTR g_processFilename = L"ctsPerProcess.csv";
 
-bool g_meanOnly = false;
+static bool g_meanOnly = false;
 
 int __cdecl wmain(_In_ int argc, _In_reads_z_(argc) const wchar_t** argv)
 {
-    WSADATA wsadata;
-    if (const auto wsError = WSAStartup(WINSOCK_VERSION, &wsadata); wsError != 0)
+    WSADATA wsaData;
+    if (const auto wsError = WSAStartup(WINSOCK_VERSION, &wsaData); wsError != 0)
     {
         wprintf(L"ctsPerf failed at WSAStartup [%d]\n", wsError);
         return wsError;
@@ -275,8 +275,8 @@ int __cdecl wmain(_In_ int argc, _In_reads_z_(argc) const wchar_t** argv)
 
         auto deleteAllCounters = wil::scope_exit([&]() noexcept { DeleteAllCounters(); });
 
-        ctsPerf::ctsWriteDetails cpuwriter(g_fileName);
-        cpuwriter.CreateFile(g_meanOnly);
+        ctsPerf::ctsWriteDetails cpuWriter(g_fileName);
+        cpuWriter.CreateFile(g_meanOnly);
 
         ctsPerf::ctsWriteDetails networkWriter(g_networkingFilename);
         if (trackNetworking)
@@ -293,7 +293,7 @@ int __cdecl wmain(_In_ int argc, _In_reads_z_(argc) const wchar_t** argv)
         wprintf(L".");
 
         // create a perf counter objects to maintain these counters
-        std::vector<ctWmiPerformance> performanceVector;
+        std::vector<ctPerformanceCounter> performanceVector;
 
         performanceVector.emplace_back(InstantiateProcessorCounters());
         performanceVector.emplace_back(InstantiateMemoryCounters());
@@ -330,8 +330,8 @@ int __cdecl wmain(_In_ int argc, _In_reads_z_(argc) const wchar_t** argv)
             perfObject.stop_all_counters();
         }
 
-        ProcessProcessorCounters(cpuwriter);
-        ProcessMemoryCounters(cpuwriter);
+        ProcessProcessorCounters(cpuWriter);
+        ProcessMemoryCounters(cpuWriter);
 
         if (trackNetworking)
         {
@@ -367,23 +367,23 @@ int __cdecl wmain(_In_ int argc, _In_reads_z_(argc) const wchar_t** argv)
 /****************************************************************************************************/
 /*                                         Processor                                                */
 /****************************************************************************************************/
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_processorTime;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_processorPercentOfMax;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_processorPercentDpcTime;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_processorDpcsQueuedPerSecond;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_processorPercentPrivilegedTime;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_processorPercentUserTime;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_processorTime;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_processorPercentOfMax;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_processorPercentDpcTime;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_processorDpcsQueuedPerSecond;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_processorPercentPrivilegedTime;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_processorPercentUserTime;
 
-ctWmiPerformance InstantiateProcessorCounters()
+ctPerformanceCounter InstantiateProcessorCounters()
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     // create objects for system counters we care about
     g_processorTime = ctCreatePerfCounter<ULONGLONG>(
         *g_wmi,
         ctWmiEnumClassName::Processor,
         L"PercentProcessorTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_processorTime);
     wprintf(L".");
 
@@ -391,7 +391,7 @@ ctWmiPerformance InstantiateProcessorCounters()
         *g_wmi,
         ctWmiEnumClassName::Processor,
         L"PercentofMaximumFrequency",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_processorPercentOfMax);
     wprintf(L".");
 
@@ -399,7 +399,7 @@ ctWmiPerformance InstantiateProcessorCounters()
         *g_wmi,
         ctWmiEnumClassName::Processor,
         L"PercentDPCTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_processorPercentDpcTime);
     wprintf(L".");
 
@@ -407,7 +407,7 @@ ctWmiPerformance InstantiateProcessorCounters()
         *g_wmi,
         ctWmiEnumClassName::Processor,
         L"DPCsQueuedPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_processorDpcsQueuedPerSecond);
     wprintf(L".");
 
@@ -415,7 +415,7 @@ ctWmiPerformance InstantiateProcessorCounters()
         *g_wmi,
         ctWmiEnumClassName::Processor,
         L"PercentPrivilegedTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_processorPercentPrivilegedTime);
     wprintf(L".");
 
@@ -423,7 +423,7 @@ ctWmiPerformance InstantiateProcessorCounters()
         *g_wmi,
         ctWmiEnumClassName::Processor,
         L"PercentUserTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_processorPercentUserTime);
     wprintf(L".");
 
@@ -442,7 +442,7 @@ void DeleteProcessorCounters() noexcept
 
 void ProcessProcessorCounters(ctsPerf::ctsWriteDetails& writer)
 {
-    ctWmiEnumerate enumProcessors(*g_wmi);
+    ctWmiEnumerateInstance enumProcessors(*g_wmi);
     enumProcessors.query(L"SELECT * FROM Win32_PerfFormattedData_Counters_ProcessorInformation");
     if (enumProcessors.begin() == enumProcessors.end())
     {
@@ -574,17 +574,17 @@ void ProcessProcessorCounters(ctsPerf::ctsWriteDetails& writer)
 /****************************************************************************************************/
 /*                                            Memory                                                */
 /****************************************************************************************************/
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_pagedPoolBytes;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_nonPagedPoolBytes;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_pagedPoolBytes;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_nonPagedPoolBytes;
 
-ctWmiPerformance InstantiateMemoryCounters()
+ctPerformanceCounter InstantiateMemoryCounters()
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
     g_pagedPoolBytes = ctCreatePerfCounter<ULONGLONG>(
         *g_wmi,
         ctWmiEnumClassName::Memory,
         L"PoolPagedBytes",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_pagedPoolBytes);
     wprintf(L".");
 
@@ -592,7 +592,7 @@ ctWmiPerformance InstantiateMemoryCounters()
         *g_wmi,
         ctWmiEnumClassName::Memory,
         L"PoolNonpagedBytes",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_nonPagedPoolBytes);
     wprintf(L".");
 
@@ -644,24 +644,24 @@ void ProcessMemoryCounters(ctsPerf::ctsWriteDetails& writer)
 /****************************************************************************************************/
 /*                                     NetworkAdapter                                               */
 /****************************************************************************************************/
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterTotalBytes;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterOffloadedConnections;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterPacketsOutboundDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterPacketsOutboundErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterPacketsReceivedDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterPacketsReceivedErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterPacketsPerSecond;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkAdapterActiveRscConnections;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterTotalBytes;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterOffloadedConnections;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterPacketsOutboundDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterPacketsOutboundErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterPacketsReceivedDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterPacketsReceivedErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterPacketsPerSecond;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkAdapterActiveRscConnections;
 
-ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInterfaceDescription)
+ctPerformanceCounter InstantiateNetworkAdapterCounters(const std::wstring& trackInterfaceDescription)
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     g_networkAdapterTotalBytes = ctCreatePerfCounter<ULONGLONG>(
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"BytesTotalPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterTotalBytes->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -673,7 +673,7 @@ ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInte
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"OffloadedConnections",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterOffloadedConnections->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -685,7 +685,7 @@ ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInte
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"PacketsOutboundDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterPacketsOutboundDiscarded->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -697,7 +697,7 @@ ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInte
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"PacketsOutboundErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterPacketsOutboundErrors->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -709,7 +709,7 @@ ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInte
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"PacketsReceivedDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterPacketsReceivedDiscarded->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -721,7 +721,7 @@ ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInte
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"PacketsReceivedErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterPacketsReceivedErrors->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -733,7 +733,7 @@ ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInte
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"PacketsPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterPacketsPerSecond->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -745,7 +745,7 @@ ctWmiPerformance InstantiateNetworkAdapterCounters(const std::wstring& trackInte
         *g_wmi,
         ctWmiEnumClassName::NetworkAdapter,
         L"TCPActiveRSCConnections",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkAdapterActiveRscConnections->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -773,9 +773,9 @@ void ProcessNetworkAdapterCounters(ctsPerf::ctsWriteDetails& writer)
     vector<ULONGLONG> ullData;
 
     // there is no great way to find the 'Name' for each network interface tracked
-    // - it is not guaranteed to match anything from NetAdapter or NetIPInteface
+    // - it is not guaranteed to match anything from NetAdapter or NetIPInterface
     // - making a single query directly here to at least get the names
-    ctWmiEnumerate enumAdapter(*g_wmi);
+    ctWmiEnumerateInstance enumAdapter(*g_wmi);
     enumAdapter.query(L"SELECT * FROM Win32_PerfFormattedData_Tcpip_NetworkAdapter");
     if (enumAdapter.begin() == enumAdapter.end())
     {
@@ -890,22 +890,22 @@ void ProcessNetworkAdapterCounters(ctsPerf::ctsWriteDetails& writer)
 /****************************************************************************************************/
 /*                                     NetworkInterface                                             */
 /****************************************************************************************************/
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkInterfaceTotalBytes;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkInterfacePacketsOutboundDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkInterfacePacketsOutboundErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkInterfacePacketsReceivedDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkInterfacePacketsReceivedErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_networkInterfacePacketsReceivedUnknown;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkInterfaceTotalBytes;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkInterfacePacketsOutboundDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkInterfacePacketsOutboundErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkInterfacePacketsReceivedDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkInterfacePacketsReceivedErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_networkInterfacePacketsReceivedUnknown;
 
-ctWmiPerformance InstantiateNetworkInterfaceCounters(const std::wstring& trackInterfaceDescription)
+ctPerformanceCounter InstantiateNetworkInterfaceCounters(const std::wstring& trackInterfaceDescription)
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     g_networkInterfaceTotalBytes = ctCreatePerfCounter<ULONGLONG>(
         *g_wmi,
         ctWmiEnumClassName::NetworkInterface,
         L"BytesTotalPerSec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     if (!trackInterfaceDescription.empty())
     {
         g_networkInterfaceTotalBytes->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -917,7 +917,7 @@ ctWmiPerformance InstantiateNetworkInterfaceCounters(const std::wstring& trackIn
         *g_wmi,
         ctWmiEnumClassName::NetworkInterface,
         L"PacketsOutboundDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkInterfacePacketsOutboundDiscarded->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -929,7 +929,7 @@ ctWmiPerformance InstantiateNetworkInterfaceCounters(const std::wstring& trackIn
         *g_wmi,
         ctWmiEnumClassName::NetworkInterface,
         L"PacketsOutboundErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkInterfacePacketsOutboundErrors->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -941,7 +941,7 @@ ctWmiPerformance InstantiateNetworkInterfaceCounters(const std::wstring& trackIn
         *g_wmi,
         ctWmiEnumClassName::NetworkInterface,
         L"PacketsReceivedDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkInterfacePacketsReceivedDiscarded->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -953,7 +953,7 @@ ctWmiPerformance InstantiateNetworkInterfaceCounters(const std::wstring& trackIn
         *g_wmi,
         ctWmiEnumClassName::NetworkInterface,
         L"PacketsReceivedErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkInterfacePacketsReceivedErrors->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -965,7 +965,7 @@ ctWmiPerformance InstantiateNetworkInterfaceCounters(const std::wstring& trackIn
         *g_wmi,
         ctWmiEnumClassName::NetworkInterface,
         L"PacketsReceivedUnknown",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     if (!trackInterfaceDescription.empty())
     {
         g_networkInterfacePacketsReceivedUnknown->add_filter(L"Name", trackInterfaceDescription.c_str());
@@ -993,7 +993,7 @@ void ProcessNetworkInterfaceCounters(ctsPerf::ctsWriteDetails& writer)
     // there is no great way to find the 'Name' for each network interface tracked
     // - it is not guaranteed to match anything from NetAdapter or NetIPInterface
     // - making a single query directly here to at least get the names
-    ctWmiEnumerate enumAdapter(*g_wmi);
+    ctWmiEnumerateInstance enumAdapter(*g_wmi);
     enumAdapter.query(L"SELECT * FROM Win32_PerfFormattedData_Tcpip_NetworkInterface");
     if (enumAdapter.begin() == enumAdapter.end())
     {
@@ -1080,33 +1080,33 @@ void ProcessNetworkInterfaceCounters(ctsPerf::ctsWriteDetails& writer)
 /*                                        TCPIP IPv4                                                */
 /*                                        TCPIP IPv6                                                */
 /****************************************************************************************************/
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4OutboundDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4OutboundNoRoute;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4ReceivedAddressErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4ReceivedDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4ReceivedHeaderErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4ReceivedUnknownProtocol;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4FragmentReassemblyFailures;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv4FragmentationFailures;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4OutboundDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4OutboundNoRoute;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4ReceivedAddressErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4ReceivedDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4ReceivedHeaderErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4ReceivedUnknownProtocol;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4FragmentReassemblyFailures;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv4FragmentationFailures;
 
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6OutboundDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6OutboundNoRoute;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6ReceivedAddressErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6ReceivedDiscarded;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6ReceivedHeaderErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6ReceivedUnknownProtocol;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6FragmentReassemblyFailures;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipIpv6FragmentationFailures;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6OutboundDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6OutboundNoRoute;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6ReceivedAddressErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6ReceivedDiscarded;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6ReceivedHeaderErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6ReceivedUnknownProtocol;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6FragmentReassemblyFailures;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipIpv6FragmentationFailures;
 
-ctWmiPerformance InstantiateIPCounters()
+ctPerformanceCounter InstantiateIPCounters()
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     g_tcpipIpv4OutboundDiscarded = ctCreatePerfCounter<ULONG>(
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"DatagramsOutboundDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4OutboundDiscarded);
     wprintf(L".");
 
@@ -1114,7 +1114,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"DatagramsOutboundNoRoute",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4OutboundNoRoute);
     wprintf(L".");
 
@@ -1122,7 +1122,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"DatagramsReceivedAddressErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4ReceivedAddressErrors);
     wprintf(L".");
 
@@ -1130,7 +1130,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"DatagramsReceivedDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4ReceivedDiscarded);
     wprintf(L".");
 
@@ -1138,7 +1138,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"DatagramsReceivedHeaderErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4ReceivedHeaderErrors);
     wprintf(L".");
 
@@ -1146,7 +1146,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"DatagramsReceivedUnknownProtocol",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4ReceivedUnknownProtocol);
     wprintf(L".");
 
@@ -1154,7 +1154,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"FragmentReassemblyFailures",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4FragmentReassemblyFailures);
     wprintf(L".");
 
@@ -1162,7 +1162,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv4,
         L"FragmentationFailures",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv4FragmentationFailures);
     wprintf(L".");
 
@@ -1170,7 +1170,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"DatagramsOutboundDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6OutboundDiscarded);
     wprintf(L".");
 
@@ -1178,7 +1178,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"DatagramsOutboundNoRoute",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6OutboundNoRoute);
     wprintf(L".");
 
@@ -1186,7 +1186,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"DatagramsReceivedAddressErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6ReceivedAddressErrors);
     wprintf(L".");
 
@@ -1194,7 +1194,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"DatagramsReceivedDiscarded",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6ReceivedDiscarded);
     wprintf(L".");
 
@@ -1202,7 +1202,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"DatagramsReceivedHeaderErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6ReceivedHeaderErrors);
     wprintf(L".");
 
@@ -1210,7 +1210,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"DatagramsReceivedUnknownProtocol",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6ReceivedUnknownProtocol);
     wprintf(L".");
 
@@ -1218,7 +1218,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"FragmentReassemblyFailures",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6FragmentReassemblyFailures);
     wprintf(L".");
 
@@ -1226,7 +1226,7 @@ ctWmiPerformance InstantiateIPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipIpv6,
         L"FragmentationFailures",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipIpv6FragmentationFailures);
     wprintf(L".");
 
@@ -1380,24 +1380,24 @@ void ProcessIPCounters(ctsPerf::ctsWriteDetails& writer)
 /*                                        TCPIP TCPv4                                                */
 /*                                        TCPIP TCPv6                                                */
 /****************************************************************************************************/
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipTcpv4ConnectionsEstablished;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipTcpv6ConnectionsEstablished;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipTcpv4ConnectionFailures;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipTcpv6ConnectionFailures;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipTcpv4ConnectionsReset;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipTcpv6ConnectionsReset;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_winsockBspRejectedConnections;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_winsockBspRejectedConnectionsPerSec;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipTcpv4ConnectionsEstablished;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipTcpv6ConnectionsEstablished;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipTcpv4ConnectionFailures;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipTcpv6ConnectionFailures;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipTcpv4ConnectionsReset;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipTcpv6ConnectionsReset;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_winsockBspRejectedConnections;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_winsockBspRejectedConnectionsPerSec;
 
-ctWmiPerformance InstantiateTCPCounters()
+ctPerformanceCounter InstantiateTCPCounters()
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     g_tcpipTcpv4ConnectionsEstablished = ctCreatePerfCounter<ULONG>(
         *g_wmi,
         ctWmiEnumClassName::TcpipTcpv4,
         L"ConnectionsEstablished",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_tcpipTcpv4ConnectionsEstablished);
     wprintf(L".");
 
@@ -1405,7 +1405,7 @@ ctWmiPerformance InstantiateTCPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipTcpv6,
         L"ConnectionsEstablished",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_tcpipTcpv6ConnectionsEstablished);
     wprintf(L".");
 
@@ -1413,7 +1413,7 @@ ctWmiPerformance InstantiateTCPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipTcpv4,
         L"ConnectionFailures",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipTcpv4ConnectionFailures);
     wprintf(L".");
 
@@ -1421,7 +1421,7 @@ ctWmiPerformance InstantiateTCPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipTcpv6,
         L"ConnectionFailures",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipTcpv6ConnectionFailures);
     wprintf(L".");
 
@@ -1429,7 +1429,7 @@ ctWmiPerformance InstantiateTCPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipTcpv4,
         L"ConnectionsReset",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipTcpv4ConnectionsReset);
     wprintf(L".");
 
@@ -1437,7 +1437,7 @@ ctWmiPerformance InstantiateTCPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipTcpv6,
         L"ConnectionsReset",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipTcpv6ConnectionsReset);
     wprintf(L".");
 
@@ -1445,7 +1445,7 @@ ctWmiPerformance InstantiateTCPCounters()
         *g_wmi,
         ctWmiEnumClassName::WinsockBsp,
         L"RejectedConnections",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_winsockBspRejectedConnections);
     wprintf(L".");
 
@@ -1453,7 +1453,7 @@ ctWmiPerformance InstantiateTCPCounters()
         *g_wmi,
         ctWmiEnumClassName::WinsockBsp,
         L"RejectedConnectionsPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_winsockBspRejectedConnectionsPerSec);
     wprintf(L".");
 
@@ -1571,24 +1571,24 @@ void ProcessTCPCounters(ctsPerf::ctsWriteDetails& writer)
 /*                                        TCPIP UDPv4                                                */
 /*                                        TCPIP UDPv6                                                */
 /****************************************************************************************************/
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipUdpv4NoportPerSec;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipUdpv4ReceivedErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipUdpv4DatagramsPerSec;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipUdpv6NoportPerSec;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipUdpv6ReceivedErrors;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_tcpipUdpv6DatagramsPerSec;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_winsockBspDroppedDatagrams;
-shared_ptr<ctWmiPerformanceCounter<ULONG>> g_winsockBspDroppedDatagramsPerSecond;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipUdpv4NoportPerSec;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipUdpv4ReceivedErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipUdpv4DatagramsPerSec;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipUdpv6NoportPerSec;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipUdpv6ReceivedErrors;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_tcpipUdpv6DatagramsPerSec;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_winsockBspDroppedDatagrams;
+static shared_ptr<ctPerformanceCounterCounter<ULONG>> g_winsockBspDroppedDatagramsPerSecond;
 
-ctWmiPerformance InstantiateUDPCounters()
+ctPerformanceCounter InstantiateUDPCounters()
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     g_tcpipUdpv4NoportPerSec = ctCreatePerfCounter<ULONG>(
         *g_wmi,
         ctWmiEnumClassName::TcpipUdpv4,
         L"DatagramsNoPortPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_tcpipUdpv4NoportPerSec);
     wprintf(L".");
 
@@ -1596,7 +1596,7 @@ ctWmiPerformance InstantiateUDPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipUdpv4,
         L"DatagramsReceivedErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipUdpv4ReceivedErrors);
     wprintf(L".");
 
@@ -1604,7 +1604,7 @@ ctWmiPerformance InstantiateUDPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipUdpv4,
         L"DatagramsPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_tcpipUdpv4DatagramsPerSec);
     wprintf(L".");
 
@@ -1612,7 +1612,7 @@ ctWmiPerformance InstantiateUDPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipUdpv6,
         L"DatagramsNoPortPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_tcpipUdpv6NoportPerSec);
     wprintf(L".");
 
@@ -1620,7 +1620,7 @@ ctWmiPerformance InstantiateUDPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipUdpv6,
         L"DatagramsReceivedErrors",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_tcpipUdpv6ReceivedErrors);
     wprintf(L".");
 
@@ -1628,7 +1628,7 @@ ctWmiPerformance InstantiateUDPCounters()
         *g_wmi,
         ctWmiEnumClassName::TcpipUdpv6,
         L"DatagramsPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_tcpipUdpv6DatagramsPerSec);
     wprintf(L".");
 
@@ -1636,7 +1636,7 @@ ctWmiPerformance InstantiateUDPCounters()
         *g_wmi,
         ctWmiEnumClassName::WinsockBsp,
         L"DroppedDatagrams",
-        ctWmiPerformanceCollectionType::FirstLast);
+        ctPerformanceCounterCollectionType::FirstLast);
     performanceCounter.add_counter(g_winsockBspDroppedDatagrams);
     wprintf(L".");
 
@@ -1644,7 +1644,7 @@ ctWmiPerformance InstantiateUDPCounters()
         *g_wmi,
         ctWmiEnumClassName::WinsockBsp,
         L"DroppedDatagramsPersec",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     performanceCounter.add_counter(g_winsockBspDroppedDatagramsPerSecond);
     wprintf(L".");
 
@@ -1785,23 +1785,23 @@ void ProcessUDPCounters(ctsPerf::ctsWriteDetails& writer)
 }
 
 
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_perProcessPrivilegedTime;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_perProcessProcessorTime;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_perProcessUserTime;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_perProcessPrivateBytes;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_perProcessVirtualBytes;
-shared_ptr<ctWmiPerformanceCounter<ULONGLONG>> g_perProcessWorkingSet;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_perProcessPrivilegedTime;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_perProcessProcessorTime;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_perProcessUserTime;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_perProcessPrivateBytes;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_perProcessVirtualBytes;
+static shared_ptr<ctPerformanceCounterCounter<ULONGLONG>> g_perProcessWorkingSet;
 
-ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackProcess)
+ctPerformanceCounter InstantiatePerProcessByNameCounters(const std::wstring& trackProcess)
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     // PercentPrivilegedTime, PercentProcessorTime, PercentUserTime, PrivateBytes, VirtualBytes, WorkingSet
     g_perProcessPrivilegedTime = ctCreatePerfCounter<ULONGLONG>(
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PercentPrivilegedTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessPrivilegedTime->add_filter(L"Name", trackProcess.c_str());
     performanceCounter.add_counter(g_perProcessPrivilegedTime);
     wprintf(L".");
@@ -1810,7 +1810,7 @@ ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackPr
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PercentProcessorTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessProcessorTime->add_filter(L"Name", trackProcess.c_str());
     performanceCounter.add_counter(g_perProcessProcessorTime);
     wprintf(L".");
@@ -1819,7 +1819,7 @@ ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackPr
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PercentUserTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessUserTime->add_filter(L"Name", trackProcess.c_str());
     performanceCounter.add_counter(g_perProcessUserTime);
     wprintf(L".");
@@ -1828,7 +1828,7 @@ ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackPr
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PrivateBytes",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessPrivateBytes->add_filter(L"Name", trackProcess.c_str());
     performanceCounter.add_counter(g_perProcessPrivateBytes);
     wprintf(L".");
@@ -1837,7 +1837,7 @@ ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackPr
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"VirtualBytes",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessVirtualBytes->add_filter(L"Name", trackProcess.c_str());
     performanceCounter.add_counter(g_perProcessVirtualBytes);
     wprintf(L".");
@@ -1846,7 +1846,7 @@ ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackPr
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"WorkingSet",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessWorkingSet->add_filter(L"Name", trackProcess.c_str());
     performanceCounter.add_counter(g_perProcessWorkingSet);
     wprintf(L".");
@@ -1854,16 +1854,16 @@ ctWmiPerformance InstantiatePerProcessByNameCounters(const std::wstring& trackPr
     return performanceCounter;
 }
 
-ctWmiPerformance InstantiatePerProcessByPIDCounters(const DWORD processId)
+ctPerformanceCounter InstantiatePerProcessByPIDCounters(const DWORD processId)
 {
-    ctWmiPerformance performanceCounter(*g_wmi);
+    ctPerformanceCounter performanceCounter(*g_wmi);
 
     // PercentPrivilegedTime, PercentProcessorTime, PercentUserTime, PrivateBytes, VirtualBytes, WorkingSet
     g_perProcessPrivilegedTime = ctCreatePerfCounter<ULONGLONG>(
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PercentPrivilegedTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessPrivilegedTime->add_filter(L"IDProcess", processId);
     performanceCounter.add_counter(g_perProcessPrivilegedTime);
     wprintf(L".");
@@ -1872,7 +1872,7 @@ ctWmiPerformance InstantiatePerProcessByPIDCounters(const DWORD processId)
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PercentProcessorTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessProcessorTime->add_filter(L"IDProcess", processId);
     performanceCounter.add_counter(g_perProcessProcessorTime);
     wprintf(L".");
@@ -1881,7 +1881,7 @@ ctWmiPerformance InstantiatePerProcessByPIDCounters(const DWORD processId)
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PercentUserTime",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessUserTime->add_filter(L"IDProcess", processId);
     performanceCounter.add_counter(g_perProcessUserTime);
     wprintf(L".");
@@ -1890,7 +1890,7 @@ ctWmiPerformance InstantiatePerProcessByPIDCounters(const DWORD processId)
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"PrivateBytes",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessPrivateBytes->add_filter(L"IDProcess", processId);
     performanceCounter.add_counter(g_perProcessPrivateBytes);
     wprintf(L".");
@@ -1899,7 +1899,7 @@ ctWmiPerformance InstantiatePerProcessByPIDCounters(const DWORD processId)
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"VirtualBytes",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessVirtualBytes->add_filter(L"IDProcess", processId);
     performanceCounter.add_counter(g_perProcessVirtualBytes);
     wprintf(L".");
@@ -1908,7 +1908,7 @@ ctWmiPerformance InstantiatePerProcessByPIDCounters(const DWORD processId)
         *g_wmi,
         ctWmiEnumClassName::Process,
         L"WorkingSet",
-        g_meanOnly ? ctWmiPerformanceCollectionType::MeanOnly : ctWmiPerformanceCollectionType::Detailed);
+        g_meanOnly ? ctPerformanceCounterCollectionType::MeanOnly : ctPerformanceCounterCollectionType::Detailed);
     g_perProcessWorkingSet->add_filter(L"IDProcess", processId);
     performanceCounter.add_counter(g_perProcessWorkingSet);
     wprintf(L".");

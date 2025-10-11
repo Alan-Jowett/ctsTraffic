@@ -1,20 +1,9 @@
-/*
-
-Copyright (c) Microsoft Corporation
-All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the ""License""); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
-
-See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
-
-*/
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 // ReSharper disable CppInconsistentNaming
 #pragma once
 
-// cpp headers
 #include <iterator>
 #include <functional>
 #include <memory>
@@ -22,29 +11,31 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <vector>
 #include <string>
 #include <algorithm>
-// os headers
+
 #include <Windows.h>
 #include <objbase.h>
 #include <oleauto.h>
-// ctl headers
-#include <ctString.hpp>
-#include <ctWmiInitialize.hpp>
-// wil headers always included last
+
+#include "ctWmiInstance.hpp"
+#include "ctWmiService.hpp"
+#include "ctWmiVariant.hpp"
+
 #include <wil/stl.h>
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
 
+
 // Concepts for this class:
 // - WMI Classes expose performance counters through hi-performance WMI interfaces
-// - ctWmiPerformanceCounter exposes one counter within one WMI performance counter class
+// - ctPerformanceCounterCounter exposes one counter within one WMI performance counter class
 // - Every performance counter object contains a 'Name' key field, uniquely identifying a 'set' of data points for that counter
 // - Counters are 'snapped' every one second, with the timeslot tracked with the data
 //
-// ctWmiPerformanceCounter is exposed to the user through factory functions defined per-counter class (ctShared<class>PerfCounter)
+// ctPerformanceCounterCounter is exposed to the user through factory functions defined per-counter class (ctShared<class>PerfCounter)
 // - the factory functions takes in the counter name that the user wants to capture data for
 // - the factory function has a template type matching the data type of the counter data for that counter name
 //
-// Internally, the factory function instantiates a ctWmiPerformanceCounterImpl:
+// Internally, the factory function instantiates a ctPerformanceCounterCounterImpl:
 // - has 3 template arguments:
 // 1. The IWbem* interface used to enumerate instances of this performance class (either IWbemHiPerfEnum or IWbemClassObject)
 // 2. The IWbem* interface used to access data in perf instances of this performance class (either IWbemObjectAccess or IWbemClassObject)
@@ -53,31 +44,31 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // 1. The string value of the WMI class to be used
 // 2. The string value of the counter name to be recorded
 //
-// Methods exposed publicly off of ctWmiPerformanceCounter:
+// Methods exposed publicly off of ctPerformanceCounterCounter:
 // - add_filter(): allows the caller to only capture instances which match the parameter/value combination for that object
 // - reference_range() : takes an Instance Name by which to return values
 // -- returns begin/end iterators to reference the data
 //
-// ctWmiPerformanceCounter populates data by invoking a pure virtual function (update_counter_data) every one second.
+// ctPerformanceCounterCounter populates data by invoking a pure virtual function (update_counter_data) every one second.
 // - update_counter_data takes a boolean parameter: true will invoke the virtual function to update the data, false will clear the data.
-// That pure virtual function (ctWmiPerformanceCounterImpl::update_counter_data) refreshes its counter (through its template accessor interface)
+// That pure virtual function (ctPerformanceCounterCounterImpl::update_counter_data) refreshes its counter (through its template accessor interface)
 // - then iterates through each instance recorded for that counter and invokes add_instance() in the base class.
 //
 // add_instance() takes a WMI* of the Accessor type: if that instance wasn't explicitly filtered out (through an instance_filter object),
 // - it looks to see if this is a new instance or if we have already been tracking that instance
-// - if new, we create a new ctWmiPerformanceCounterData object and add it to our counter_data
+// - if new, we create a new ctPerformanceCounterCounterData object and add it to our counter_data
 // - if not new, we just add this object to the counter_data object that we already created
 //
-// There are 2 possible sets of WMI interfaces to access and enumerate performance data, these are defined in ctWmiPerformanceDataAccessor
-// - this is instantiated in ctWmiPerformanceCounterImpl as it knows the Access and Enum template types
+// There are 2 possible sets of WMI interfaces to access and enumerate performance data, these are defined in ctPerformanceCounterDataAccessor
+// - this is instantiated in ctPerformanceCounterCounterImpl as it knows the Access and Enum template types
 //
-// ctWmiPerformanceCounterData encapsulates the data points for one instance of one counter.
+// ctPerformanceCounterCounterData encapsulates the data points for one instance of one counter.
 // - exposes match() taking a string to check if it matches the instance it contains
 // - exposes add() taking both types of Access objects + a ULONGLONG time parameter to retrieve the data and add it to the internal map
 
 namespace ctl
 {
-	enum class ctWmiPerformanceCollectionType : std::uint8_t
+	enum class ctPerformanceCounterCollectionType : std::uint8_t
 	{
 		Detailed,
 		MeanOnly,
@@ -266,14 +257,14 @@ namespace ctl
 			default:
 				THROW_HR_MSG(
 					HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-					"ctWmiPerformance only supports data of type INT32, INT64, and BSTR: counter %ws is of type %u",
+					"ctPerformanceCounter only supports data of type INT32, INT64, and BSTR: counter %ws is of type %u",
 					counterName, static_cast<unsigned>(propertyType));
 			}
 
 			return currentValue;
 		}
 
-		// template class ctWmiPerformanceDataAccessor
+		// template class ctPerformanceCounterDataAccessor
 		//
 		// Refreshes performance data for the target specified based off the classname
 		// - and the template types specified [the below are the only types supported]:
@@ -286,7 +277,7 @@ namespace ctl
 		//
 		// Note: callers *MUST* guarantee that COM is CoInitialized on this thread before calling
 		//
-		// Note: the ctWmiPerformance class *will* retain WMI service instance
+		// Note: the ctPerformanceCounter class *will* retain WMI service instance
 		//       it's recommended to guarantee it stays alive
 		//
 		// Template typename options:
@@ -305,17 +296,17 @@ namespace ctl
 		// - begin/end return an iterator to a vector<IWbemClassObject> of refreshed perf data
 		// - Note: will only ever be a single instance
 		template <typename TEnum, typename TAccess>
-		class ctWmiPerformanceDataAccessor
+		class ctPerformanceCounterDataAccessor
 		{
 		public:
 			using ctAccessIterator = typename std::vector<TAccess*>::const_iterator;
 
-			ctWmiPerformanceDataAccessor(
+			ctPerformanceCounterDataAccessor(
 				ctWmiService wmi,
 				const wil::com_ptr<IWbemConfigureRefresher>& config,
 				_In_ PCWSTR classname);
 
-			~ctWmiPerformanceDataAccessor() noexcept
+			~ctPerformanceCounterDataAccessor() noexcept
 			{
 				clear();
 			}
@@ -334,11 +325,11 @@ namespace ctl
 			}
 
 			// non-copyable
-			ctWmiPerformanceDataAccessor(const ctWmiPerformanceDataAccessor&) = delete;
-			ctWmiPerformanceDataAccessor& operator=(const ctWmiPerformanceDataAccessor&) = delete;
+			ctPerformanceCounterDataAccessor(const ctPerformanceCounterDataAccessor&) = delete;
+			ctPerformanceCounterDataAccessor& operator=(const ctPerformanceCounterDataAccessor&) = delete;
 
 			// movable
-			ctWmiPerformanceDataAccessor(ctWmiPerformanceDataAccessor&& rhs) noexcept :
+			ctPerformanceCounterDataAccessor(ctPerformanceCounterDataAccessor&& rhs) noexcept :
 				m_enumerationObject(std::move(rhs.m_enumerationObject)),
 				m_accessorObjects(std::move(rhs.m_accessorObjects)),
 				m_currentIterator(std::move(rhs.m_currentIterator))
@@ -349,7 +340,7 @@ namespace ctl
 				rhs.m_currentIterator = rhs.m_accessorObjects.end();
 			}
 
-			ctWmiPerformanceDataAccessor& operator=(ctWmiPerformanceDataAccessor&& rhs) noexcept
+			ctPerformanceCounterDataAccessor& operator=(ctPerformanceCounterDataAccessor&& rhs) noexcept
 			{
 				m_enumerationObject = std::move(rhs.m_enumerationObject);
 				m_accessorObjects = std::move(rhs.m_accessorObjects);
@@ -370,7 +361,7 @@ namespace ctl
 			void clear() noexcept;
 		};
 
-		inline ctWmiPerformanceDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::ctWmiPerformanceDataAccessor(
+		inline ctPerformanceCounterDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::ctPerformanceCounterDataAccessor(
 			ctWmiService wmi, const wil::com_ptr<IWbemConfigureRefresher>& config, _In_ PCWSTR classname) :
 			m_currentIterator(m_accessorObjects.end())
 		{
@@ -378,11 +369,11 @@ namespace ctl
 			THROW_IF_FAILED(config->AddEnum(wmi.get(), classname, 0, nullptr, m_enumerationObject.addressof(), &lid));
 		}
 
-		inline ctWmiPerformanceDataAccessor<IWbemClassObject, IWbemClassObject>::ctWmiPerformanceDataAccessor(
+		inline ctPerformanceCounterDataAccessor<IWbemClassObject, IWbemClassObject>::ctPerformanceCounterDataAccessor(
 			ctWmiService wmi, const wil::com_ptr<IWbemConfigureRefresher>& config, _In_ PCWSTR classname) :
 			m_currentIterator(m_accessorObjects.end())
 		{
-			ctWmiEnumerate enumInstances(wmi);
+			ctWmiEnumerateInstance enumInstances(wmi);
 			enumInstances.query(wil::str_printf<std::wstring>(L"SELECT * FROM %ws", classname).c_str());
 			if (enumInstances.begin() == enumInstances.end())
 			{
@@ -407,7 +398,7 @@ namespace ctl
 		}
 
 		template <>
-		inline void ctWmiPerformanceDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::refresh()
+		inline void ctPerformanceCounterDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::refresh()
 		{
 			clear();
 
@@ -434,20 +425,20 @@ namespace ctl
 		}
 
 		template <>
-		inline void ctWmiPerformanceDataAccessor<IWbemClassObject, IWbemClassObject>::refresh()
+		inline void ctPerformanceCounterDataAccessor<IWbemClassObject, IWbemClassObject>::refresh()
 		{
 			// the underlying IWbemClassObject is already refreshed
 			// accessor_objects will only ever have a singe instance
 			FAIL_FAST_IF_MSG(
 				m_accessorObjects.size() != 1,
-				"ctWmiPerformanceDataAccessor<IWbemClassObject, IWbemClassObject>: for IWbemClassObject performance classes there can only ever have the single instance being tracked - instead has %Iu",
+				"ctPerformanceCounterDataAccessor<IWbemClassObject, IWbemClassObject>: for IWbemClassObject performance classes there can only ever have the single instance being tracked - instead has %Iu",
 				m_accessorObjects.size());
 
 			m_currentIterator = m_accessorObjects.begin();
 		}
 
 		template <>
-		inline void ctWmiPerformanceDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::clear() noexcept
+		inline void ctPerformanceCounterDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::clear() noexcept
 		{
 			for (IWbemObjectAccess* object : m_accessorObjects)
 			{
@@ -458,7 +449,7 @@ namespace ctl
 		}
 
 		template <>
-		inline void ctWmiPerformanceDataAccessor<IWbemClassObject, IWbemClassObject>::clear() noexcept
+		inline void ctPerformanceCounterDataAccessor<IWbemClassObject, IWbemClassObject>::clear() noexcept
 		{
 			m_currentIterator = m_accessorObjects.end();
 		}
@@ -470,14 +461,101 @@ namespace ctl
 		// Note: callers *MUST* guarantee connections with the WMI service stay connected
 		//       for the lifetime of this object [e.g. guaranteed ctWmiService is instantiated]
 		// Note: callers *MUST* guarantee that COM is CoInitialized on this thread before calling
-		// Note: the ctWmiPerformance class *will* retain WMI service instance
+		// Note: the ctPerformanceCounter class *will* retain WMI service instance
 		//       it's recommended to guarantee it stays alive
 		template <typename T>
-		class ctWmiPerformanceCounterData
+		class ctPerformanceCounterCounterData
 		{
+		private:
+			mutable wil::critical_section m_guardData{ 500 };
+			const ctPerformanceCounterCollectionType m_collectionType = ctPerformanceCounterCollectionType::Detailed;
+			const std::wstring m_instanceName;
+			const std::wstring m_counterName;
+			std::vector<T> m_counterData;
+			uint64_t m_counterSum = 0;
+
+			void add_data(const T& instanceData)
+			{
+				const auto lock = m_guardData.lock();
+				switch (m_collectionType)
+				{
+				case ctPerformanceCounterCollectionType::Detailed:
+					m_counterData.push_back(instanceData);
+					break;
+
+				case ctPerformanceCounterCollectionType::MeanOnly:
+					// vector is formatted as:
+					// [0] == count
+					// [1] == min
+					// [2] == max
+					// [3] == mean
+					if (m_counterData.empty())
+					{
+						m_counterData.push_back(1);
+						m_counterData.push_back(instanceData);
+						m_counterData.push_back(instanceData);
+						m_counterData.push_back(0);
+					}
+					else
+					{
+						++m_counterData[0];
+						if (instanceData < m_counterData[1])
+						{
+							m_counterData[1] = instanceData;
+						}
+						if (instanceData > m_counterData[2])
+						{
+							m_counterData[2] = instanceData;
+						}
+					}
+
+					m_counterSum += instanceData;
+					break;
+
+				case ctPerformanceCounterCollectionType::FirstLast:
+					// the first data point write both min and max
+					// [0] == count
+					// [1] == first
+					// [2] == last
+					if (m_counterData.empty())
+					{
+						m_counterData.push_back(1);
+						m_counterData.push_back(instanceData);
+						m_counterData.push_back(instanceData);
+					}
+					else
+					{
+						++m_counterData[0];
+						m_counterData[2] = instanceData;
+					}
+					break;
+
+				default:
+					FAIL_FAST_MSG(
+						"Unknown ctPerformanceCounterCollectionType (%d)", m_collectionType);
+				}
+			}
+
+			typename std::vector<T>::const_iterator access_begin() noexcept
+			{
+				const auto lock = m_guardData.lock();
+				// when accessing data, calculate the mean
+				if (ctPerformanceCounterCollectionType::MeanOnly == m_collectionType)
+				{
+					m_counterData[3] = static_cast<T>(m_counterSum / m_counterData[0]);
+				}
+				return m_counterData.cbegin();
+			}
+
+			typename std::vector<T>::const_iterator access_end() const noexcept
+			{
+				const auto lock = m_guardData.lock();
+				return m_counterData.cend();
+			}
+
 		public:
-			ctWmiPerformanceCounterData(
-				const ctWmiPerformanceCollectionType collectionType,
+			ctPerformanceCounterCounterData(
+				const ctPerformanceCounterCollectionType collectionType,
 				_In_ IWbemObjectAccess* instance,
 				_In_ PCWSTR counter) :
 				m_collectionType(collectionType),
@@ -486,8 +564,8 @@ namespace ctl
 			{
 			}
 
-			ctWmiPerformanceCounterData(
-				const ctWmiPerformanceCollectionType collectionType,
+			ctPerformanceCounterCounterData(
+				const ctPerformanceCounterCollectionType collectionType,
 				_In_ IWbemClassObject* instance,
 				_In_ PCWSTR counter) :
 				m_collectionType(collectionType),
@@ -501,11 +579,11 @@ namespace ctl
 				THROW_HR_IF_MSG(
 					HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
 					value.vt != VT_NULL,
-					"ctWmiPerformanceCounterData was given an IWbemClassObject to track that had a non-null 'Name' key field ['%ws']. Expected to be a NULL key field as to only support single-instances",
+					"ctPerformanceCounterCounterData was given an IWbemClassObject to track that had a non-null 'Name' key field ['%ws']. Expected to be a NULL key field as to only support single-instances",
 					V_BSTR(value.addressof()));
 			}
 
-			~ctWmiPerformanceCounterData() noexcept = default;
+			~ctPerformanceCounterCounterData() noexcept = default;
 
 			// instanceName == nullptr means match everything
 			bool match(_In_opt_ PCWSTR instanceName) const
@@ -518,7 +596,7 @@ namespace ctl
 				{
 					return nullptr == instanceName;
 				}
-				return ctString::iordinal_equals(instanceName, m_instanceName);
+				return wil::compare_string_ordinal(instanceName, m_instanceName, true) == wistd::weak_ordering::equivalent;
 			}
 
 			void add(_In_ IWbemObjectAccess* instance)
@@ -573,99 +651,12 @@ namespace ctl
 			}
 
 			// non-copyable
-			ctWmiPerformanceCounterData(const ctWmiPerformanceCounterData&) = delete;
-			ctWmiPerformanceCounterData& operator=(const ctWmiPerformanceCounterData&) = delete;
+			ctPerformanceCounterCounterData(const ctPerformanceCounterCounterData&) = delete;
+			ctPerformanceCounterCounterData& operator=(const ctPerformanceCounterCounterData&) = delete;
 
 			// not movable
-			ctWmiPerformanceCounterData(ctWmiPerformanceCounterData&&) = delete;
-			ctWmiPerformanceCounterData& operator=(ctWmiPerformanceCounterData&&) = delete;
-
-		private:
-			mutable wil::critical_section m_guardData{ 500 };
-			const ctWmiPerformanceCollectionType m_collectionType = ctWmiPerformanceCollectionType::Detailed;
-			const std::wstring m_instanceName;
-			const std::wstring m_counterName;
-			std::vector<T> m_counterData;
-			uint64_t m_counterSum = 0;
-
-			void add_data(const T& instanceData)
-			{
-				const auto lock = m_guardData.lock();
-				switch (m_collectionType)
-				{
-				case ctWmiPerformanceCollectionType::Detailed:
-					m_counterData.push_back(instanceData);
-					break;
-
-				case ctWmiPerformanceCollectionType::MeanOnly:
-					// vector is formatted as:
-					// [0] == count
-					// [1] == min
-					// [2] == max
-					// [3] == mean
-					if (m_counterData.empty())
-					{
-						m_counterData.push_back(1);
-						m_counterData.push_back(instanceData);
-						m_counterData.push_back(instanceData);
-						m_counterData.push_back(0);
-					}
-					else
-					{
-						++m_counterData[0];
-						if (instanceData < m_counterData[1])
-						{
-							m_counterData[1] = instanceData;
-						}
-						if (instanceData > m_counterData[2])
-						{
-							m_counterData[2] = instanceData;
-						}
-					}
-
-					m_counterSum += instanceData;
-					break;
-
-				case ctWmiPerformanceCollectionType::FirstLast:
-					// the first data point write both min and max
-					// [0] == count
-					// [1] == first
-					// [2] == last
-					if (m_counterData.empty())
-					{
-						m_counterData.push_back(1);
-						m_counterData.push_back(instanceData);
-						m_counterData.push_back(instanceData);
-					}
-					else
-					{
-						++m_counterData[0];
-						m_counterData[2] = instanceData;
-					}
-					break;
-
-				default:
-					FAIL_FAST_MSG(
-						"Unknown ctWmiPerformanceCollectionType (%d)", m_collectionType);
-				}
-			}
-
-			typename std::vector<T>::const_iterator access_begin() noexcept
-			{
-				const auto lock = m_guardData.lock();
-				// when accessing data, calculate the mean
-				if (ctWmiPerformanceCollectionType::MeanOnly == m_collectionType)
-				{
-					m_counterData[3] = static_cast<T>(m_counterSum / m_counterData[0]);
-				}
-				return m_counterData.cbegin();
-			}
-
-			typename std::vector<T>::const_iterator access_end() const noexcept
-			{
-				const auto lock = m_guardData.lock();
-				return m_counterData.cend();
-			}
+			ctPerformanceCounterCounterData(ctPerformanceCounterCounterData&&) = delete;
+			ctPerformanceCounterCounterData& operator=(ctPerformanceCounterCounterData&&) = delete;
 		};
 
 		inline wil::unique_variant ctQueryInstanceName(_In_ IWbemObjectAccess* instance)
@@ -680,7 +671,7 @@ namespace ctl
 			return value;
 		}
 
-		// type for the callback implemented in all ctWmiPerformanceCounter classes
+		// type for the callback implemented in all ctPerformanceCounterCounter classes
 		enum class CallbackAction : std::uint8_t
 		{
 			Start,
@@ -689,28 +680,28 @@ namespace ctl
 			Clear
 		};
 
-		using ctWmiPerformanceCallback = std::function<void(CallbackAction)>;
+		using ctPerformanceCounterCallback = std::function<void(CallbackAction)>;
 	} // unnamed namespace
 
-	// forward-declaration to reference ctWmiPerformance
-	class ctWmiPerformance;
+	// forward-declaration to reference ctPerformanceCounter
+	class ctPerformanceCounter;
 
-	// class ctWmiPerformanceCounter
+	// class ctPerformanceCounterCounter
 	// - The abstract base class contains the WMI-specific code which all templated instances will derive from
 	// - Using public inheritance + protected members over composition as we need a common type which we can pass to
-	//   ctWmiPerformance
+	//   ctPerformanceCounter
 	// - Exposes the iterator class for users to traverse the data points gathered
 	//
 	// Note: callers *MUST* guarantee connections with the WMI service stay connected
 	//       for the lifetime of this object [e.g. guaranteed ctWmiService is instantiated]
 	// Note: callers *MUST* guarantee that COM is CoInitialized on this thread before calling
-	// Note: the ctWmiPerformance class *will* retain WMI service instance
+	// Note: the ctPerformanceCounter class *will* retain WMI service instance
 	//       it's recommended to guarantee it stays alive
 	template <typename T>
-	class ctWmiPerformanceCounter
+	class ctPerformanceCounterCounter
 	{
 	public:
-		// iterates across *time-slices* captured over from ctWmiPerformance
+		// iterates across *time-slices* captured over from ctPerformanceCounter
 		class iterator
 		{
 		public:
@@ -760,7 +751,7 @@ namespace ctl
 				if (m_isEmpty)
 				{
 					throw std::runtime_error(
-						"ctWmiPerformanceCounter::iterator : dereferencing an iterator referencing an empty container");
+						"ctPerformanceCounterCounter::iterator : dereferencing an iterator referencing an empty container");
 				}
 				return *m_current;
 			}
@@ -785,7 +776,7 @@ namespace ctl
 				if (m_isEmpty)
 				{
 					throw std::runtime_error(
-						"ctWmiPerformanceCounter::iterator : pre-incrementing an iterator referencing an empty container");
+						"ctPerformanceCounterCounter::iterator : pre-incrementing an iterator referencing an empty container");
 				}
 				++m_current;
 				return *this;
@@ -797,7 +788,7 @@ namespace ctl
 				if (m_isEmpty)
 				{
 					throw std::runtime_error(
-						"ctWmiPerformanceCounter::iterator : post-incrementing an iterator referencing an empty container");
+						"ctPerformanceCounterCounter::iterator : post-incrementing an iterator referencing an empty container");
 				}
 				iterator temp(*this);
 				++m_current;
@@ -810,7 +801,7 @@ namespace ctl
 				if (m_isEmpty)
 				{
 					throw std::runtime_error(
-						"ctWmiPerformanceCounter::iterator : post-incrementing an iterator referencing an empty container");
+						"ctPerformanceCounterCounter::iterator : post-incrementing an iterator referencing an empty container");
 				}
 				for (size_t loop = 0; loop < inc; ++loop)
 				{
@@ -824,7 +815,7 @@ namespace ctl
 			bool m_isEmpty = true;
 		};
 
-		ctWmiPerformanceCounter(_In_ PCWSTR counterName, const ctWmiPerformanceCollectionType collectionType) :
+		ctPerformanceCounterCounter(_In_ PCWSTR counterName, const ctPerformanceCounterCollectionType collectionType) :
 			m_collectionType(collectionType),
 			m_counterName(counterName)
 		{
@@ -832,12 +823,12 @@ namespace ctl
 			m_configRefresher = m_refresher.query<IWbemConfigureRefresher>();
 		}
 
-		virtual ~ctWmiPerformanceCounter() noexcept = default;
+		virtual ~ctPerformanceCounterCounter() noexcept = default;
 
-		ctWmiPerformanceCounter(const ctWmiPerformanceCounter&) = delete;
-		ctWmiPerformanceCounter& operator=(const ctWmiPerformanceCounter&) = delete;
-		ctWmiPerformanceCounter(ctWmiPerformanceCounter&&) = delete;
-		ctWmiPerformanceCounter& operator=(ctWmiPerformanceCounter&&) = delete;
+		ctPerformanceCounterCounter(const ctPerformanceCounterCounter&) = delete;
+		ctPerformanceCounterCounter& operator=(const ctPerformanceCounterCounter&) = delete;
+		ctPerformanceCounterCounter(ctPerformanceCounterCounter&&) = delete;
+		ctPerformanceCounterCounter& operator=(ctPerformanceCounterCounter&&) = delete;
 
 		//
 		// *not* thread-safe: caller must guarantee sequential access to add_filter()
@@ -847,7 +838,7 @@ namespace ctl
 		{
 			FAIL_FAST_IF_MSG(
 				!m_dataStopped,
-				"ctWmiPerformanceCounter: must call stop_all_counters on the ctWmiPerformance class containing this counter");
+				"ctPerformanceCounterCounter: must call stop_all_counters on the ctPerformanceCounter class containing this counter");
 			m_instanceFilter.emplace_back(counterName, std::move(ctWmiMakeVariant(propertyValue)));
 		}
 
@@ -859,7 +850,7 @@ namespace ctl
 		{
 			FAIL_FAST_IF_MSG(
 				!m_dataStopped,
-				"ctWmiPerformanceCounter: must call stop_all_counters on the ctWmiPerformance class containing this counter");
+				"ctPerformanceCounterCounter: must call stop_all_counters on the ctPerformanceCounter class containing this counter");
 
 			const auto lock = m_guardCounterData.lock();
 			const auto foundInstance = std::ranges::find_if(
@@ -875,7 +866,7 @@ namespace ctl
 				return std::pair<iterator, iterator>(iterator(), iterator());
 			}
 
-			const std::unique_ptr<details::ctWmiPerformanceCounterData<T>>& instanceReference = *foundInstance;
+			const std::unique_ptr<details::ctPerformanceCounterCounterData<T>>& instanceReference = *foundInstance;
 			return std::pair<iterator, iterator>(instanceReference->begin(), instanceReference->end());
 		}
 
@@ -883,31 +874,31 @@ namespace ctl
 		//
 		// private structure to track the 'filter' which instances to track
 		//
-		struct ctWmiPerformanceInstanceFilter
+		struct ctPerformanceCounterInstanceFilter
 		{
 			const std::wstring m_counterName;
 			const wil::unique_variant m_propertyValue;
 
-			ctWmiPerformanceInstanceFilter(_In_ PCWSTR counterName, wil::unique_variant&& propertyValue) :
+			ctPerformanceCounterInstanceFilter(_In_ PCWSTR counterName, wil::unique_variant&& propertyValue) :
 				m_counterName(counterName),
 				m_propertyValue(std::move(propertyValue))
 			{
 			}
 
-			~ctWmiPerformanceInstanceFilter() = default;
+			~ctPerformanceCounterInstanceFilter() = default;
 
-			ctWmiPerformanceInstanceFilter(const ctWmiPerformanceInstanceFilter& rhs) = delete;
-			ctWmiPerformanceInstanceFilter& operator=(const ctWmiPerformanceInstanceFilter& rhs) = delete;
+			ctPerformanceCounterInstanceFilter(const ctPerformanceCounterInstanceFilter& rhs) = delete;
+			ctPerformanceCounterInstanceFilter& operator=(const ctPerformanceCounterInstanceFilter& rhs) = delete;
 
 			// must const-cast to allow the const objects to be movable
 			// this is safe as these are const only for the accessors of this object
-			ctWmiPerformanceInstanceFilter(ctWmiPerformanceInstanceFilter&& rhs) noexcept :
+			ctPerformanceCounterInstanceFilter(ctPerformanceCounterInstanceFilter&& rhs) noexcept :
 				m_counterName(std::move(*const_cast<std::wstring*>(&rhs.m_counterName))),
 				m_propertyValue(std::move(*const_cast<wil::unique_variant*>(&rhs.m_propertyValue)))
 			{
 			}
 
-			ctWmiPerformanceInstanceFilter& operator=(ctWmiPerformanceInstanceFilter&&) noexcept = delete;
+			ctPerformanceCounterInstanceFilter& operator=(ctPerformanceCounterInstanceFilter&&) noexcept = delete;
 
 			bool operator==(_In_ IWbemObjectAccess* instance) const
 			{
@@ -943,23 +934,23 @@ namespace ctl
 			}
 		};
 
-		const ctWmiPerformanceCollectionType m_collectionType;
+		const ctPerformanceCounterCollectionType m_collectionType;
 		const std::wstring m_counterName;
 		wil::com_ptr<IWbemRefresher> m_refresher;
 		wil::com_ptr<IWbemConfigureRefresher> m_configRefresher;
-		std::vector<ctWmiPerformanceInstanceFilter> m_instanceFilter;
+		std::vector<ctPerformanceCounterInstanceFilter> m_instanceFilter;
 		// Must lock access to counter_data
 		mutable wil::critical_section m_guardCounterData{ 500 };
-		std::vector<std::unique_ptr<details::ctWmiPerformanceCounterData<T>>> m_counterData;
+		std::vector<std::unique_ptr<details::ctPerformanceCounterCounterData<T>>> m_counterData;
 		bool m_dataStopped = true;
 
 	protected:
 		virtual void update_counter_data() = 0;
 
-		// ctWmiPerformance needs private access to invoke register_callback in the derived type
-		friend class ctWmiPerformance;
+		// ctPerformanceCounter needs private access to invoke register_callback in the derived type
+		friend class ctPerformanceCounter;
 
-		details::ctWmiPerformanceCallback register_callback()
+		details::ctPerformanceCounterCallback register_callback()
 		{
 			// the callback function must be no-except - it can't leak an exception to the caller
 			// as it shouldn't break calling all other callbacks if one happens to fail an update
@@ -987,7 +978,7 @@ namespace ctl
 						{
 							FAIL_FAST_IF_MSG(
 								!m_dataStopped,
-								"ctWmiPerformanceCounter: must call stop_all_counters on the ctWmiPerformance class containing this counter");
+								"ctPerformanceCounterCounter: must call stop_all_counters on the ctPerformanceCounter class containing this counter");
 
 							const auto lock = m_guardCounterData.lock();
 							for (auto& counterData : m_counterData)
@@ -1052,13 +1043,13 @@ namespace ctl
 					});
 
 				// if this instance of this counter is new [new unique instance for this counter]
-				// - we must add a new ctWmiPerformanceCounterData to the parent's counter_data vector
+				// - we must add a new ctPerformanceCounterCounterData to the parent's counter_data vector
 				// else
 				// - we just add this counter value to the already-tracked instance
 				if (trackedInstance == std::end(m_counterData))
 				{
 					m_counterData.push_back(
-						std::make_unique<details::ctWmiPerformanceCounterData<T>>(
+						std::make_unique<details::ctPerformanceCounterCounterData<T>>(
 							m_collectionType, instance, m_counterName.c_str()));
 					(*m_counterData.rbegin())->add(instance);
 				}
@@ -1076,7 +1067,7 @@ namespace ctl
 			if (m_counterData.empty())
 			{
 				m_counterData.push_back(
-					std::make_unique<details::ctWmiPerformanceCounterData<T>>(
+					std::make_unique<details::ctPerformanceCounterCounterData<T>>(
 						m_collectionType, instance, m_counterName.c_str()));
 			}
 
@@ -1084,8 +1075,8 @@ namespace ctl
 		}
 	};
 
-	// ctWmiPerformanceCounterImpl
-	// - derived from the pure-virtual ctWmiPerformanceCounter class
+	// ctPerformanceCounterCounterImpl
+	// - derived from the pure-virtual ctPerformanceCounterCounter class
 	//   shares the same data type template typename with the parent class
 	//
 	// Template typename details:
@@ -1095,38 +1086,38 @@ namespace ctl
 	// - TData: the data type of the counter of the class specified in the c'tor
 	//
 	// Only 2 combinations currently supported:
-	// : ctWmiPerformanceCounter<IWbemHiPerfEnum, IWbemObjectAccess, TData>
+	// : ctPerformanceCounterCounter<IWbemHiPerfEnum, IWbemObjectAccess, TData>
 	//   - refreshes N of instances of a counter
-	// : ctWmiPerformanceCounter<IWbemClassObject, IWbemClassObject, TData>
+	// : ctPerformanceCounterCounter<IWbemClassObject, IWbemClassObject, TData>
 	//   - refreshes a single instance of a counter
 	template <typename TEnum, typename TAccess, typename TData>
-	class ctWmiPerformanceCounterImpl final : public ctWmiPerformanceCounter<TData>
+	class ctPerformanceCounterCounterImpl final : public ctPerformanceCounterCounter<TData>
 	{
 	public:
-		ctWmiPerformanceCounterImpl(
+		ctPerformanceCounterCounterImpl(
 			const ctWmiService& wmi,
 			_In_ PCWSTR className,
 			_In_ PCWSTR counterName,
-			const ctWmiPerformanceCollectionType collectionType) :
-			ctWmiPerformanceCounter<TData>(counterName, collectionType),
+			const ctPerformanceCounterCollectionType collectionType) :
+			ctPerformanceCounterCounter<TData>(counterName, collectionType),
 			m_accessor(wmi, this->access_refresher(), className)
 			// must qualify 'this' name lookup to access access_refresher since it's in the base class
 		{
 		}
 
-		~ctWmiPerformanceCounterImpl() override = default;
+		~ctPerformanceCounterCounterImpl() override = default;
 
 		// non-copyable
-		ctWmiPerformanceCounterImpl(const ctWmiPerformanceCounterImpl&) = delete;
-		ctWmiPerformanceCounterImpl& operator=(const ctWmiPerformanceCounterImpl&) = delete;
-		ctWmiPerformanceCounterImpl(ctWmiPerformanceCounterImpl&&) = delete;
-		ctWmiPerformanceCounterImpl& operator=(ctWmiPerformanceCounterImpl&&) = delete;
+		ctPerformanceCounterCounterImpl(const ctPerformanceCounterCounterImpl&) = delete;
+		ctPerformanceCounterCounterImpl& operator=(const ctPerformanceCounterCounterImpl&) = delete;
+		ctPerformanceCounterCounterImpl(ctPerformanceCounterCounterImpl&&) = delete;
+		ctPerformanceCounterCounterImpl& operator=(ctPerformanceCounterCounterImpl&&) = delete;
 
 	private:
 		//
 		// this concrete template class serves to capture the Enum and Access template types
 		// - so can instantiate the appropriate accessor object
-		details::ctWmiPerformanceDataAccessor<TEnum, TAccess> m_accessor;
+		details::ctPerformanceCounterDataAccessor<TEnum, TAccess> m_accessor;
 
 		//
 		// invoked from the parent class to add data matching any/all filters
@@ -1152,18 +1143,18 @@ namespace ctl
 		}
 	};
 
-	// ctWmiPerformance
+	// ctPerformanceCounter
 	//
 	// class to register for and collect performance counters
-	// - captures counter data into the ctWmiPerformanceCounter objects passed through add()
+	// - captures counter data into the ctPerformanceCounterCounter objects passed through add()
 	//
 	// CAUTION:
-	// - do not access the ctWmiPerformanceCounter instances while between calling start() and stop()
+	// - do not access the ctPerformanceCounterCounter instances while between calling start() and stop()
 	// - any iterators returned can be invalidated when more data is added on the next cycle
-	class ctWmiPerformance final
+	class ctPerformanceCounter final
 	{
 	public:
-		explicit ctWmiPerformance(ctWmiService wmiService) :
+		explicit ctPerformanceCounter(ctWmiService wmiService) :
 			m_wmiService(std::move(wmiService))
 		{
 			m_lockedData = std::make_unique<LockedData>();
@@ -1171,7 +1162,7 @@ namespace ctl
 			m_configRefresher = m_refresher.query<IWbemConfigureRefresher>();
 		}
 
-		~ctWmiPerformance() noexcept
+		~ctPerformanceCounter() noexcept
 		{
 			// when being destroyed, don't invoke callbacks
 			// the counters might be destroyed, and we don't hold a ref on them
@@ -1184,7 +1175,7 @@ namespace ctl
 		}
 
 		template <typename T>
-		void add_counter(const std::shared_ptr<ctWmiPerformanceCounter<T>>& perfCounterObject)
+		void add_counter(const std::shared_ptr<ctPerformanceCounterCounter<T>>& perfCounterObject)
 		{
 			m_callbacks.push_back(perfCounterObject->register_callback());
 			auto revertCallback = wil::scope_exit([&]() noexcept
@@ -1255,26 +1246,26 @@ namespace ctl
 		}
 
 		// non-copyable
-		ctWmiPerformance(const ctWmiPerformance&) = delete;
-		ctWmiPerformance& operator=(const ctWmiPerformance&) = delete;
-		ctWmiPerformance& operator=(ctWmiPerformance&& rhs) noexcept = delete;
+		ctPerformanceCounter(const ctPerformanceCounter&) = delete;
+		ctPerformanceCounter& operator=(const ctPerformanceCounter&) = delete;
+		ctPerformanceCounter& operator=(ctPerformanceCounter&& rhs) noexcept = delete;
 
 		// movable
-		ctWmiPerformance(ctWmiPerformance&& rhs) noexcept = default;
+		ctPerformanceCounter(ctPerformanceCounter&& rhs) noexcept = default;
 
 	private:
 		ctWmiService m_wmiService;
 		wil::com_ptr<IWbemRefresher> m_refresher;
 		wil::com_ptr<IWbemConfigureRefresher> m_configRefresher;
 		// for each interval, callback each of the registered aggregators
-		std::vector<details::ctWmiPerformanceCallback> m_callbacks;
+		std::vector<details::ctPerformanceCounterCallback> m_callbacks;
 		uint32_t m_timerIntervalMs{};
 		// timer to fire to indicate when to Refresh the data
 		// declare last to guarantee will be destroyed first
 		wil::unique_threadpool_timer m_timer;
 
 		// must dynamically allocate this as the critical_section isn't movable
-		// and the ctWmiPerformance objects must be movable
+		// and the ctPerformanceCounter objects must be movable
 		struct LockedData
 		{
 			wil::critical_section m_lock{ 500 };
@@ -1285,7 +1276,7 @@ namespace ctl
 
 		static void NTAPI TimerCallback(PTP_CALLBACK_INSTANCE, PVOID pContext, PTP_TIMER) noexcept
 		{
-			const auto* pThis = static_cast<ctWmiPerformance*>(pContext);
+			const auto* pThis = static_cast<ctPerformanceCounter*>(pContext);
 			try
 			{
 				// must guarantee COM is initialized on this thread
@@ -1341,7 +1332,7 @@ namespace ctl
 		WfpFilterCount,
 	};
 
-	struct ctWmiPerformanceCounterProperties
+	struct ctPerformanceCounterCounterProperties
 	{
 		const ctWmiEnumClassType m_classType = ctWmiEnumClassType::Uninitialized;
 		const ctWmiEnumClassName m_className = ctWmiEnumClassName::Uninitialized;
@@ -1361,12 +1352,12 @@ namespace ctl
 	};
 
 	template <>
-	inline bool ctWmiPerformanceCounterProperties::PropertyNameExists<ULONG>(_In_ PCWSTR name) const noexcept
+	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<ULONG>(_In_ PCWSTR name) const noexcept
 		// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_ulongFieldNameCount; ++counter)
 		{
-			if (ctString::iordinal_equals(name, m_ulongFieldNames[counter]))
+			if (wil::compare_string_ordinal(name, m_ulongFieldNames[counter], true) == wistd::weak_ordering::equivalent)
 			{
 				return true;
 			}
@@ -1376,12 +1367,12 @@ namespace ctl
 	}
 
 	template <>
-	inline bool ctWmiPerformanceCounterProperties::PropertyNameExists<ULONGLONG>(_In_ PCWSTR name) const noexcept
+	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<ULONGLONG>(_In_ PCWSTR name) const noexcept
 		// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_ulonglongFieldNameCount; ++counter)
 		{
-			if (ctString::iordinal_equals(name, m_ulonglongFieldNames[counter]))
+			if (wil::compare_string_ordinal(name, m_ulonglongFieldNames[counter], true) == wistd::weak_ordering::equivalent)
 			{
 				return true;
 			}
@@ -1391,12 +1382,12 @@ namespace ctl
 	}
 
 	template <>
-	inline bool ctWmiPerformanceCounterProperties::PropertyNameExists<std::wstring>(_In_ PCWSTR name) const noexcept
+	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<std::wstring>(_In_ PCWSTR name) const noexcept
 		// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_stringFieldNameCount; ++counter)
 		{
-			if (ctString::iordinal_equals(name, m_stringFieldNames[counter]))
+			if (wil::compare_string_ordinal(name, m_stringFieldNames[counter], true) == wistd::weak_ordering::equivalent)
 			{
 				return true;
 			}
@@ -1406,12 +1397,12 @@ namespace ctl
 	}
 
 	template <>
-	inline bool ctWmiPerformanceCounterProperties::PropertyNameExists<wil::unique_bstr>(_In_ PCWSTR name) const noexcept
+	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<wil::unique_bstr>(_In_ PCWSTR name) const noexcept
 		// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_stringFieldNameCount; ++counter)
 		{
-			if (ctString::iordinal_equals(name, m_stringFieldNames[counter]))
+			if (wil::compare_string_ordinal(name, m_stringFieldNames[counter], true) == wistd::weak_ordering::equivalent)
 			{
 				return true;
 			}
@@ -1420,7 +1411,7 @@ namespace ctl
 		return false;
 	}
 
-	namespace ctWmiPerformanceDetails
+	namespace ctPerformanceCounterDetails
 	{
 		// ReSharper disable StringLiteralTypo
 		inline const wchar_t* g_commonStringPropertyNames[]{
@@ -1800,7 +1791,7 @@ namespace ctl
 
 		// this patterns (const array of wchar_t* pointers)
 		// allows for compile-time construction of the array of properties
-		inline const ctWmiPerformanceCounterProperties c_performanceCounterPropertiesArray[]{
+		inline const ctPerformanceCounterCounterProperties c_performanceCounterPropertiesArray[]{
 
 			{
 				.m_classType = ctWmiEnumClassType::Static,
@@ -1985,58 +1976,58 @@ namespace ctl
 	}
 
 	template <typename T>
-	std::shared_ptr<ctWmiPerformanceCounter<T>> ctMakeStaticPerfCounter(
+	std::shared_ptr<ctPerformanceCounterCounter<T>> ctMakeStaticPerfCounter(
 		const ctWmiService& wmi,
 		_In_ PCWSTR className,
 		_In_ PCWSTR counterName,
-		ctWmiPerformanceCollectionType collectionType = ctWmiPerformanceCollectionType::Detailed)
+		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
 	{
 		// 'static' WMI PerfCounters enumerate via IWbemClassObject and accessed/refreshed via IWbemClassObject
-		return std::make_shared<ctWmiPerformanceCounterImpl<IWbemClassObject, IWbemClassObject, T>>(
+		return std::make_shared<ctPerformanceCounterCounterImpl<IWbemClassObject, IWbemClassObject, T>>(
 			wmi, className, counterName, collectionType);
 	}
 
 	template <typename T>
-	std::shared_ptr<ctWmiPerformanceCounter<T>> ctMakeStaticPerfCounter(
+	std::shared_ptr<ctPerformanceCounterCounter<T>> ctMakeStaticPerfCounter(
 		PCWSTR className,
 		PCWSTR counterName,
-		const ctWmiPerformanceCollectionType collectionType = ctWmiPerformanceCollectionType::Detailed)
+		const ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
 	{
 		const ctWmiService wmi(L"root\\cimv2");
 		return ctMakeStaticPerfCounter<T>(wmi, className, counterName, collectionType);
 	}
 
 	template <typename T>
-	std::shared_ptr<ctWmiPerformanceCounter<T>> ctMakeInstancePerfCounter(
+	std::shared_ptr<ctPerformanceCounterCounter<T>> ctMakeInstancePerfCounter(
 		const ctWmiService& wmi,
 		_In_ PCWSTR className,
 		_In_ PCWSTR counterName,
-		ctWmiPerformanceCollectionType collectionType = ctWmiPerformanceCollectionType::Detailed)
+		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
 	{
 		// 'instance' WMI perf objects are enumerated through the IWbemHiPerfEnum interface and accessed/refreshed through the IWbemObjectAccess interface
-		return std::make_shared<ctWmiPerformanceCounterImpl<IWbemHiPerfEnum, IWbemObjectAccess, T>>(
+		return std::make_shared<ctPerformanceCounterCounterImpl<IWbemHiPerfEnum, IWbemObjectAccess, T>>(
 			wmi, className, counterName, collectionType);
 	}
 
 	template <typename T>
-	std::shared_ptr<ctWmiPerformanceCounter<T>> ctMakeInstancePerfCounter(
+	std::shared_ptr<ctPerformanceCounterCounter<T>> ctMakeInstancePerfCounter(
 		_In_ PCWSTR className,
 		_In_ PCWSTR counterName,
-		ctWmiPerformanceCollectionType collectionType = ctWmiPerformanceCollectionType::Detailed)
+		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
 	{
 		const ctWmiService wmi(L"root\\cimv2");
 		return ctMakeInstancePerfCounter<T>(wmi, className, counterName, collectionType);
 	}
 
 	template <typename T>
-	std::shared_ptr<ctWmiPerformanceCounter<T>> ctCreatePerfCounter(
+	std::shared_ptr<ctPerformanceCounterCounter<T>> ctCreatePerfCounter(
 		const ctWmiService& wmi,
 		ctWmiEnumClassName className,
 		_In_ PCWSTR counterName,
-		ctWmiPerformanceCollectionType collectionType = ctWmiPerformanceCollectionType::Detailed)
+		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
 	{
-		const ctWmiPerformanceCounterProperties* foundProperty = nullptr;
-		for (const auto& counterProperty : ctWmiPerformanceDetails::c_performanceCounterPropertiesArray)
+		const ctPerformanceCounterCounterProperties* foundProperty = nullptr;
+		for (const auto& counterProperty : ctPerformanceCounterDetails::c_performanceCounterPropertiesArray)
 		{
 			if (className == counterProperty.m_className)
 			{
@@ -2066,10 +2057,10 @@ namespace ctl
 	}
 
 	template <typename T>
-	std::shared_ptr<ctWmiPerformanceCounter<T>> ctCreatePerfCounter(
+	std::shared_ptr<ctPerformanceCounterCounter<T>> ctCreatePerfCounter(
 		ctWmiEnumClassName className,
 		_In_ PCWSTR counterName,
-		ctWmiPerformanceCollectionType collectionType = ctWmiPerformanceCollectionType::Detailed)
+		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
 	{
 		const ctWmiService wmi(L"root\\cimv2");
 		return ctCreatePerfCounter<T>(wmi, className, counterName, collectionType);

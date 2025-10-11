@@ -14,21 +14,18 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // ReSharper disable CppInconsistentNaming
 #pragma once
 
-// cpp headers
 #include <string>
 #include <vector>
 #include <set>
-// os headers
+
 #include <Windows.h>
-// Winsock2 is needed for IPHelper headers
-// ReSharper disable once CppUnusedIncludeDirective
 #include <WinSock2.h>
 #include <ws2ipdef.h>
 #include <iphlpapi.h>
 #include <tcpestats.h>
-// ctl headers
+
 #include <ctSockaddr.hpp>
-// wil headers always included last
+
 #include <wil/stl.h>
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>

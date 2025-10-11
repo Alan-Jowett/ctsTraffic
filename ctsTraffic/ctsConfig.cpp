@@ -32,7 +32,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <ctSocketExtensions.hpp>
 #include <ctTimer.hpp>
 #include <ctRandom.hpp>
-#include <ctWmiInitialize.hpp>
+#include <ctWmiInstance.hpp>
 // project headers
 #include "ctsConfig.h"
 #include "ctsLogger.hpp"
@@ -156,9 +156,7 @@ namespace ctsTraffic::ctsConfig
 		// - this allows for much greater reuse of local ports, but also requires
 		//   the system having been deliberately configured to take advantage of it
 		// - looking for corresponding the WMI class property, which only exists in Win10+
-		const ctWmiService wmiService(L"ROOT\\StandardCimv2");
-		ctWmiEnumerate wmiQuery(wmiService);
-		for (const auto& instance : wmiQuery.query(L"SELECT * FROM MSFT_NetTCPSetting"))
+		for (const auto& instance : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetTCPSetting"))
 		{
 			wil::unique_variant varValue;
 			instance.get(L"AutoReusePortRangeNumberOfPorts", varValue.addressof());
@@ -185,9 +183,7 @@ namespace ctsTraffic::ctsConfig
 	constexpr auto* NotEnabledString = L"NOT-ENABLED";
 	static std::wstring CheckOffloadRsc(const std::wstring& inputInterfaceDescription) noexcept try
 	{
-		const ctWmiService wmiService(L"ROOT\\StandardCimv2");
-		ctWmiEnumerate wmiQuery(wmiService);
-		for (const auto& setting : wmiQuery.query(L"SELECT * FROM MSFT_NetAdapterRscSettingData"))
+		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterRscSettingData"))
 		{
 			std::wstring interfaceDescription;
 			setting.get(L"InterfaceDescription", &interfaceDescription);
@@ -216,9 +212,7 @@ namespace ctsTraffic::ctsConfig
 
 	static std::wstring CheckOffloadLso(const std::wstring& inputInterfaceDescription) noexcept try
 	{
-		const ctWmiService wmiService(L"ROOT\\StandardCimv2");
-		ctWmiEnumerate wmiQuery(wmiService);
-		for (const auto& setting : wmiQuery.query(L"SELECT * FROM MSFT_NetAdapterLsoSettingData"))
+		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterLsoSettingData"))
 		{
 			std::wstring interfaceDescription;
 			setting.get(L"InterfaceDescription", &interfaceDescription);
@@ -247,9 +241,7 @@ namespace ctsTraffic::ctsConfig
 
 	static std::wstring CheckOffloadRss(const std::wstring& inputInterfaceDescription) noexcept try
 	{
-		const ctWmiService wmiService(L"ROOT\\StandardCimv2");
-		ctWmiEnumerate wmiQuery(wmiService);
-		for (const auto& setting : wmiQuery.query(L"SELECT * FROM MSFT_NetAdapterRssSettingData"))
+		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterRssSettingData"))
 		{
 			std::wstring interfaceDescription;
 			setting.get(L"InterfaceDescription", &interfaceDescription);
@@ -275,14 +267,10 @@ namespace ctsTraffic::ctsConfig
 
 	static std::wstring PrintPhysicalAdapter(const std::wstring& inputInterfaceDescription) noexcept try
 	{
-		const ctWmiService wmiService(L"ROOT\\StandardCimv2");
-		ctWmiEnumerate wmiQuery(wmiService);
-		ctWmiEnumerate wmiHardwareQuery(wmiService);
-
 		std::wstring returnString;
 
 		// the first query is to find the PCI link speed
-		for (const auto& setting : wmiQuery.query(L"SELECT * FROM MSFT_NetAdapterHardwareInfoSettingData"))
+		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterHardwareInfoSettingData"))
 		{
 			std::wstring interfaceDescription;
 			setting.get(L"InterfaceDescription", &interfaceDescription);
@@ -326,7 +314,7 @@ namespace ctsTraffic::ctsConfig
 		}
 
 		// the second query is to find a custom adapter property describing buffers available on the adapter
-		for (const auto& setting : wmiHardwareQuery.query(L"SELECT * FROM MSFT_NetAdapterAdvancedPropertySettingData"))
+		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterAdvancedPropertySettingData"))
 		{
 			std::wstring interfaceDescription;
 			setting.get(L"InterfaceDescription", &interfaceDescription);
@@ -3023,9 +3011,7 @@ namespace ctsTraffic::ctsConfig
 		//
 		CheckReuseUnicastPort();
 
-		const ctWmiService wmiService(L"ROOT\\StandardCimv2");
-		ctWmiEnumerate netAdapter(wmiService);
-		for (const auto& setting : netAdapter.query(L"SELECT * FROM MSFT_NetAdapter"))
+		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapter"))
 		{
 			std::wstring interfaceDescription;
 			if (setting.get(L"InterfaceDescription", &interfaceDescription))
@@ -4335,7 +4321,7 @@ namespace ctsTraffic::ctsConfig
 				totalTime > 0LL ? stats.m_bytesRecv.GetValue() * 1000LL / totalTime : 0LL,
 				totalTime);
 
-			DWORD bytesReturned;
+			DWORD bytesReturned{};
 			TCP_INFO_v1 tcpInfo1{};
 			DWORD tcpInfoVersion = 1;
 			if (WSAIoctl(
