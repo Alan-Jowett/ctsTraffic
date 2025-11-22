@@ -21,6 +21,7 @@ This repo contains a solution with multiple projects but the main executable and
   - `ctsSocketBroker.*` : manages pool of `ctsSocketState` objects, enforces concurrent/pending connection limits, schedules creation of sockets and refreshes pool as connections complete.
 - Socket state and socket
   - `ctsSocketState.*` : per-connection state machine that transitions through Creation -> (Connecting) -> InitiatingIo -> InitiatedIo -> Closing -> Closed. Uses thread-pool work callbacks to drive state transitions.
+  - `ctsSocketState.*` : per-connection state machine that transitions through `Creating` -> `Created` -> (Connecting -> `Connected`) -> `InitiatingIo` -> `InitiatedIo` -> `Closing` -> `Closed`. Uses thread-pool work callbacks to drive state transitions. `ctsSocketState` owns a `TP_WORK` used to run the state-machine callbacks.
   - `ctsSocket.*` : core socket wrapper which owns the native `SOCKET`, the I/O pattern object, threadpool helpers (IOCP wrapper, timers), local/remote addresses, and exposes safe locking via `AcquireSocketLock()`.
 - IO patterns
   - `ctsIOPattern.*` : factory and implementations of different IO behaviors (Push, Pull, PushPull, Duplex, MediaStream). Patterns encapsulate per-connection I/O flow, verification, and per-connection statistics.
@@ -52,6 +53,8 @@ This repo contains a solution with multiple projects but the main executable and
     - `m_tpIocp`, `m_tpTimer`: threadpool objects used for IO notifications and timers
     - `m_ioCount`: outstanding IO request counter
   - Provides `SetIoPattern()` which creates and configures the IO pattern object and registers callbacks.
+  - Note: `SetIoPattern()` calls `ctsIoPattern::MakeIoPattern()`; in test scenarios this can return null and `SetIoPattern()` will return early. When `ctsConfig::g_configSettings->PrePostSends` is zero, `SetIoPattern()` will also start the ISB (ideal send backlog) notification sequence via `InitiateIsbNotification()` to enable adaptive pacing.
+    - When an IO pattern completes or an error occurs, `ctsSocket::CompleteState()` will query the pattern for its last error and unregister its callback before notifying the parent `ctsSocketState`.
   - Provides `GetIocpThreadpool()` to lazily create `ctThreadIocp` object when needed. The IOCP wrapper is used to post overlapped IO callbacks.
   - Implements `InitiateIsbNotification()` which uses `idealsendbacklognotify/query` to dynamically adjust the ideal send backlog for adaptive send pacing.
 
@@ -69,6 +72,7 @@ The `ctsIoPattern` subsystem implements several concrete patterns. Each pattern 
 
 - Push (default client->server send)
   - Behavior: The client continuously sends data until the configured `TransferSize` is reached. The server primarily receives and validates the pattern. After a client finishes sending, it typically waits for a confirmation response from the server.
+  - Behavior: The client continuously sends data until the configured `TransferSize` is reached. The server primarily receives and validates the pattern. Some patterns implement a completion/confirmation exchange (for example: send/recv completion messages) depending on the configured protocol/pattern; this behavior is pattern-specific rather than implicit to all Push scenarios.
   - Pre-post behavior: On the receiver, `PrePostRecvs` controls the number of outstanding WSARecv calls. The sender may pre-post sends when using RIO or Registered IO.
   - Verification: Receiver validates each buffer against the configured test pattern when `ShouldVerifyBuffers` is true.
   - Use-cases: Measuring good-put in upload scenarios; simple throughput tests.
@@ -108,13 +112,15 @@ Implementation notes common to patterns:
 - The IO pattern uses the IOCP threadpool wrapper for overlapped IO completions. Callbacks from IO operations are executed on threadpool threads and are expected to be fast and non-throwing.
 - `ctsSocketBroker` serializes creation/removal of `ctsSocketState` objects with an internal lock; most heavy work occurs in the threadpool callbacks.
 - Timers for periodic status updates are implemented with `CreateThreadpoolTimer` in `ctsTraffic.cpp` and per-socket timers using `CreateThreadpoolTimer` stored on the socket.
+ - `ctsSocket::CompleteState()` obtains the final pattern error (if any) and unregisters the pattern callback before calling back into the parent `ctsSocketState`.
 
 ## Socket Lifecycle Sequence (Client example)
 
 1. `ctsSocketBroker::Start()` creates up to `ConnectionLimit` `ctsSocketState` objects and calls `Start()` on them.
 2. `ctsSocketState::ThreadPoolWorker` runs in `Creating` state and constructs a `ctsSocket` and invokes `ctsConfig::CreateFunction`.
 3. `ctsConfig::ConnectFunction` (when configured) initiates a connect. On success, `ctsSocketState` transitions to `InitiatingIo` or `Connected`.
-4. In `InitiatingIo`, broker is notified via `InitiatingIo()`, `ctsSocket::SetIoPattern()` attaches an IO pattern, and the configured `IoFunction` is invoked to begin send/receive loops.
+4. In `InitiatingIo`, broker is notified via `InitiatingIo()`, the state installs an IO pattern via `ctsSocket::SetIoPattern()` (which can start ISB notifications when appropriate), the state transitions to `InitiatedIo`, and the configured `IoFunction` is invoked to begin send/receive loops.
+ - Note: `ctsSocketBroker::Wait()` will also return when `ctsConfig::g_configSettings->CtrlCHandle` is signaled (the code installs a console ctrl handler in `wmain`), so a Ctrl-C will cause the broker to stop earlier than natural completion.
 5. IO completions are handled by the IO pattern, which updates per-connection stats and the global stats via `ctsConfig::g_configSettings` counters.
 6. On completion or error, the state transitions to `Closing`, the socket is closed, results printed, and the `ctsSocketState` moves to `Closed` and is removed from the broker pool.
 
