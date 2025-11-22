@@ -13,16 +13,16 @@ This repo contains a solution with multiple projects but the main executable and
 ## High-level architecture
 
 - ctsTraffic.exe (entrypoint)
-  - `ctsTraffic.cpp` : program lifecycle, WSAStartup, configuration startup/shutdown, status timer, top-level broker startup and final summary (see `ctsTraffic/ctsTraffic.cpp` around `wmain`, e.g. lines ~46..180).
+  - `ctsTraffic.cpp` : program lifecycle, WSAStartup, configuration startup/shutdown, status timer, top-level broker startup and final summary (see https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsTraffic.cpp#L46-L180).
 - Configuration and logging
-  - `ctsConfig.*` : parses command-line args, stores global `ctsConfig::g_configSettings`, exposes helper functions for printing, options, and socket setup (see `ctsTraffic/ctsConfig.h` where `g_configSettings` is declared and `ctsTraffic/ctsConfig.cpp` for parsing and flag setup e.g. `-io:rioiocp` at `ctsTraffic/ctsConfig.cpp:~680`).
+  - `ctsConfig.*` : parses command-line args, stores global `ctsConfig::g_configSettings`, exposes helper functions for printing, options, and socket setup (see https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsConfig.h#L432-L444 for the `g_configSettings` declaration, and `-io:rioiocp` handling at https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsConfig.cpp#L680-L692).
   - `ctsLogger.*`, `ctsPrintStatus.*` : logging and status output (console and file). See `ctsTraffic/ctsLogger.hpp` and `ctsTraffic/ctsPrintStatus.hpp`.
 - Broker (connection lifecycle)
   - `ctsSocketBroker.*` : manages pool of `ctsSocketState` objects, enforces concurrent/pending connection limits, schedules creation of sockets and refreshes pool as connections complete.
 - Socket state and socket
   - `ctsSocketState.*` : per-connection state machine that transitions through Creation -> (Connecting) -> InitiatingIo -> InitiatedIo -> Closing -> Closed. Uses thread-pool work callbacks to drive state transitions.
-  - `ctsSocketState.*` : per-connection state machine that transitions through `Creating` -> `Created` -> (Connecting -> `Connected`) -> `InitiatingIo` -> `InitiatedIo` -> `Closing` -> `Closed`. Uses thread-pool work callbacks to drive state transitions. `ctsSocketState` owns a `TP_WORK` used to run the state-machine callbacks (see enum at `ctsTraffic/ctsSocketState.h:22..36` and worker creation in `ctsTraffic/ctsSocketState.cpp:1..40`).
-  - `ctsSocket.*` : core socket wrapper which owns the native `SOCKET`, the I/O pattern object, threadpool helpers (IOCP wrapper, timers), local/remote addresses, and exposes safe locking via `AcquireSocketLock()` (see `ctsTraffic/ctsSocket.h` and `ctsTraffic/ctsSocket.cpp`).
+  - `ctsSocketState.*` : per-connection state machine that transitions through `Creating` -> `Created` -> (Connecting -> `Connected`) -> `InitiatingIo` -> `InitiatedIo` -> `Closing` -> `Closed`. Uses thread-pool work callbacks to drive state transitions. `ctsSocketState` owns a `TP_WORK` used to run the state-machine callbacks (see enum at https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsSocketState.h#L22-L36 and worker creation in https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsSocketState.cpp#L1-L40).
+  - `ctsSocket.*` : core socket wrapper which owns the native `SOCKET`, the I/O pattern object, threadpool helpers (IOCP wrapper, timers), local/remote addresses, and exposes safe locking via `AcquireSocketLock()` (see https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsSocket.h and https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsSocket.cpp).
 - IO patterns
   - `ctsIOPattern.*` : factory and implementations of different IO behaviors (Push, Pull, PushPull, Duplex, MediaStream). Patterns encapsulate per-connection I/O flow, verification, and per-connection statistics.
 - Winsock abstraction
@@ -52,14 +52,14 @@ This repo contains a solution with multiple projects but the main executable and
     - `m_pattern`: pointer to `ctsIoPattern` for this connection
     - `m_tpIocp`, `m_tpTimer`: threadpool objects used for IO notifications and timers
     - `m_ioCount`: outstanding IO request counter
-  - Provides `SetIoPattern()` which creates and configures the IO pattern object and registers callbacks (implementation at `ctsTraffic/ctsSocket.cpp:~112..134`).
-  - Note: `SetIoPattern()` calls `ctsIoPattern::MakeIoPattern()` (factory in `ctsTraffic/ctsIOPattern.cpp:~36..64`); in test scenarios this can return null and `SetIoPattern()` will return early. When `ctsConfig::g_configSettings->PrePostSends` is zero, `SetIoPattern()` will also start the ISB (ideal send backlog) notification sequence via `InitiateIsbNotification()` (see `ctsTraffic/ctsSocket.cpp:~220..280`).
+  - Provides `SetIoPattern()` which creates and configures the IO pattern object and registers callbacks (implementation at https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsSocket.cpp#L176-L194).
+  - Note: `SetIoPattern()` calls `ctsIoPattern::MakeIoPattern()` (factory at https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsIOPattern.cpp#L96-L112); in test scenarios this can return null and `SetIoPattern()` will return early. When `ctsConfig::g_configSettings->PrePostSends` is zero, `SetIoPattern()` will also start the ISB (ideal send backlog) notification sequence via `InitiateIsbNotification()` (see https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsSocket.cpp#L200-L280).
     - When an IO pattern completes or an error occurs, `ctsSocket::CompleteState()` will query the pattern for its last error and unregister its callback before notifying the parent `ctsSocketState`.
   - Provides `GetIocpThreadpool()` to lazily create `ctThreadIocp` object when needed. The IOCP wrapper is used to post overlapped IO callbacks.
-  - Implements `InitiateIsbNotification()` which uses `idealsendbacklognotify`/`idealsendbacklogquery` to dynamically adjust the ideal send backlog for adaptive send pacing (see `ctsTraffic/ctsSocket.cpp:~220..280`).
+  - Implements `InitiateIsbNotification()` which uses `idealsendbacklognotify`/`idealsendbacklogquery` to dynamically adjust the ideal send backlog for adaptive send pacing (see https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsSocket.cpp#L200-L280).
 
 - ctsIoPattern
-  - Factory `MakeIoPattern()` selects concrete IO pattern implementation based on `ctsConfig::g_configSettings->IoPattern` (see `ctsTraffic/ctsIOPattern.cpp:~36..64`).
+  - Factory `MakeIoPattern()` selects concrete IO pattern implementation based on `ctsConfig::g_configSettings->IoPattern` (see https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsIOPattern.cpp#L96-L112).
   - Pattern responsibilities:
     - Manage per-connection send/recv loop.
     - Pre-post receives/sends based on `PrePostRecvs` / `PrePostSends`.
@@ -98,7 +98,7 @@ The `ctsIoPattern` subsystem implements several concrete patterns. Each pattern 
 Implementation notes common to patterns:
 
 - Rate limiting: Patterns can use `ctsIOPatternRateLimitPolicy` which consults `ctsConfig::GetTcpBytesPerSecond()` and `TcpBytesPerSecondPeriod` to schedule sends in quantums.
-  - RIO / Registered IO: When using `WSA_FLAG_REGISTERED_IO` the pattern will use RIO buffers/IDs and adjust behavior to avoid extra buffer copies. See `ctsIOPattern.cpp` for multiple code-paths handling RIO vs overlapped IO (e.g. buffer registration in `ctsTraffic/ctsIOPattern.cpp:~120..220`). The `-io:rioiocp` argument sets the flag at `ctsTraffic/ctsConfig.cpp:~680`.
+  - RIO / Registered IO: When using `WSA_FLAG_REGISTERED_IO` the pattern will use RIO buffers/IDs and adjust behavior to avoid extra buffer copies. See `ctsIOPattern.cpp` for multiple code-paths handling RIO vs overlapped IO (e.g. buffer registration in https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsIOPattern.cpp#L120-L220). The `-io:rioiocp` argument sets the flag at https://github.com/Alan-Jowett/ctsTraffic/blob/docs/design-spec-mermaid/ctsTraffic/ctsConfig.cpp#L680-L692.
 - Shared buffer mode: When `UseSharedBuffer` is enabled in `g_configSettings`, the implementation uses a single reusable buffer for sends/receives (saves memory at the expense of increased coordination).
 
 
