@@ -152,116 +152,164 @@ Each Functional Requirement (FR‑###) is a statement of required behavior; all 
 
 ---
 
-## Data / Control Flows (textual diagrams)
+# cts-traffic — Functional Requirements Specification
 
-**Packet path (text)**
-- NIC → hardware RSS queue → kernel receive path → socket bound to shard → IOCP associated with shard → worker thread (dequeues up to `B` completions) → application receive callback → application processing.
+Sharded UDP receive for cts-traffic (IOCP enqueue contention mitigation)
 
-**Back‑pressure control (text)**
-- If per‑shard backlog (completion queue depth or measured enqueue latency) exceeds configured thresholds, the shard controller shall:
-  - increase `RECV_BUFFER_SIZE` (subject to system limits), and/or
-  - increase `OUTSTANDING_RECEIVES` (`R`) up to configured max, and/or
-  - emit a warning telemetry event; actions and thresholds are configurable.
-
-**Rebalance flow (text)**
-- Rebalance trigger (operator request or topology change) → controller acquires shard reconfiguration lock → new CPU/NUMA mapping validated → routing updates applied for new incoming flows → telemetry event sequence emitted → finalization and release.
+**Revision date:** 2025-11-22  
+**Scope:** cts-traffic codebase — receive-path sharding for high-volume UDP ingest
 
 ---
 
-## Failure Modes & Recovery
+## Overview & Scope
 
-**Unavailable SIO_CPU_AFFINITY or equivalent OS capability**
-- Detection: startup capability probe shall detect unavailability and emit capability‑loss event.  
-- Recovery/fallback: the system shall fall back to a reduced‑shard or single‑socket mode and shall optionally enable an alternative supported optimized path (e.g., RIO or larger `OUTSTANDING_RECEIVES`). The fallback mode shall be observable and logged.
+Purpose: The cts-traffic system shall eliminate IOCP enqueue bottlenecks observed when a single UDP socket + IOCP is used for high-rate receive traffic by sharding UDP receive processing across multiple sockets and IOCPs aligned with cts-traffic runtime abstractions (e.g., `ctsSocket`, `ctsSocketState`, `ctThreadIocp`) and CPU/RSS/NUMA topology. This document scopes functional requirements to the cts-traffic design referenced in the project's `documents/DesignSpec.md`.
 
-**IOCP saturation / enqueue contention**
-- Detection: sustained high completion queue depths, increased dequeue latency, or IOCP enqueue failures.  
-- Recovery: the controller shall adjust `BATCH_SIZE` (increase `B`), increase per‑socket `OUTSTANDING_RECEIVES`, or increase `RECV_BUFFER_SIZE`. The controller shall emit an alert event and suggest human remediation if automatic adjustments do not restore acceptable metrics.
+In scope
+- Changes required in cts-traffic to support sharded receive: socket lifecycle (`ctsSocket`), state manager (`ctsSocketState`), broker semantics (`ctsSocketBroker`), configuration (`ctsConfig`), and IO completion integration (`ctThreadIocp` / IOCP wrappers).
+- Telemetry additions in the cts-traffic telemetry surface (ETW/counters) to report per-shard metrics.
+- Runtime configuration controls to enable and tune sharding behavior.
 
-**NUMA misalignment**
-- Detection: high remote memory access counters, elevated latency for certain shards.  
-- Recovery: the system shall warn and propose a corrected CPU/NUMA mask; if automatic remediation is enabled, the system shall attempt to rebind shards to local NUMA nodes and report the outcome.
-
-**Shard failure (e.g., worker crash)**
-- Detection: shard heartbeat missing, repeated error events.  
-- Recovery: the system shall mark shard as offline, reassign incoming flows per policy, and if configured, spawn replacement shard worker; telemetry shall include time to recovery.
+Out of scope
+- NIC driver or kernel RSS implementation changes.
+- Major redesign of send path unless required for correctness during receive sharding.
 
 ---
 
-## Acceptance Criteria (AC‑###)
+## Goals & Non‑Goals
 
-**AC‑001 (Throughput & Latency)**
-- Given `SHARD_COUNT` = number of logical processors and offered load `L` (test vector), the system shall sustain the load with p99 latency ≤ `B_LAT` µs and drop rate ≤ `C%` during a sustained run of duration `P` minutes (test duration specified by test plan).
+Goals (shall)
+- Integrate sharding within cts-traffic so receive throughput scales with SHARD_COUNT up to Nmax on target hardware.
+- Preserve existing cts-traffic observable semantics (per-connection ConnectionId and per-connection stats) while ensuring per-flow affinity across shards.
+- Provide telemetry, counters, and events compatible with cts-traffic logging/ETW conventions.
 
-**AC‑002 (Flow Stickiness)**
-- A flow stickiness test that sends packets for a single 4‑tuple continuously for `M` minutes shall show that all packets for that 4‑tuple are processed by exactly one shard (no inter‑shard processing) except during controlled rebalance windows; telemetry shall show a single shard identifier for that 4‑tuple across `M`.
-
-**AC‑003 (Shard Removal Rebalance)**
-- When one shard is deliberately disabled during a live test, the system shall rebalance remaining traffic such that throughput loss ≤ `U%` and the rebalance completes within `S` seconds.
-
-**AC‑004 (Telemetry Fidelity)**
-- The telemetry stream shall export per‑shard counters at interval `T` ms and the sum of per‑shard received packets shall equal the NIC total (within measurement tolerance), while reported drops shall be consistent with packet loss observed at test traffic sources.
-
-**AC‑005 (Graceful Shutdown)**
-- On graceful shutdown, the system shall drain or account for in‑flight completions and emit a drain report within `D` ms indicating counts of processed, dropped, and cancelled receives.
-
-**AC‑006 (Compatibility Fallback)**
-- When SIO_CPU_AFFINITY is unavailable on a tested SKU in `SKU_LIST`, the system shall report capability loss and operate in a documented fallback mode; acceptance requires that fallback mode be functional and telemetry identifies the degraded mode.
+Non-Goals (shall not)
+- The change shall not require kernel or NIC driver modifications.
+- The change shall not alter existing public command-line flags or behavior unless explicitly gated by new configuration options in `ctsConfig`.
 
 ---
 
-## Constraints & Assumptions
+## Variables (parameterized)
 
-- The design assumes Windows UDP semantics (socket semantics, overlapped I/O, IOCP semantics).
-- Where SIO_CPU_AFFINITY (or equivalent) is referenced, it shall be invoked before socket bind operations for correctness.
-- Sharding the same port across sockets may be incompatible with `SO_REUSEADDR` or `SO_REUSE_MULTICASTPORT` on some SKUs; the system shall validate platform behavior and fail with clear diagnostics if unsupported.
-- NICs are expected to have RSS enabled and provide ≥ `Q` MSI‑X/MSI queues for effective hardware queue distribution; if not, acceptance tests shall reflect hardware limits.
-- The process shall run with sufficient privileges to set required socket options and CPU affinity masks.
-
----
-
-## Glossary
-
-- **IOCP**: I/O Completion Port (Windows)
-- **RSS**: Receive Side Scaling (hardware hashing to queues)
-- **NUMA**: Non‑Uniform Memory Access
-- **shard**: a logical receive processing unit consisting of a socket, IOCP, and worker(s)
-- **backlog**: queued but unprocessed receive completions
-- **pps**: packets per second
-- **ETW**: Event Tracing for Windows
-- **AFD**: Ancillary Function Driver/Windows socket stack component (contextual)
-- **4‑tuple**: (src IP, src port, dst IP, dst port)
-- **RIO**: Registered I/O (reference only as a possible fallback mode)
+- `N` / `SHARD_COUNT`: number of shards (sockets + IOCPs) — default: number of logical processors; range 1..`Nmax`.
+- `B` / `BATCH_SIZE`: completion dequeue batch size — default: 64; range: 1..512.
+- `R` / `OUTSTANDING_RECEIVES`: outstanding receives per shard — default: 512; range: 8..8192.
+- `L` / `OFFERED_LOAD`: test load vector (Mpps/Mbps).
+- `A` / `LATENCY_MEDIAN_US`, `B_LAT` / `LATENCY_P99_US` — latency targets.
+- `C` / `DROP_PERCENT` — acceptable drop percent under load `L`.
+- `T` / `TELEMETRY_INTERVAL_MS` — default 1000 ms.
+- Other variables as previously defined in design doc.
 
 ---
 
-## Open Questions
+## Functional Requirements (cts-traffic scoped)
 
-- `SKU_LIST`: which Windows server/client builds and KBs shall be explicitly supported and tested?
-- NIC models: what NIC vendors/models and RSS queue counts shall be validated?
-- Maximum shard count (`Nmax`) for realistic hardware targets — what is the intended production `Nmax`?
-- Deployment footprint: memory and per‑shard resource budgets for production targets.
-- Buffer sizing policy: algorithmic policy for `RECV_BUFFER_SIZE` growth/shrink during run.
+FR-001 (CTS Socket Sharding)
+- `ctsSocket` (or a new receive-side socket abstraction) shall support instantiation of `SHARD_COUNT` UDP sockets that are logically tied to a single logical listener (same bind address/port semantics) and expose a shard identifier to the upper layer `ctsSocketState`/broker.
+- The mapping from logical connection (ConnectionId) to shard shall be deterministic and observable.
+
+FR-002 (Per-Shard IOCP / `ctThreadIocp` Association)
+- Each receive socket shall be associated with its own `ctThreadIocp` instance or an IOCP instance logically dedicated to the shard. The `ctThreadIocp` wrapper shall expose batched dequeuing (GetQueuedCompletionStatusEx semantics) with batch size `B`.
+
+FR-003 (Integration with `ctsSocketState` and Broker)
+- `ctsSocketState` shall be able to select and bind its receive context to a specific shard so that per-connection state and reporting remain consistent. `ctsSocketBroker` shall manage shard lifecycle (create/destroy) when scaling SHARD_COUNT up or down.
+
+FR-004 (Affinity & NUMA alignment)
+- `ctsConfig` shall expose CPU/NUMA affinity configuration for shards. The cts-traffic runtime shall prefer binding shard workers and `ctThreadIocp` to CPUs and NUMA nodes compatible with RSS mapping for target NICs.
+
+FR-005 (Outstanding Receives & Backpressure within cts-traffic)
+- cts-traffic shall maintain at least `OUTSTANDING_RECEIVES` per shard and shall implement a control loop that monitors per-shard backlog and drop metrics and adjusts `RecvBufferSize` and `OUTSTANDING_RECEIVES` at runtime.
+
+FR-006 (Observability & Telemetry)
+- cts-traffic shall add per-shard telemetry (ETW/counters) consistent with existing telemetry schema: per-shard pps, per-shard drop counts, per-shard backlog length, per-shard dequeue latency histogram, and events for shard add/remove/fallback.
+
+FR-007 (Graceful Shutdown & Drain)
+- cts-traffic shall coordinate shutdown so `ctsSocketBroker` initiates per-shard drain, `ctsSocket` cancels or waits on outstanding receives, and `ctThreadIocp` drains completions within `D` ms before process exit.
+
+FR-008 (Configuration & Command Line)
+- `ctsConfig` shall accept new flags / config keys to enable sharding and set `SHARD_COUNT`, `BATCH_SIZE`, `OUTSTANDING_RECEIVES`, per-shard CPU masks, and `TELEMETRY_INTERVAL_MS`. CLI precedence and runtime change semantics shall match existing `ctsConfig` behavior.
+
+FR-009 (Compatibility & Fallback)
+- On SKUs where per-socket CPU affinity cannot be established, cts-traffic shall detect capability absence at startup and publish a capability-loss event; behavior shall fall back to single-socket receive with enhanced `OUTSTANDING_RECEIVES` tuning.
+
+FR-010 (Security & Buffer Safety)
+- cts-traffic shall ensure buffer ownership semantics remain safe when shard-local buffers are used; `ctsSocket` shall not expose raw shard-local buffers to other shards without ownership handoff.
+
+FR-011 (Testing Hooks)
+- cts-traffic shall provide test hooks or telemetry markers to correlate ConnectionId → shard id mappings to support AC‑002 (flow stickiness) verification.
 
 ---
 
-## References (neutral placeholders)
+## Non‑Functional Requirements (cts-traffic scoped)
 
-- Winsock IOCP APIs: `CreateIoCompletionPort`, `GetQueuedCompletionStatusEx`
-- Winsock control IO: `WSAIoctl(SIO_CPU_AFFINITY)` (platform capability)
-- RSS documentation and NIC vendor guides
-- ETW provider and performance counter conventions
+NFR-001 (Throughput)
+- On supported hardware and with `SHARD_COUNT` set to logical CPU count, cts-traffic shall show aggregated UDP receive throughput improvement vs baseline single-socket runs; test targets (X Mpps) shall be validated per hardware profile.
 
-(Concrete references and provider/event IDs shall be provided in an operational manifest; this document contains neutral placeholders only.)
+NFR-002 (Latency)
+- Median receive-to-callback latency p50 ≤ `A` and p99 ≤ `B_LAT` under load `L` (as measured by existing cts-traffic measurement harness).
 
----
+NFR-003 (Reliability & Soak)
+- The modified cts-traffic executable shall run 24-hour soak tests with no deadlocks and drop rate ≤ `C%` at offered load `L`.
 
-## Style & Formatting Notes (conformance)
-
-- All functional requirements use assertive “shall” language and are numbered.
-- Tunables are UPPER_SNAKE_CASE with defaults and ranges where applicable.
-- The document avoids implementation pseudo‑code and focuses on behavior, observability, and measurable acceptance criteria.
+NFR-004 (Operability)
+- Runtime changes to `SHARD_COUNT`, `BATCH_SIZE`, and other tunables shall be applied using existing `ctsConfig` mechanisms and shall be effective within `K` ms where feasible.
 
 ---
 
-*End of specification.*
+## Interfaces & Configuration (cts-traffic)
+
+- Add configuration keys to `ctsConfig::ctsConfigSettings` and parsing in `ctsConfig.cpp`: `EnableRecvSharding` (bool), `ShardCount`, `ShardBatchSize`, `ShardOutstandingReceives`, `ShardCpuMasks[]`, `ShardNumaNodes[]`, `ShardRebalancePolicy`.
+- `ctsTraffic` startup sequence shall validate capabilities and log chosen default shard topology.
+- Telemetry provider shall extend existing cts-traffic provider and add per-shard event types and counters.
+
+---
+
+## Data / Control Flows (textual)
+
+Packet path (cts-traffic): NIC → kernel RSS → AFD → `ctsSocket` (shard X) → `ctThreadIocp` (shard X) → shard worker → `ctsSocketState` callback → pattern handling.
+
+Backpressure control (cts-traffic): per-shard monitor → adjust `ctsSocket` recv buffer sizes via `ctsWinsockLayer` helpers and tune `OUTSTANDING_RECEIVES` through configuration update path in `ctsConfig`.
+
+Rebalance (cts-traffic): `ctsSocketBroker` coordinates rebind of new sockets, updates `ctsSocketState` mappings, and emits events for telemetry.
+
+---
+
+## Failure Modes & Recovery (cts-traffic)
+
+- If per-shard `ctThreadIocp` cannot be created, log and fall back to single-socket receive and increase `OUTSTANDING_RECEIVES`.
+- If IOCP enqueue failures increase, `ctsSocketBroker` shall increase batch size `B` and `OUTSTANDING_RECEIVES`; emit alerts.
+- NUMA misalignment detection via local metrics; propose mask correction via logs and telemetry.
+
+---
+
+## Acceptance Criteria (cts-traffic)
+
+AC-001 (Throughput/Latency)
+- With `SHARD_COUNT` = logical CPUs and offered load `L`, modified cts-traffic shall meet `B_LAT` p99 latency and drop ≤ `C%` over `P` minutes.
+
+AC-002 (Flow Stickiness)
+- The mapping ConnectionId → shard id shall be stable for `M` minutes of continuous traffic and verifiable via telemetry markers.
+
+AC-003 (Shard Removal)
+- Disabling a shard at runtime shall complete rebalance within `S` seconds with throughput loss ≤ `U%`.
+
+AC-004 (Telemetry)
+- Per-shard counters exported at `T` intervals and sum validation holds within measurement tolerance.
+
+---
+
+## Constraints & Assumptions (cts-traffic)
+
+- Changes shall be made primarily in `ctsSocket`, `ctsSocketBroker`, `ctsSocketState`, `ctsConfig`, and `ctThreadIocp`.
+- Keep backward compatibility: default behavior shall remain single-socket unless `EnableRecvSharding` is enabled.
+- Tests and harnesses may require updates to correlate ConnectionId ↔ shard id; provide test hooks.
+
+---
+
+## Glossary & References
+
+See project `documents/DesignSpec.md` for existing design conventions. Reference Winsock IOCP and WSAIoctl docs for platform calls.
+
+---
+
+*End of cts-traffic scoped specification.*
