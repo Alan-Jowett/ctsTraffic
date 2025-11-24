@@ -82,6 +82,15 @@ namespace ctsTraffic
             MediaStream
         };
 
+        enum class AffinityPolicy : std::uint8_t
+        {
+            None,
+            PerCpu,
+            PerGroup,
+            RssAligned,
+            Manual
+        };
+
         enum class StatusFormatting : std::uint8_t
         {
             NoFormattingSet,
@@ -411,6 +420,14 @@ namespace ctsTraffic
             uint32_t RecvBufValue = 0;
             uint32_t SendBufValue = 0;
             uint32_t KeepAliveValue = 0;
+
+            // Sharded UDP receive configuration
+            bool EnableRecvSharding = false;
+            uint32_t ShardCount = 0; // 0 means default to logical processor count
+            uint32_t OutstandingReceives = 256;
+            uint32_t BatchSize = 64;
+            uint32_t ShardWorkerCount = 1;
+            AffinityPolicy ShardAffinityPolicy = AffinityPolicy::None;
 
             uint32_t PushBytes = 0;
             uint32_t PullBytes = 0;
