@@ -2292,10 +2292,7 @@ namespace ctsTraffic::ctsConfig
 		if (foundShardCount != end(args))
 		{
 			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundShardCount, L"-ShardCount"));
-			if (val == 0)
-			{
-				throw invalid_argument("-ShardCount");
-			}
+			// 0 is a valid sentinel meaning "default to logical processor count"
 			g_configSettings->ShardCount = val;
 			args.erase(foundShardCount);
 		}
@@ -2371,6 +2368,10 @@ namespace ctsTraffic::ctsConfig
 			else if (ctString::iordinal_equals(value, L"Manual"))
 			{
 				g_configSettings->ShardAffinityPolicy = AffinityPolicy::Manual;
+			}
+			else if (ctString::iordinal_equals(value, L"None"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::None;
 			}
 			else
 			{
