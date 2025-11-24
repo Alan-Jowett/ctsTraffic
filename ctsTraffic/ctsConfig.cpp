@@ -2252,13 +2252,23 @@ namespace ctsTraffic::ctsConfig
 	{
 		const auto foundEnable = ranges::find_if(args, [](const wchar_t* parameter) -> bool
 			{
+				if (ctString::iordinal_equals(parameter, L"-EnableRecvSharding"))
+				{
+					return true; // bare flag
+				}
+				// only consider -EnableRecvSharding:... forms for ParseArgument
+				if (!ctString::istarts_with(parameter, L"-EnableRecvSharding:"))
+				{
+					return false;
+				}
 				const auto* const value = ParseArgument(parameter, L"-EnableRecvSharding");
-				// accept either the exact flag "-EnableRecvSharding" or the flag with a value "-EnableRecvSharding:<value>"
-				return value != nullptr || ctString::iordinal_equals(parameter, L"-EnableRecvSharding");
+				return value != nullptr;
 			});
 		if (foundEnable != end(args))
 		{
-			const auto* const value = ParseArgument(*foundEnable, L"-EnableRecvSharding");
+			const auto* const arg = *foundEnable;
+			const auto* const value = ctString::iordinal_equals(arg, L"-EnableRecvSharding") ? nullptr : ParseArgument(arg, L"-EnableRecvSharding");
+
 			if (value == nullptr)
 			{
 				g_configSettings->EnableRecvSharding = true;
@@ -2281,7 +2291,12 @@ namespace ctsTraffic::ctsConfig
 			});
 		if (foundShardCount != end(args))
 		{
-			g_configSettings->ShardCount = ConvertToIntegral<uint32_t>(ParseArgument(*foundShardCount, L"-ShardCount"));
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundShardCount, L"-ShardCount"));
+			if (val == 0)
+			{
+				throw invalid_argument("-ShardCount");
+			}
+			g_configSettings->ShardCount = val;
 			args.erase(foundShardCount);
 		}
 
@@ -2292,7 +2307,12 @@ namespace ctsTraffic::ctsConfig
 			});
 		if (foundOutstanding != end(args))
 		{
-			g_configSettings->OutstandingReceives = ConvertToIntegral<uint32_t>(ParseArgument(*foundOutstanding, L"-OutstandingReceives"));
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundOutstanding, L"-OutstandingReceives"));
+			if (val == 0)
+			{
+				throw invalid_argument("-OutstandingReceives");
+			}
+			g_configSettings->OutstandingReceives = val;
 			args.erase(foundOutstanding);
 		}
 
@@ -2303,7 +2323,12 @@ namespace ctsTraffic::ctsConfig
 			});
 		if (foundBatch != end(args))
 		{
-			g_configSettings->BatchSize = ConvertToIntegral<uint32_t>(ParseArgument(*foundBatch, L"-BatchSize"));
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundBatch, L"-BatchSize"));
+			if (val == 0)
+			{
+				throw invalid_argument("-BatchSize");
+			}
+			g_configSettings->BatchSize = val;
 			args.erase(foundBatch);
 		}
 
@@ -2314,7 +2339,12 @@ namespace ctsTraffic::ctsConfig
 			});
 		if (foundWorker != end(args))
 		{
-			g_configSettings->ShardWorkerCount = ConvertToIntegral<uint32_t>(ParseArgument(*foundWorker, L"-ShardWorkerCount"));
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundWorker, L"-ShardWorkerCount"));
+			if (val == 0)
+			{
+				throw invalid_argument("-ShardWorkerCount");
+			}
+			g_configSettings->ShardWorkerCount = val;
 			args.erase(foundWorker);
 		}
 
@@ -2344,7 +2374,7 @@ namespace ctsTraffic::ctsConfig
 			}
 			else
 			{
-				g_configSettings->ShardAffinityPolicy = AffinityPolicy::None;
+				throw invalid_argument("-AffinityPolicy");
 			}
 			args.erase(foundAffinity);
 		}

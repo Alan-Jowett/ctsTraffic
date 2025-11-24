@@ -34,6 +34,12 @@ bool ctRawIocpShard::Initialize(SOCKET listenSocketHint) noexcept
             std::cerr << "CreateIoCompletionPort (associate) failed: " << GetLastError() << "\n";
             CloseHandle(m_iocp);
             m_iocp = NULL;
+            // If we adopted the socket, make sure we don't leak/close it later
+            if (m_socket != INVALID_SOCKET)
+            {
+                closesocket(m_socket);
+                m_socket = INVALID_SOCKET;
+            }
             return false;
         }
     }
@@ -48,7 +54,7 @@ bool ctRawIocpShard::StartWorkers(uint32_t workerCount) noexcept
         return false;
     }
 
-    m_running = true;
+    m_running.store(true, std::memory_order_release);
     try
     {
         for (uint32_t i = 0; i < workerCount; ++i)
@@ -57,7 +63,14 @@ bool ctRawIocpShard::StartWorkers(uint32_t workerCount) noexcept
         }
     }
     catch (...) {
-        m_running = false;
+        m_running.store(false, std::memory_order_release);
+        for (auto& t : m_workers)
+        {
+            if (t.joinable())
+            {
+                t.join();
+            }
+        }
         m_workers.clear();
         return false;
     }
@@ -67,7 +80,7 @@ bool ctRawIocpShard::StartWorkers(uint32_t workerCount) noexcept
 
 void ctRawIocpShard::Shutdown() noexcept
 {
-    m_running = false;
+    m_running.store(false, std::memory_order_release);
 
     if (m_iocp != NULL)
     {
@@ -105,14 +118,14 @@ void ctRawIocpShard::Shutdown() noexcept
 void ctRawIocpShard::WorkerThreadMain() noexcept
 {
     // Minimal loop - wait for completions and no-op
-    while (m_running)
+    while (m_running.load(std::memory_order_acquire))
     {
         DWORD bytesTransferred = 0;
         ULONG_PTR completionKey = 0;
         LPOVERLAPPED overlapped = nullptr;
 
         BOOL ok = GetQueuedCompletionStatus(m_iocp, &bytesTransferred, &completionKey, &overlapped, INFINITE);
-        if (!m_running) break;
+        if (!m_running.load(std::memory_order_acquire)) break;
         if (!ok)
         {
             auto err = GetLastError();
