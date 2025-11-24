@@ -17,6 +17,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <stdexcept>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -137,6 +138,15 @@ namespace ctsTraffic::ctsConfig
 		// defaulting to verifying - therefore not using a shared buffer
 		g_configSettings->ShouldVerifyBuffers = true;
 		g_configSettings->UseSharedBuffer = false;
+
+		// sharded receive defaults
+		g_configSettings->EnableRecvSharding = false;
+		// default shard count to number of logical processors when 0
+		g_configSettings->ShardCount = 0;
+		g_configSettings->OutstandingReceives = 256;
+		g_configSettings->BatchSize = 64;
+		g_configSettings->ShardWorkerCount = 1;
+		g_configSettings->ShardAffinityPolicy = AffinityPolicy::None;
 
 		g_previousPrintTimeslice = 0LL;
 		g_printTimesliceCount = 0LL;
@@ -2232,6 +2242,182 @@ namespace ctsTraffic::ctsConfig
 		}
 	}
 
+	// Parses sharded receive options
+	// -EnableRecvSharding[:on|:off]
+	// -ShardCount:###
+	// -OutstandingReceives:###
+	// -BatchSize:###
+	// -ShardWorkerCount:###
+	// -AffinityPolicy:<None|PerCpu|PerGroup|RssAligned|Manual>
+	static void ParseForRecvSharding(vector<const wchar_t*>& args)
+	{
+		const auto foundEnable = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				if (ctString::iordinal_equals(parameter, L"-EnableRecvSharding"))
+				{
+					return true; // bare flag
+				}
+				// only consider -EnableRecvSharding:... forms for ParseArgument
+				if (!ctString::istarts_with(parameter, L"-EnableRecvSharding:"))
+				{
+					return false;
+				}
+				const auto* const value = ParseArgument(parameter, L"-EnableRecvSharding");
+				return value != nullptr;
+			});
+		if (foundEnable != end(args))
+		{
+			const auto* const arg = *foundEnable;
+			const auto* const value = ctString::iordinal_equals(arg, L"-EnableRecvSharding") ? nullptr : ParseArgument(arg, L"-EnableRecvSharding");
+
+			if (value == nullptr)
+			{
+				// bare flag == enable
+				g_configSettings->EnableRecvSharding = true;
+			}
+			else if (ctString::iordinal_equals(value, L"1") || ctString::iordinal_equals(value, L"on") || ctString::iordinal_equals(value, L"true"))
+			{
+				g_configSettings->EnableRecvSharding = true;
+			}
+			else if (ctString::iordinal_equals(value, L"0") || ctString::iordinal_equals(value, L"off") || ctString::iordinal_equals(value, L"false"))
+			{
+				g_configSettings->EnableRecvSharding = false;
+			}
+			else
+			{
+				const auto err = std::string("Invalid -EnableRecvSharding value: ") + ctString::convert_to_string(value);
+				throw std::invalid_argument(err);
+			}
+			args.erase(foundEnable);
+		}
+
+		const auto foundShardCount = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-ShardCount");
+				return value != nullptr;
+			});
+		if (foundShardCount != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundShardCount, L"-ShardCount"));
+			// 0 is a valid sentinel meaning "default to logical processor count"
+			g_configSettings->ShardCount = val;
+			args.erase(foundShardCount);
+		}
+
+		const auto foundOutstanding = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-OutstandingReceives");
+				return value != nullptr;
+			});
+		if (foundOutstanding != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundOutstanding, L"-OutstandingReceives"));
+			if (val == 0)
+			{
+				throw invalid_argument("-OutstandingReceives");
+			}
+			g_configSettings->OutstandingReceives = val;
+			args.erase(foundOutstanding);
+		}
+
+		const auto foundBatch = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-BatchSize");
+				return value != nullptr;
+			});
+		if (foundBatch != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundBatch, L"-BatchSize"));
+			if (val == 0)
+			{
+				throw invalid_argument("-BatchSize");
+			}
+			g_configSettings->BatchSize = val;
+			args.erase(foundBatch);
+		}
+
+		const auto foundWorker = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-ShardWorkerCount");
+				return value != nullptr;
+			});
+		if (foundWorker != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundWorker, L"-ShardWorkerCount"));
+			if (val == 0)
+			{
+				throw invalid_argument("-ShardWorkerCount");
+			}
+			g_configSettings->ShardWorkerCount = val;
+			args.erase(foundWorker);
+		}
+
+		const auto foundAffinity = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-AffinityPolicy");
+				return value != nullptr;
+			});
+		if (foundAffinity != end(args))
+		{
+			const auto* const value = ParseArgument(*foundAffinity, L"-AffinityPolicy");
+			if (ctString::iordinal_equals(value, L"PerCpu"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::PerCpu;
+			}
+			else if (ctString::iordinal_equals(value, L"PerGroup"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::PerGroup;
+			}
+			else if (ctString::iordinal_equals(value, L"RssAligned"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::RssAligned;
+			}
+			else if (ctString::iordinal_equals(value, L"Manual"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::Manual;
+			}
+			else if (ctString::iordinal_equals(value, L"None"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::None;
+			}
+			else
+			{
+				throw invalid_argument("-AffinityPolicy");
+			}
+			args.erase(foundAffinity);
+		}
+
+		// Post-parse validations
+		if (g_configSettings->EnableRecvSharding)
+		{
+			// Sharded receive mode currently only supported for UDP servers
+			if (g_configSettings->Protocol != ProtocolType::UDP)
+			{
+				throw invalid_argument("-EnableRecvSharding (only valid with -Protocol:udp)");
+			}
+
+			// Must be in listening/server mode (at least one -Listen provided)
+			if (g_configSettings->ListenAddresses.empty())
+			{
+				throw invalid_argument("-EnableRecvSharding (requires the server to be listening; specify -Listen:<addr>)");
+			}
+
+			// numeric ranges already validated above for zero; additional range checks could be added here
+			if (g_configSettings->ShardWorkerCount == 0)
+			{
+				throw invalid_argument("-ShardWorkerCount");
+			}
+			if (g_configSettings->OutstandingReceives == 0)
+			{
+				throw invalid_argument("-OutstandingReceives");
+			}
+			if (g_configSettings->BatchSize == 0)
+			{
+				throw invalid_argument("-BatchSize");
+			}
+		}
+	}
+
 	//
 	// Sets an IP Compartment (routing domain)
 	//
@@ -2663,6 +2849,23 @@ namespace ctsTraffic::ctsConfig
 				L"-ServerExitLimit:####\n"
 				L"   - the total # of accepted connections before server gracefully exits\n"
 				L"     <default> == 0  (infinite)\n"
+				L"\n"
+				L"  UDP server-only: Sharded receive options\n"
+				L"    (applies to UDP servers only)\n"
+				L"-EnableRecvSharding[:on|:off]\n"
+				L"   - opt-in receive sharding mode. When enabled, ctsTraffic will create one\n"
+				L"     UDP socket and one IOCP per shard and run dedicated worker threads.\n"
+				L"     <default> == off\n"
+				L"-ShardCount:###\n"
+				L"   - number of receive shards to create (0 == default to logical processor count)\n"
+				L"-OutstandingReceives:###\n"
+				L"   - number of outstanding WSARecvFrom per shard (default = 256)\n"
+				L"-BatchSize:###\n"
+				L"   - number of completions to process per worker loop iteration (default = 64)\n"
+				L"-ShardWorkerCount:###\n"
+				L"   - number of worker threads to run per shard (default = 1)\n"
+				L"-AffinityPolicy:<None|PerCpu|PerGroup|RssAligned|Manual>\n"
+				L"   - how to assign CPU affinity to shards when supported (default = None)\n"
 			);
 			break;
 
@@ -3262,6 +3465,9 @@ namespace ctsTraffic::ctsConfig
 		ParseForPrePostSends(args);
 		ParseForRecvBufValue(args);
 		ParseForSendBufValue(args);
+
+		// move parsing into a helper consistent with the codebase style
+		ParseForRecvSharding(args);
 
 		if (!args.empty())
 		{
