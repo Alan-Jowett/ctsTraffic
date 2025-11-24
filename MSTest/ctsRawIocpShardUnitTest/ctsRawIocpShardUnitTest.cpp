@@ -68,12 +68,14 @@ namespace ctsUnitTest
             sockaddr_in addr1 = {};
             addr1.sin_family = AF_INET;
             addr1.sin_port = 0; // let system pick
-            InetPtonA(AF_INET, "127.0.0.1", &addr1.sin_addr);
+            const int ip1 = InetPtonA(AF_INET, "127.0.0.1", &addr1.sin_addr);
+            Assert::AreEqual(1, ip1);
 
             sockaddr_in addr2 = {};
             addr2.sin_family = AF_INET;
             addr2.sin_port = 0;
-            InetPtonA(AF_INET, "127.0.0.1", &addr2.sin_addr);
+            const int ip2 = InetPtonA(AF_INET, "127.0.0.1", &addr2.sin_addr);
+            Assert::AreEqual(1, ip2);
 
             Assert::AreEqual(0, bind(s1, reinterpret_cast<sockaddr*>(&addr1), sizeof(addr1)));
             Assert::AreEqual(0, bind(s2, reinterpret_cast<sockaddr*>(&addr2), sizeof(addr2)));
@@ -81,7 +83,8 @@ namespace ctsUnitTest
             // Query assigned port for s2
             sockaddr_in sa = {};
             int saLen = sizeof(sa);
-            getsockname(s2, reinterpret_cast<sockaddr*>(&sa), &saLen);
+            const int gs = getsockname(s2, reinterpret_cast<sockaddr*>(&sa), &saLen);
+            Assert::AreEqual(0, gs);
 
             ctl::ctRawIocpShard shard(1);
             Assert::IsTrue(shard.Initialize(s2, 2));
@@ -98,7 +101,8 @@ namespace ctsUnitTest
 
             shard.Shutdown();
             closesocket(s1);
-            closesocket(s2);
+            // Do not close s2 here — ownership of the socket is transferred to
+            // ctRawIocpShard::Initialize and will be closed in Shutdown().
         }
     };
 }

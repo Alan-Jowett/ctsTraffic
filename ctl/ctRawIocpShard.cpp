@@ -113,10 +113,14 @@ bool ctRawIocpShard::Initialize(SOCKET listenSocketHint, uint32_t outstandingRec
                     const int gle = WSAGetLastError();
                     if (gle != WSA_IO_PENDING)
                     {
+                        // Free only the op that failed to post. Do NOT free
+                        // previously posted ops because their OVERLAPPED
+                        // structures are owned by the kernel until completion.
                         FreeRecvOp(op);
-                        // on failure, clean up previous ops
-                        for (auto p : m_recvOps) FreeRecvOp(p);
-                        m_recvOps.clear();
+                        // Treat partial pre-post failure as "fewer outstanding
+                        // receives than requested" and return false so the
+                        // caller can decide how to proceed. Do NOT delete
+                        // m_recvOps here.
                         return false;
                     }
                 }
@@ -124,8 +128,12 @@ bool ctRawIocpShard::Initialize(SOCKET listenSocketHint, uint32_t outstandingRec
             }
         }
         catch (...) {
-            for (auto p : m_recvOps) FreeRecvOp(p);
-            m_recvOps.clear();
+            // Don't free m_recvOps here. Some RecvOp objects may have already
+            // been successfully posted to the kernel (their OVERLAPPED is in
+            // use). Freeing them here risks use-after-free. Treat this as a
+            // partial failure and let the caller decide; leave any posted
+            // ops for Shutdown to clean up when/if the shard is later
+            // initialized/started.
             return false;
         }
     }
@@ -168,6 +176,15 @@ void ctRawIocpShard::Shutdown() noexcept
 {
     m_running.store(false, std::memory_order_release);
 
+    // Cancel any outstanding I/O on the socket so the kernel will complete
+    // outstanding OVERLAPPED operations. CancelIoEx is preferred; if it's not
+    // available, fall back to closesocket which will also cancel pending ops.
+    if (m_socket != INVALID_SOCKET)
+    {
+        // Best-effort: ignore errors during shutdown
+        CancelIoEx(reinterpret_cast<HANDLE>(m_socket), nullptr);
+    }
+
     if (m_iocp != NULL)
     {
         const auto wakeCount = m_workers.size();
@@ -186,7 +203,8 @@ void ctRawIocpShard::Shutdown() noexcept
     }
     m_workers.clear();
 
-    // free outstanding recv ops
+    // At this point worker threads should have drained completions and
+    // returned. It's now safe to free the RecvOp objects.
     for (auto p : m_recvOps) FreeRecvOp(p);
     m_recvOps.clear();
 
@@ -248,7 +266,13 @@ void ctRawIocpShard::WorkerThreadMain() noexcept
             if (gle != WSA_IO_PENDING)
             {
                 std::cerr << "WSARecvFrom re-post failed: " << gle << "\n";
-                // drop this op and continue
+                // Remove the op from m_recvOps so Shutdown doesn't double-free it,
+                // then free the op.
+                auto it = std::find(m_recvOps.begin(), m_recvOps.end(), op);
+                if (it != m_recvOps.end())
+                {
+                    m_recvOps.erase(it);
+                }
                 FreeRecvOp(op);
             }
         }

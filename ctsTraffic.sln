@@ -168,6 +168,12 @@ Global
 		{A1B2C3D4-0000-4000-8000-010203040506}.Debug|Win32.Build.0 = Debug|Win32
 		{A1B2C3D4-0000-4000-8000-010203040506}.Debug|x64.ActiveCfg = Debug|x64
 		{A1B2C3D4-0000-4000-8000-010203040506}.Debug|x64.Build.0 = Debug|x64
+		{A1B2C3D4-0000-4000-8000-010203040506}.Debug|ARM64.ActiveCfg = Debug|x64
+		{A1B2C3D4-0000-4000-8000-010203040506}.Release|Win32.ActiveCfg = Release|Win32
+		{A1B2C3D4-0000-4000-8000-010203040506}.Release|Win32.Build.0 = Release|Win32
+		{A1B2C3D4-0000-4000-8000-010203040506}.Release|x64.ActiveCfg = Release|x64
+		{A1B2C3D4-0000-4000-8000-010203040506}.Release|x64.Build.0 = Release|x64
+		{A1B2C3D4-0000-4000-8000-010203040506}.Release|ARM64.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
