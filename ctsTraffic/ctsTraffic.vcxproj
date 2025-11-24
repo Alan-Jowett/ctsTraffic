@@ -429,6 +429,7 @@
     <ClCompile Include="ctsWinsockLayer.cpp" />
     <ClCompile Include="ctsWSASocket.cpp" />
     <ClCompile Include="..\ctl\ctRawIocpShard.cpp" />
+    <ClCompile Include="..\ctl\ctCpuAffinity.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
