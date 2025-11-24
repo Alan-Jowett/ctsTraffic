@@ -17,6 +17,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <stdexcept>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -2271,6 +2272,11 @@ namespace ctsTraffic::ctsConfig
 
 			if (value == nullptr)
 			{
+				// bare flag == enable
+				g_configSettings->EnableRecvSharding = true;
+			}
+			else if (ctString::iordinal_equals(value, L"1") || ctString::iordinal_equals(value, L"on") || ctString::iordinal_equals(value, L"true"))
+			{
 				g_configSettings->EnableRecvSharding = true;
 			}
 			else if (ctString::iordinal_equals(value, L"0") || ctString::iordinal_equals(value, L"off") || ctString::iordinal_equals(value, L"false"))
@@ -2279,7 +2285,8 @@ namespace ctsTraffic::ctsConfig
 			}
 			else
 			{
-				g_configSettings->EnableRecvSharding = true;
+				const auto err = std::string("Invalid -EnableRecvSharding value: ") + ctString::convert_to_string(value);
+				throw std::invalid_argument(err);
 			}
 			args.erase(foundEnable);
 		}
