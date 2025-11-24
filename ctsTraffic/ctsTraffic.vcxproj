@@ -428,6 +428,7 @@
     <ClCompile Include="ctsMediaStreamServerConnectedSocket.cpp" />
     <ClCompile Include="ctsWinsockLayer.cpp" />
     <ClCompile Include="ctsWSASocket.cpp" />
+    <ClCompile Include="..\ctl\ctRawIocpShard.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
