@@ -49,6 +49,7 @@ These variables are used through requirements and acceptance criteria.
 - `C` / `DROP_PERCENT`: acceptable drop percentage under load `L`; default = 0.1 (%).
 - `E` / `SCALING_TOLERANCE`: acceptable deviation from linear scaling; default = 10 (%).
 - `K` / `CONFIG_APPLY_MS`: max time to apply runtime configuration change; default = 2000 (ms).
+- `D` / `SHUTDOWN_DRAIN_MS`: shutdown/drain deadline in milliseconds (ms); default = 2000 (ms). Maximum time allowed to drain in‑flight completions and account for outstanding IO during shutdown. Used by shutdown/drain policies (see FR‑007).
 - `M` / `STICKINESS_MINUTES`: duration for flow stickiness test; default = 10 (minutes).
 - `S` / `REBALANCE_SECONDS`: max time to rebalance after shard removal; default = 30 (s).
 - `U` / `THROUGHPUT_LOSS_PERCENT`: acceptable throughput loss during rebalance; default = 10 (%).

@@ -2378,6 +2378,36 @@ namespace ctsTraffic::ctsConfig
 			}
 			args.erase(foundAffinity);
 		}
+
+		// Post-parse validations
+		if (g_configSettings->EnableRecvSharding)
+		{
+			// Sharded receive mode currently only supported for UDP servers
+			if (g_configSettings->Protocol != ProtocolType::UDP)
+			{
+				throw invalid_argument("-EnableRecvSharding (only valid with -Protocol:udp)");
+			}
+
+			// Must be in listening/server mode (at least one -Listen provided)
+			if (g_configSettings->ListenAddresses.empty())
+			{
+				throw invalid_argument("-EnableRecvSharding (requires the server to be listening; specify -Listen:<addr>)");
+			}
+
+			// numeric ranges already validated above for zero; additional range checks could be added here
+			if (g_configSettings->ShardWorkerCount == 0)
+			{
+				throw invalid_argument("-ShardWorkerCount");
+			}
+			if (g_configSettings->OutstandingReceives == 0)
+			{
+				throw invalid_argument("-OutstandingReceives");
+			}
+			if (g_configSettings->BatchSize == 0)
+			{
+				throw invalid_argument("-BatchSize");
+			}
+		}
 	}
 
 	//

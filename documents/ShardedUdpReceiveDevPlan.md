@@ -32,7 +32,8 @@ This document describes the design and concrete development tasks to implement a
     - `OutstandingReceives` (int)
     - `BatchSize` (int)
     - `ShardWorkerCount` (int)
-    - `AffinityPolicy` (enum)
+    - `ShardAffinityPolicy` (enum)  
+      - NOTE: this maps to `ctsConfig::ctsConfigSettings::ShardAffinityPolicy` in code (was previously referred to as `AffinityPolicy` in some docs).
   - `ctsSocket.cpp` / `ctsSocket.h` (or `ctsSocketBroker.*`) — add hooks to instantiate the shard manager and delegate receives to shards when enabled.
   - `ctsSocketBroker.cpp` / `ctsSocketBroker.h` — manage shard instances and provide mapping helpers to route application-level work or look up shard per 4‑tuple for test hooks.
   - `ctsStatistics.hpp` / telemetry code — add per-shard counters and periodic emit.
@@ -65,7 +66,7 @@ This document describes the design and concrete development tasks to implement a
 
 - Thread pinning:
   - Use `SetThreadAffinityMask` (or `SetThreadGroupAffinity`) to pin worker threads to desired CPU(s)
-  - `AffinityPolicy` controls mapping: `PerCpu`, `PerGroup`, `RssAligned`, `Manual`
+  - `ShardAffinityPolicy` controls mapping: `PerCpu`, `PerGroup`, `RssAligned`, `Manual`
 
 ## Telemetry & observability
 
