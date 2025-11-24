@@ -18,6 +18,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #include "ctCpuAffinity.hpp"
 
+#include <cstdio>
+
 #include <winsock2.h>
 #include <mstcpip.h>
 #include <windows.h>
@@ -216,7 +218,7 @@ namespace ctl
     std::wstring FormatGroupAffinity(const GroupAffinity& g) noexcept
     {
         wchar_t buf[128];
-        _snwprintf_s(buf, _countof(buf), L"Group=%u Mask=0x%llx", g.Group, static_cast<unsigned long long>(g.Mask));
+        swprintf_s(buf, _countof(buf), L"Group=%u Mask=0x%llx", g.Group, static_cast<unsigned long long>(g.Mask));
         return std::wstring(buf);
     }
 
