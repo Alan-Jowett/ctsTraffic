@@ -1,0 +1,69 @@
+name: Run Unit Tests
+
+on:
+  pull_request:
+    branches: [ master ]
+  push:
+    branches: [ ci/run-unit-tests ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        configuration: [ Debug, Release ]
+        platform: [ x64, Win32 ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild tools
+        uses: microsoft/setup-msbuild@v1
+
+      - name: Install nuget
+        uses: nuget/setup-nuget@v1
+
+      - name: Restore NuGet packages
+        run: nuget restore "ctsTraffic.sln"
+
+      - name: Build solution
+        run: msbuild.exe "ctsTraffic.sln" /m /p:Configuration=${{ matrix.configuration }} /p:Platform=${{ matrix.platform }} /p:VisualStudioVersion=17.0
+
+      - name: Discover and run unit tests
+        shell: pwsh
+        run: |
+          Write-Host "Searching for test DLLs in the default output folders"
+          $config = "${{ matrix.configuration }}"
+          $platform = "${{ matrix.platform }}"
+          $searchPaths = @(
+            "$env:GITHUB_WORKSPACE\\x64\\$config",
+            "$env:GITHUB_WORKSPACE\\x86\\$config",
+            "$env:GITHUB_WORKSPACE\\bin\\$platform\\$config",
+            "$env:GITHUB_WORKSPACE\\bin\\$config",
+            "$env:GITHUB_WORKSPACE\\$platform\\$config",
+            "$env:GITHUB_WORKSPACE\\$platform\\$config"
+          )
+
+          $dlls = @()
+          foreach ($p in $searchPaths) {
+            if (Test-Path $p) {
+              $found = Get-ChildItem -Path $p -Filter '*UnitTest.dll' -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+              $dlls += $found
+            }
+          }
+
+          if (-not $dlls) {
+            Write-Host "No test DLLs found in the typical output folders. Attempting full recursive search."
+            $dlls = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter '*UnitTest.dll' -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
+          }
+
+          if (-not $dlls) {
+            Write-Host "No unit test DLLs found; job will succeed but no tests run."; exit 0
+          }
+
+          Write-Host "Found test DLLs:"; $dlls | ForEach-Object { Write-Host " - $_" }
+
+          foreach ($dll in $dlls) {
+            Write-Host "Running tests in $dll"
+            & "C:\Program Files (x86)\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\TestPlatform\vstest.console.exe" $dll /EnableCodeCoverage || exit $LASTEXITCODE
+          }
