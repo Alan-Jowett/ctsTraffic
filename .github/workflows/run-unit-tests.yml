@@ -67,10 +67,14 @@ jobs:
           $vstest = $null
           $vswhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
           if (Test-Path $vswhere) {
-            $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.Core -property installationPath 2>$null
+            $vsPath = & $vswhere -latest -products * -property installationPath 2>$null
             if ($vsPath) {
               $candidate = Join-Path $vsPath 'Common7\IDE\Extensions\TestPlatform\vstest.console.exe'
               if (Test-Path $candidate) { $vstest = $candidate }
+              else {
+                $foundUnderVS = Get-ChildItem -Path $vsPath -Filter 'vstest.console.exe' -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -First 1
+                if ($foundUnderVS) { $vstest = $foundUnderVS }
+              }
             }
           }
 
