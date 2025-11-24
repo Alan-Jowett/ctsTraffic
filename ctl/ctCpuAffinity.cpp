@@ -26,31 +26,28 @@ namespace ctl
         {
             total += GetActiveProcessorCount(g);
         }
-        info.LogicalProcessorCount = static_cast<uint32_t>(total == 0 ? 1 : total);
+        info.LogicalProcessorCount = static_cast<uint32_t>(total);
 
-        // Probe SIO_CPU_AFFINITY support using a temporary UDP socket.
+        // Probe SIO_CPU_AFFINITY support using a temporary UDP socket, if available
         // WSAStartup is expected to have been called by the application earlier.
+#ifdef SIO_CPU_AFFINITY
         SOCKET s = WSASocketW(AF_INET, SOCK_DGRAM, IPPROTO_UDP, nullptr, 0, WSA_FLAG_OVERLAPPED);
         if (s != INVALID_SOCKET)
         {
             DWORD bytes = 0;
             // Calling WSAIoctl with SIO_CPU_AFFINITY; if it returns 0, consider supported.
             const int rc = WSAIoctl(s, SIO_CPU_AFFINITY, nullptr, 0, nullptr, 0, &bytes, nullptr, nullptr);
-            if (rc == 0)
-            {
-                info.SupportsCpuAffinityIoctl = true;
-            }
-            else
-            {
-                // Not supported or ioctl failed - report as not supported
-                info.SupportsCpuAffinityIoctl = false;
-            }
+            info.SupportsCpuAffinityIoctl = (rc == 0);
             closesocket(s);
         }
         else
         {
             info.SupportsCpuAffinityIoctl = false;
         }
+#else
+        // SDK doesn't define SIO_CPU_AFFINITY; treat as not supported.
+        info.SupportsCpuAffinityIoctl = false;
+#endif
 
         // Feature-detect GetQueuedCompletionStatusEx presence conservatively
         // Assume present on supported Windows versions; leave false only if very old.
