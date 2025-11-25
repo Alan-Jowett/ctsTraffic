@@ -131,6 +131,35 @@ This document describes the design and concrete development tasks to implement a
 
 - If you approve, I can scaffold the new `ctl/ctRawIocpShard.hpp`/`.cpp` skeleton and add config flags in `ctsConfig` so you can review the initial implementation quickly.
 
+## Run Instructions (sharded UDP receive)
+
+- **Purpose:** Quick example to start a UDP server with receive sharding enabled for validation and development.
+- **Required UDP options:** For UDP runs the media-stream options are required: `-BitsPerSecond`, `-FrameRate`, and `-StreamLength`.
+- **Recommended minimal example:**
+
+  - Start `ctsTraffic` (x64 release) from a PowerShell prompt:
+
+```powershell
+& 'f:\ctsTraffic\Releases\2.0.3.9\x64\ctsTraffic.exe' \
+  '-Protocol:UDP' \
+  '-BitsPerSecond:8000' '-FrameRate:1' '-StreamLength:1' \
+  '-Listen:127.0.0.1' '-Port:5001' \
+  '-EnableRecvSharding:on' '-ShardCount:2' \
+  '-OutstandingReceives:4' '-BatchSize:4' '-ShardWorkerCount:1' \
+  '-AffinityPolicy:PerCpu' '-StatusUpdate:1000' '-TimeLimit:5000'
+```
+
+- **What to watch for in the console:**
+  - Startup logs that indicate sharding is enabled and shard objects are created.
+  - Messages about `SIO_CPU_AFFINITY` success/failure per shard.
+  - Periodic status updates (controlled by `-StatusUpdate`) showing shard counters.
+
+- **Notes and troubleshooting:**
+  - If you see `Invalid argument specified: -BitsPerSecond is required`, supply the three required UDP options shown above.
+  - If the platform does not support `SIO_CPU_AFFINITY`, the broker will print an error and fail to start in sharded mode.
+  - Use `-ShardCount:0` to default to logical processor count.
+
+
 ---
 
 File: `documents/ShardedUdpReceiveDevPlan.md`

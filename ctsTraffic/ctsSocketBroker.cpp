@@ -16,11 +16,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // cpp headers
 #include <memory>
 #include <iterator>
-#include <stdexcept>
 // os headers
 #include <Windows.h>
-#include <winsock2.h>
-#include <mstcpip.h>
 // wil headers
 #include <wil/stl.h>
 #include <wil/resource.h>
@@ -28,12 +25,6 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // project headers
 #include "ctsConfig.h"
 #include "ctsSocketState.h"
-// need ctsSocket methods in implementation
-#include "ctsSocket.h"
-// for unique_socket
-#include <wil/resource.h>
-// affinity helpers
-#include "../ctl/ctCpuAffinity.hpp"
 
 namespace ctsTraffic
 {
@@ -70,170 +61,6 @@ ctsSocketBroker::ctsSocketBroker()
 
     // create our manual-reset notification event
     m_doneEvent.create(wil::EventOptions::ManualReset, nullptr);
-
-    // If sharding is enabled, create shard objects now. We allocate shard
-    // instances (one per configured ShardCount) but do not start their
-    // workers until the user requests IO; this keeps startup deterministic
-    // and avoids altering behavior when the feature is disabled.
-    if (ctsConfig::g_configSettings->EnableRecvSharding)
-    {
-        uint32_t shardCount = ctsConfig::g_configSettings->ShardCount;
-        if (shardCount == 0)
-        {
-            SYSTEM_INFO si{};
-            GetSystemInfo(&si);
-            shardCount = si.dwNumberOfProcessors;
-        }
-
-        m_shards.reserve(shardCount);
-
-        // detect CPU affinity ioctl support and compute per-shard affinities
-        const auto affinityInfo = ctl::QueryCpuAffinitySupport();
-
-        // SIO_CPU_AFFINITY is mandatory when the user requests recv sharding.
-        // If the kernel does not support the ioctl, log and fail loudly.
-        if (!affinityInfo.SupportsCpuAffinityIoctl)
-        {
-            ctsConfig::PrintErrorInfoOverride(L"EnableRecvSharding requested but SIO_CPU_AFFINITY is not supported on this platform.\n");
-            throw std::runtime_error("SIO_CPU_AFFINITY not supported");
-        }
-        std::optional<std::vector<ctl::GroupAffinity>> shardAffinities;
-        if (affinityInfo.SupportsCpuAffinityIoctl)
-        {
-            // map config AffinityPolicy to ctl::CpuAffinityPolicy
-            ctl::CpuAffinityPolicy policy = ctl::CpuAffinityPolicy::None;
-            switch (ctsConfig::g_configSettings->ShardAffinityPolicy)
-            {
-            case ctsConfig::AffinityPolicy::PerCpu:
-                policy = ctl::CpuAffinityPolicy::PerCpu;
-                break;
-            case ctsConfig::AffinityPolicy::PerGroup:
-                policy = ctl::CpuAffinityPolicy::PerGroup;
-                break;
-            case ctsConfig::AffinityPolicy::RssAligned:
-                policy = ctl::CpuAffinityPolicy::RssAligned;
-                break;
-            case ctsConfig::AffinityPolicy::Manual:
-                policy = ctl::CpuAffinityPolicy::Manual;
-                break;
-            case ctsConfig::AffinityPolicy::None:
-            default:
-                policy = ctl::CpuAffinityPolicy::None;
-                break;
-            }
-
-            auto computed = ctl::ComputeShardAffinities(shardCount, policy);
-            if (computed && computed->size() == shardCount)
-            {
-                shardAffinities = std::move(*computed);
-            }
-            else
-            {
-                // couldn't compute affinities; fall back to no affinity
-                shardAffinities.reset();
-            }
-        }
-        // For each configured listen address, create shards that bind to that
-        // address (or use INADDR_ANY if no listen addresses configured).
-        auto add_shard_with_socket = [&](uint32_t shardId, const ctl::ctSockaddr& bindAddr) {
-            m_shards.emplace_back(std::make_unique<ctl::ctRawIocpShard>(shardId));
-            auto& shard = m_shards.back();
-
-            // create and configure a socket for this shard
-            wil::unique_socket s;
-            try
-            {
-                s.reset(ctsConfig::CreateSocket(bindAddr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
-            }
-            catch (...) {
-                // creation failed, leave shard uninitialized
-                return;
-            }
-
-            // if we have a shard affinity mapping and SIO_CPU_AFFINITY is supported,
-            // attempt to apply the kernel affinity ioctl prior to bind.
-            if (shardAffinities && shardId < shardAffinities->size())
-            {
-                const auto& ga = (*shardAffinities)[shardId];
-                // SIO_CPU_AFFINITY expects a structure describing group + mask
-                struct {
-                    WORD Group;
-                    KAFFINITY Mask;
-                } affinity;
-                affinity.Group = ga.Group;
-                affinity.Mask = ga.Mask;
-
-#ifdef SIO_CPU_AFFINITY
-                int rc = WSAIoctl(s.get(), SIO_CPU_AFFINITY, &affinity, sizeof(affinity), nullptr, 0, nullptr, nullptr, nullptr);
-                if (rc == 0)
-                {
-                    PRINT_DEBUG_INFO(L"\t\tApplied SIO_CPU_AFFINITY to shard %u: %s\n", shardId, ctl::FormatGroupAffinity(ga).c_str());
-                }
-                else
-                {
-                    const auto gle = WSAGetLastError();
-                    ctsConfig::PrintErrorIfFailed("WSAIoctl(SIO_CPU_AFFINITY)", gle);
-                }
-#else
-                // SIO_CPU_AFFINITY not defined in this SDK; skip applying kernel affinity
-#endif
-            }
-
-            // set pre-bind options consistent with other listening sockets
-            const auto prebindErr = ctsConfig::SetPreBindOptions(s.get(), bindAddr);
-            if (prebindErr != NO_ERROR)
-            {
-                // can't apply options; close socket and skip
-                s.reset();
-                return;
-            }
-
-            // bind the socket to the requested address
-            if (bind(s.get(), bindAddr.sockaddr(), bindAddr.length()) == SOCKET_ERROR)
-            {
-                const auto gle = WSAGetLastError();
-                ctsConfig::PrintErrorIfFailed("bind (shard)", gle);
-                s.reset();
-                return;
-            }
-
-            // attempt to initialize shard with this bound socket and start workers
-            if (shard->Initialize(s.get(), ctsConfig::g_configSettings->OutstandingReceives))
-            {
-                shard->StartWorkers(ctsConfig::g_configSettings->ShardWorkerCount);
-                // shard now owns the socket; release unique_socket ownership
-                s.release();
-            }
-            else
-            {
-                // initialization failed; close the socket
-                s.reset();
-            }
-        };
-
-        // If there are explicit ListenAddresses, create shards for each address in round-robin
-        if (!ctsConfig::g_configSettings->ListenAddresses.empty())
-        {
-            const auto& addrs = ctsConfig::g_configSettings->ListenAddresses;
-            for (uint32_t i = 0; i < shardCount; ++i)
-            {
-                const auto& addr = addrs[i % addrs.size()];
-                add_shard_with_socket(i, addr);
-            }
-        }
-        else
-        {
-            // no explicit listen addresses: bind to INADDR_ANY / ephemeral port per family
-            ctl::ctSockaddr any4; any4.reset(AF_INET, ctl::ctSockaddr::AddressType::Any);
-            ctl::ctSockaddr any6; any6.reset(AF_INET6, ctl::ctSockaddr::AddressType::Any);
-            for (uint32_t i = 0; i < shardCount; ++i)
-            {
-                // choose family based on config preference (prefer IPv4 by default)
-                const auto& bindAddr = (ctsConfig::g_configSettings->Protocol == ctsConfig::ProtocolType::UDP && !ctsConfig::g_configSettings->TargetAddresses.empty() && ctsConfig::g_configSettings->TargetAddresses[0].family() == AF_INET6) ? any6 : any4;
-                add_shard_with_socket(i, bindAddr);
-            }
-        }
-    }
 }
 
 ctsSocketBroker::~ctsSocketBroker() noexcept
@@ -248,16 +75,6 @@ ctsSocketBroker::~ctsSocketBroker() noexcept
     // - must do this explicitly before deleting the CS
     //   in case they were calling back while we called detach
     m_socketPool.clear();
-
-    // shut down any shards we created
-    for (auto& s : m_shards)
-    {
-        if (s)
-        {
-            s->Shutdown();
-        }
-    }
-    m_shards.clear();
 }
 
 void ctsSocketBroker::Start()
@@ -287,10 +104,6 @@ void ctsSocketBroker::Start()
         --m_totalConnectionsRemaining;
     }
 }
-
-// Broker-owned socket model implemented: shards are created and bound
-// during broker construction. The adopt-on-demand path has been removed
-// in favor of deterministic broker-owned sockets.
 
 //
 // SocketState is indicating the socket is now 'connected'
@@ -390,19 +203,14 @@ void ctsSocketBroker::RefreshSockets() noexcept try
         }
         else
         {
-            // remove closed sockets from m_socketPool and move them to removedObjects
-            for (auto it = m_socketPool.begin(); it != m_socketPool.end(); )
-            {
-                if ((*it)->GetCurrentState() == ctsSocketState::InternalState::Closed)
+            std::erase_if(m_socketPool, [&](const auto& socketPoolEntry) {
+                if (ctsSocketState::InternalState::Closed == socketPoolEntry->GetCurrentState())
                 {
-                    removedObjects.emplace_back(std::move(*it));
-                    it = m_socketPool.erase(it);
+                    removedObjects.emplace_back(std::move(socketPoolEntry));
+                    return true;
                 }
-                else
-                {
-                    ++it;
-                }
-            }
+                return false;
+            });
 
             if (!m_doneEvent.is_signaled())
             {

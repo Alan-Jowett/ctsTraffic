@@ -24,8 +24,6 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsConfig.h"
 #include "ctsSocketState.h"
 #include "ctThreadpoolQueue.hpp"
-// shard includes
-#include "ctRawIocpShard.hpp"
 
 namespace ctsTraffic
 {
@@ -50,8 +48,6 @@ public:
     // methods that the child ctsSocketState objects will invoke when they change state
     void InitiatingIo() noexcept;
     void Closing(bool wasActive) noexcept;
-
-    // (Socket ownership model: Broker creates and owns per-shard sockets)
 
     // method to wait on when all connections are completed
     bool Wait(DWORD milliseconds) const noexcept;
@@ -81,7 +77,5 @@ private:
     uint32_t m_activeSockets = 0UL;
 
     ctl::ctThreadpoolQueue<ctl::ctThreadpoolGrowthPolicy::Flat> m_tpFlatQueue;
-    // optional sharded receive manager: collection of shards created when enabled
-    std::vector<std::unique_ptr<ctl::ctRawIocpShard>> m_shards;
 };
 } // namespace

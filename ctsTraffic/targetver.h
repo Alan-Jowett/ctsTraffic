@@ -18,6 +18,10 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // If you wish to build your application for a previous Windows platform, include WinSDKVer.h and
 // set the _WIN32_WINNT macro to the platform you wish to support before including SDKDDKVer.h.
 
-// defining _WIN32_WINNT_WIN7 in the project settings
+// Previously the project defined _WIN32_WINNT_WIN7; now we target Windows 10
+
+#ifndef NTDDI_VERSION
+#define NTDDI_VERSION NTDDI_WIN10_VB
+#endif
 
 #include <sdkddkver.h>

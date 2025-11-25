@@ -50,9 +50,23 @@ namespace ctl
         if (s != INVALID_SOCKET)
         {
             DWORD bytes = 0;
-            // Calling WSAIoctl with SIO_CPU_AFFINITY; if it returns 0, consider supported.
-            const int rc = WSAIoctl(s, SIO_CPU_AFFINITY, nullptr, 0, nullptr, 0, &bytes, nullptr, nullptr);
-            info.SupportsCpuAffinityIoctl = (rc == 0);
+            // Prepare a valid SOCKET_PROCESSOR_AFFINITY structure as required by SIO_CPU_AFFINITY.
+            SOCKET_PROCESSOR_AFFINITY spa{};
+            // The structure is zero-initialized above; no need to set individual fields here.
+            // The call is used only to probe support; the kernel will validate the structure.
+
+            // Calling WSAIoctl to probe SIO_CPU_AFFINITY support.
+            // Use the same pattern as when actually applying affinity (input only, no output buffer).
+            // Some implementations may reject using the same buffer for output; use nullptr for output to probe cleanly.
+            const int rc = WSAIoctl(s, SIO_CPU_AFFINITY, &spa, sizeof(spa), nullptr, 0, &bytes, nullptr, nullptr);
+            if (rc == 0)
+            {
+                info.SupportsCpuAffinityIoctl = true;
+            }
+            else
+            {
+                info.SupportsCpuAffinityIoctl = false;
+            }
             closesocket(s);
         }
         else
