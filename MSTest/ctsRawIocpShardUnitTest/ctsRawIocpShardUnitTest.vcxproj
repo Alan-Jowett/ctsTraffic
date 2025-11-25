@@ -151,6 +151,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ctsRawIocpShardUnitTest.cpp" />
+    <ClCompile Include="ctsThreadIocpShardUnitTest.cpp" />
     <ClCompile Include="..\..\ctl\ctRawIocpShard.cpp" />
   </ItemGroup>
   <ItemGroup>
