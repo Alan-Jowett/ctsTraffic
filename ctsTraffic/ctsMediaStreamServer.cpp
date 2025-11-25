@@ -154,8 +154,29 @@ namespace ctsTraffic
                         shardCount = static_cast<int>(logical);
                     }
 
+                    // Translate from ctsConfig::g_configSettings->ShardAffinityPolicy to ctl::CpuAffinityPolicy
+                    ctl::CpuAffinityPolicy affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+                    switch (ctsConfig::g_configSettings->ShardAffinityPolicy)
+                    {
+                    case ctsConfig::AffinityPolicy::PerCpu:
+                        affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+                        break;
+                    case ctsConfig::AffinityPolicy::PerGroup:
+                        affinityPolicy = ctl::CpuAffinityPolicy::PerGroup;
+                        break;
+                    case ctsConfig::AffinityPolicy::RssAligned:
+                        affinityPolicy = ctl::CpuAffinityPolicy::RssAligned;
+                        break;
+                    case ctsConfig::AffinityPolicy::Manual:
+                        affinityPolicy = ctl::CpuAffinityPolicy::Manual;
+                        break;
+                    default:
+                        affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+                        break;
+                    }
+
                     // compute per-shard affinities (round-robin per-cpu)
-                    std::optional<std::vector<ctl::GroupAffinity>> maybeAffinities = ctl::ComputeShardAffinities(static_cast<uint32_t>(shardCount), ctl::CpuAffinityPolicy::PerCpu);
+                    std::optional<std::vector<ctl::GroupAffinity>> maybeAffinities = ctl::ComputeShardAffinities(static_cast<uint32_t>(shardCount), affinityPolicy);
 
                     for (int shard = 0; shard < shardCount; ++shard)
                     {

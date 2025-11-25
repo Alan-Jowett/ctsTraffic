@@ -1,4 +1,17 @@
 /*
+
+Copyright (c) Microsoft Corporation
+All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
+
+See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+
+*/
+
+/*
   ctThreadIocp_shard.hpp
 
   IO Completion Port backed replacement for ctThreadIocp that uses
@@ -8,9 +21,12 @@
 */
 #pragma once
 
+#include <wil/resource.h>
+
 // reuse the callback info/type from the original header
 #include "ctThreadIocp.hpp"
 #include "ctThreadIocp_base.hpp"
+#include "ctCpuAffinity.hpp"
 
 #include <atomic>
 #include <thread>
@@ -26,34 +42,21 @@ namespace ctl
 // - when an OVERLAPPED* (that was returned from new_request) completes,
 //   the stored std::function callback is invoked on a worker thread and
 //   the callback info object is deleted
-// - threads may be affinitized by providing a list of CPU indices; each
-//   worker will get the CPU index at position (threadIndex % cpus.size())
+// - threads may be affinitized by providing a list of `GroupAffinity`; each
+//   worker will use the GroupAffinity at position (threadIndex % groupAffinities.size())
 class ctThreadIocp_shard : public ctThreadIocp_base
 {
 public:
-    explicit ctThreadIocp_shard(HANDLE _handle, size_t numThreads = 0, const std::vector<DWORD>& cpus = {})
-        : m_iocp(CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0)), m_shutdown(false), m_cpus(cpus)
+    // Constructor that accepts GroupAffinity entries so callers can supply group+mask
+    explicit ctThreadIocp_shard(HANDLE _handle, size_t numThreads = 0, const std::vector<GroupAffinity>& groupAffinities = {})
+        : m_shutdown(false), m_groupAffinities(groupAffinities)
     {
-        THROW_LAST_ERROR_IF_NULL(m_iocp);
-
-        // associate the user handle/socket with our IOCP
-        const auto assoc = CreateIoCompletionPort(_handle, m_iocp, 0, 0);
-        THROW_LAST_ERROR_IF_NULL(assoc);
-
-        if (numThreads == 0)
-        {
-            numThreads = std::max<size_t>(1, std::thread::hardware_concurrency());
-        }
-
-        m_workers.reserve(numThreads);
-        for (size_t i = 0; i < numThreads; ++i)
-        {
-            m_workers.emplace_back(&ctThreadIocp_shard::WorkerLoop, this, i);
-        }
+        Init(_handle, numThreads);
     }
 
-    explicit ctThreadIocp_shard(SOCKET _socket, size_t numThreads = 0, const std::vector<DWORD>& cpus = {})
-        : ctThreadIocp_shard(reinterpret_cast<HANDLE>(_socket), numThreads, cpus) // NOLINT(performance-no-int-to-ptr)
+    // SOCKET overload forwards to HANDLE constructor
+    explicit ctThreadIocp_shard(SOCKET _socket, size_t numThreads = 0, const std::vector<GroupAffinity>& groupAffinities = {})
+        : ctThreadIocp_shard(reinterpret_cast<HANDLE>(_socket), numThreads, groupAffinities) // NOLINT(performance-no-int-to-ptr)
     {
     }
 
@@ -84,25 +87,54 @@ public:
     // Post a custom completion packet for testing or to inject a completion
     bool post_completion(ULONG_PTR key = 0, DWORD bytes = 0, OVERLAPPED* ov = nullptr) const noexcept
     {
-        return !!PostQueuedCompletionStatus(m_iocp, bytes, key, ov);
+        return !!PostQueuedCompletionStatus(m_iocp.get(), bytes, key, ov);
     }
 
 private:
-    HANDLE m_iocp{nullptr};
+    wil::unique_handle m_iocp;
     std::vector<std::thread> m_workers;
     std::atomic<bool> m_shutdown;
-    std::vector<DWORD> m_cpus;
+    std::vector<GroupAffinity> m_groupAffinities;
+
+    void Init(HANDLE _handle, size_t numThreads)
+    {
+        // Create the IOCP into a local RAII handle first so it will be closed
+        // automatically if association or thread creation fails.
+        wil::unique_handle iocp(CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0));
+        THROW_LAST_ERROR_IF_NULL(iocp.get());
+
+        // associate the user handle/socket with our IOCP
+        const auto assoc = CreateIoCompletionPort(_handle, iocp.get(), 0, 0);
+        THROW_LAST_ERROR_IF_NULL(assoc);
+
+        if (numThreads == 0)
+        {
+            numThreads = std::max<size_t>(1, std::thread::hardware_concurrency());
+        }
+
+        m_workers.reserve(numThreads);
+        for (size_t i = 0; i < numThreads; ++i)
+        {
+            m_workers.emplace_back(&ctThreadIocp_shard::WorkerLoop, this, i);
+        }
+
+        // All initialization succeeded; take ownership of the IOCP handle
+        m_iocp = std::move(iocp);
+    }
 
     void WorkerLoop(size_t index) noexcept
     {
-        // if CPU indices were provided, affinitize this thread to a single CPU
-        if (!m_cpus.empty())
+        // if group affinities were provided, use SetThreadGroupAffinity which respects groups
+        if (!m_groupAffinities.empty())
         {
-            const DWORD cpu = m_cpus[index % m_cpus.size()];
-            KAFFINITY mask = (KAFFINITY)(1ULL << cpu);
+            const GroupAffinity& ga = m_groupAffinities[index % m_groupAffinities.size()];
+            GROUP_AFFINITY gaff{};
+            gaff.Group = ga.Group;
+            gaff.Mask = ga.Mask;
             // ignore return value; affinity is best-effort
-            SetThreadAffinityMask(GetCurrentThread(), mask);
+            SetThreadGroupAffinity(GetCurrentThread(), &gaff, nullptr);
         }
+        // legacy cpu-index API removed; only GroupAffinity is supported now
 
         DWORD bytesTransferred = 0;
         ULONG_PTR completionKey = 0;
@@ -110,7 +142,7 @@ private:
 
         while (!m_shutdown.load(std::memory_order_acquire))
         {
-            const BOOL ok = GetQueuedCompletionStatus(m_iocp, &bytesTransferred, &completionKey, &pOverlapped, INFINITE);
+            const BOOL ok = GetQueuedCompletionStatus(m_iocp.get(), &bytesTransferred, &completionKey, &pOverlapped, INFINITE);
             (void)ok;
 
             // a NULL overlapped is our shutdown signal (or a benign empty post)
@@ -161,7 +193,7 @@ private:
         // wake up all workers by posting null OVERLAPPEDs
         for (size_t i = 0; i < m_workers.size(); ++i)
         {
-            PostQueuedCompletionStatus(m_iocp, 0, 0, nullptr);
+            PostQueuedCompletionStatus(m_iocp.get(), 0, 0, nullptr);
         }
 
         for (auto& t : m_workers)
@@ -172,11 +204,7 @@ private:
             }
         }
 
-        if (m_iocp)
-        {
-            CloseHandle(m_iocp);
-            m_iocp = nullptr;
-        }
+        // m_iocp will be closed automatically by wil::unique_handle's destructor
     }
 };
 

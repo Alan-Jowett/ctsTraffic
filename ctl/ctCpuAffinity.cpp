@@ -128,7 +128,7 @@ namespace ctl
         }
     }
 
-    std::optional<std::vector<GroupAffinity>> ComputeShardAffinities(uint32_t shardCount, CpuAffinityPolicy policy) noexcept
+    std::optional<std::vector<GroupAffinity>> ComputeShardAffinities(uint32_t shardCount, CpuAffinityPolicy policy)
     {
         if (shardCount == 0)
         {
@@ -222,7 +222,7 @@ namespace ctl
         return std::nullopt;
     }
 
-    std::wstring FormatGroupAffinity(const GroupAffinity& g) noexcept
+    std::wstring FormatGroupAffinity(const GroupAffinity& g)
     {
         wchar_t buf[128];
         swprintf_s(buf, _countof(buf), L"Group=%u Mask=0x%llx", g.Group, static_cast<unsigned long long>(g.Mask));

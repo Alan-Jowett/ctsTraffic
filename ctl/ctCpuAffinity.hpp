@@ -56,11 +56,11 @@ namespace ctl
 
     // Compute per-shard affinity mapping given a shard count and policy.
     // Returns an optional vector of length == shardCount when mapping is possible.
-    std::optional<std::vector<GroupAffinity>> ComputeShardAffinities(uint32_t shardCount, CpuAffinityPolicy policy) noexcept;
+    std::optional<std::vector<GroupAffinity>> ComputeShardAffinities(uint32_t shardCount, CpuAffinityPolicy policy);
 
     // Parse a policy name (case-insensitive) to CpuAffinityPolicy.
     std::optional<CpuAffinityPolicy> ParsePolicyName(const std::wstring& name) noexcept;
 
     // Human-readable formatting helper for logging.
-    std::wstring FormatGroupAffinity(const GroupAffinity& g) noexcept;
+    std::wstring FormatGroupAffinity(const GroupAffinity& g);
 }

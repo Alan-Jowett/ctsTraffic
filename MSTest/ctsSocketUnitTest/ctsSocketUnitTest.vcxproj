@@ -364,6 +364,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\ctsTraffic\ctsSocket.cpp" />
     <ClCompile Include="ctsSocketUnitTest.cpp" />
+    <!-- moved ctsThreadIocpShardUnitTest.cpp into its own project -->
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
