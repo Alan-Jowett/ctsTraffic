@@ -25,6 +25,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <wil/resource.h>
 
 
+#include "ctThreadIocp_base.hpp"
+
 namespace ctl
 {
 //
@@ -91,7 +93,7 @@ static_assert(sizeof(ctThreadIocpCallbackInfo) == sizeof(OVERLAPPED) + sizeof(PV
 // - if the IO call must be canceled after is completed successfully or returned ERROR_IO_PENDING, 
 //   the user should take care to call the appropriate API (CancelIo, CancelIoEx, CloseHandle, closesocket)
 //   - the user should then expect the callback to be invoked for all IO requests on that HANDLE/SOCKET
-class ctThreadIocp
+class ctThreadIocp : public ctThreadIocp_base
 {
 public:
     //
@@ -143,7 +145,7 @@ public:
     // - each call will return a unique OVERLAPPED*
     // - the callback will be given the OVERLAPPED* matching the IO that completed
     //
-    OVERLAPPED* new_request(std::function<void(OVERLAPPED*)> _callback) const
+    OVERLAPPED* new_request(std::function<void(OVERLAPPED*)> _callback) const override
     {
         // this can fail by throwing std::bad_alloc
         auto* new_callback = new ctThreadIocpCallbackInfo(std::move(_callback));
@@ -163,7 +165,7 @@ public:
     // This function does *not* cancel the IO call (e.g. does not cancel the ReadFile or WSARecv request)
     // - it is only to notify the threadpool that there will not be any IO over the OVERLAPPED*
     //
-    void cancel_request(const OVERLAPPED* pOverlapped) const noexcept
+    void cancel_request(const OVERLAPPED* pOverlapped) const noexcept override
     {
         CancelThreadpoolIo(m_tpIo.get());
         const auto* const old_request = reinterpret_cast<const ctThreadIocpCallbackInfo*>(pOverlapped);

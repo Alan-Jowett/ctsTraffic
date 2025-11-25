@@ -1,0 +1,232 @@
+/*
+
+Copyright (c) Microsoft Corporation
+All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the ""License""); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
+
+See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+
+*/
+
+/*
+ * ctCpuAffinity.cpp
+ * Implementation of CPU affinity capability detection and shard -> affinity mapping.
+ */
+
+#include "ctCpuAffinity.hpp"
+
+#include <cstdio>
+
+#include <winsock2.h>
+#include <mstcpip.h>
+#include <windows.h>
+#include <vector>
+#include <algorithm>
+
+namespace ctl
+{
+
+    CpuAffinityInfo QueryCpuAffinitySupport() noexcept
+    {
+        CpuAffinityInfo info{};
+
+        // Processor group and counts
+        info.ProcessorGroupCount = static_cast<uint32_t>(GetActiveProcessorGroupCount());
+        // total logical processors across groups
+        uint64_t total = 0;
+        for (WORD g = 0; g < info.ProcessorGroupCount; ++g)
+        {
+            total += GetActiveProcessorCount(g);
+        }
+        info.LogicalProcessorCount = static_cast<uint32_t>(total);
+
+        // Probe SIO_CPU_AFFINITY support using a temporary UDP socket, if available
+        // WSAStartup is expected to have been called by the application earlier.
+#ifdef SIO_CPU_AFFINITY
+        SOCKET s = WSASocketW(AF_INET, SOCK_DGRAM, IPPROTO_UDP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+        if (s != INVALID_SOCKET)
+        {
+            DWORD bytes = 0;
+            // Prepare a valid SOCKET_PROCESSOR_AFFINITY structure as required by SIO_CPU_AFFINITY.
+            SOCKET_PROCESSOR_AFFINITY spa{};
+            // The structure is zero-initialized above; no need to set individual fields here.
+            // The call is used only to probe support; the kernel will validate the structure.
+
+            // Calling WSAIoctl to probe SIO_CPU_AFFINITY support.
+            // Use the same pattern as when actually applying affinity (input only, no output buffer).
+            // Some implementations may reject using the same buffer for output; use nullptr for output to probe cleanly.
+            const int rc = WSAIoctl(s, SIO_CPU_AFFINITY, &spa, sizeof(spa), nullptr, 0, &bytes, nullptr, nullptr);
+            if (rc == 0)
+            {
+                info.SupportsCpuAffinityIoctl = true;
+            }
+            else
+            {
+                info.SupportsCpuAffinityIoctl = false;
+            }
+            closesocket(s);
+        }
+        else
+        {
+            info.SupportsCpuAffinityIoctl = false;
+        }
+#else
+        // SDK doesn't define SIO_CPU_AFFINITY; treat as not supported.
+        info.SupportsCpuAffinityIoctl = false;
+#endif
+
+        // Feature-detect GetQueuedCompletionStatusEx presence conservatively
+        // Assume present on supported Windows versions; leave false only if very old.
+        info.SupportsGQCSEx = true;
+
+        return info;
+    }
+
+    namespace {
+        // Helper: get per-group processor counts
+        static std::vector<uint32_t> GetProcessorCountsPerGroup() noexcept
+        {
+            std::vector<uint32_t> counts;
+            const WORD groupCount = static_cast<WORD>(GetActiveProcessorGroupCount());
+            counts.reserve(groupCount);
+            for (WORD g = 0; g < groupCount; ++g)
+            {
+                counts.push_back(static_cast<uint32_t>(GetActiveProcessorCount(g)));
+            }
+            return counts;
+        }
+
+        // Convert a global cpu index to group and local index
+        static void GlobalCpuIndexToGroupAndIndex(uint32_t globalIndex, const std::vector<uint32_t>& perGroupCounts, WORD& outGroup, uint32_t& outIndex) noexcept
+        {
+            uint32_t acc = 0;
+            for (WORD g = 0; g < perGroupCounts.size(); ++g)
+            {
+                const uint32_t c = perGroupCounts[g];
+                if (globalIndex < acc + c)
+                {
+                    outGroup = g;
+                    outIndex = globalIndex - acc;
+                    return;
+                }
+                acc += c;
+            }
+            // fallback to last group
+            if (!perGroupCounts.empty())
+            {
+                outGroup = static_cast<WORD>(perGroupCounts.size() - 1);
+                outIndex = perGroupCounts.back() ? (perGroupCounts.back() - 1) : 0;
+            }
+            else
+            {
+                outGroup = 0;
+                outIndex = 0;
+            }
+        }
+    }
+
+    std::optional<std::vector<GroupAffinity>> ComputeShardAffinities(uint32_t shardCount, CpuAffinityPolicy policy) noexcept
+    {
+        if (shardCount == 0)
+        {
+            return std::nullopt;
+        }
+
+        const auto perGroup = GetProcessorCountsPerGroup();
+        uint32_t totalProcessors = 0;
+        for (auto c : perGroup) totalProcessors += c;
+        if (totalProcessors == 0)
+        {
+            return std::nullopt;
+        }
+
+        std::vector<GroupAffinity> result;
+        result.resize(shardCount);
+
+        switch (policy)
+        {
+
+
+        case CpuAffinityPolicy::Manual:
+            // Manual policy requires external mapping; indicate failure by returning nullopt
+            return std::nullopt;
+
+        case CpuAffinityPolicy::PerCpu:
+        case CpuAffinityPolicy::RssAligned:
+        {
+            // Distribute shards across individual logical processors round-robin
+            for (uint32_t i = 0; i < shardCount; ++i)
+            {
+                uint32_t cpuIndex = i % totalProcessors;
+                WORD group = 0;
+                uint32_t localIndex = 0;
+                GlobalCpuIndexToGroupAndIndex(cpuIndex, perGroup, group, localIndex);
+                GroupAffinity ga{};
+                ga.Group = group;
+                // Limit mask to 64 bits (KAFFINITY is 64-bit on x64)
+                if (localIndex < (sizeof(KAFFINITY) * 8))
+                {
+                    ga.Mask = static_cast<KAFFINITY>(1ULL << localIndex);
+                }
+                else
+                {
+                    // fallback to first bit if index too large
+                    ga.Mask = static_cast<KAFFINITY>(1ULL);
+                }
+                result[i] = ga;
+            }
+            return result;
+        }
+
+        case CpuAffinityPolicy::PerGroup:
+        default:
+        {
+            // Assign shards to groups (full group mask) round-robin across available groups
+            const size_t groupCount = perGroup.size();
+            std::vector<KAFFINITY> groupMasks(groupCount, 0);
+            for (size_t g = 0; g < groupCount; ++g)
+            {
+                KAFFINITY mask = 0;
+                const uint32_t count = perGroup[g];
+                for (uint32_t bi = 0; bi < count && bi < (sizeof(KAFFINITY) * 8); ++bi)
+                {
+                    mask |= (static_cast<KAFFINITY>(1ULL) << bi);
+                }
+                groupMasks[g] = mask;
+            }
+
+            for (uint32_t i = 0; i < shardCount; ++i)
+            {
+                const size_t g = i % groupCount;
+                result[i].Group = static_cast<WORD>(g);
+                result[i].Mask = groupMasks[g];
+            }
+            return result;
+        }
+        }
+    }
+
+    std::optional<CpuAffinityPolicy> ParsePolicyName(const std::wstring& name) noexcept
+    {
+        if (name.empty()) return std::nullopt;
+        std::wstring s = name;
+        for (auto& c : s) c = towupper(c);
+        if (s == L"NONE") return std::nullopt;
+        if (s == L"PERCPU" || s == L"PER_CPU") return CpuAffinityPolicy::PerCpu;
+        if (s == L"PERGROUP" || s == L"PER_GROUP") return CpuAffinityPolicy::PerGroup;
+        if (s == L"RSSALIGNED" || s == L"RSS_ALIGNED") return CpuAffinityPolicy::RssAligned;
+        if (s == L"MANUAL") return CpuAffinityPolicy::Manual;
+        return std::nullopt;
+    }
+
+    std::wstring FormatGroupAffinity(const GroupAffinity& g) noexcept
+    {
+        wchar_t buf[128];
+        swprintf_s(buf, _countof(buf), L"Group=%u Mask=0x%llx", g.Group, static_cast<unsigned long long>(g.Mask));
+        return std::wstring(buf);
+    }
+
+} // namespace ctl

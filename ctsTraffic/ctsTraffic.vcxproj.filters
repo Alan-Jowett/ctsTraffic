@@ -99,6 +99,9 @@
     <ClCompile Include="ctsConnectByName.cpp">
       <Filter>TCPFunctions</Filter>
     </ClCompile>
+    <ClCompile Include="..\ctl\ctCpuAffinity.cpp">
+      <Filter>ctl</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">

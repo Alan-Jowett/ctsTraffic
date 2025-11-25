@@ -19,7 +19,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <Windows.h>
 #include <WinSock2.h>
 // ctl headers
-#include <ctThreadIocp.hpp>
+#include <ctThreadIocp_base.hpp>
 #include <ctSockaddr.hpp>
 // project headers
 #include "ctsMediaStreamServerListeningSocket.h"
@@ -32,8 +32,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-ctsMediaStreamServerListeningSocket::ctsMediaStreamServerListeningSocket(wil::unique_socket&& listeningSocket, ctl::ctSockaddr listeningAddr) :
-    m_threadIocp(std::make_shared<ctl::ctThreadIocp>(listeningSocket.get(), ctsConfig::g_configSettings->pTpEnvironment)),
+ctsMediaStreamServerListeningSocket::ctsMediaStreamServerListeningSocket(wil::unique_socket&& listeningSocket, ctl::ctSockaddr listeningAddr, std::shared_ptr<ctl::ctThreadIocp_base> threadIocp) :
+    m_threadIocp(std::move(threadIocp)),
     m_listeningSocket(std::move(listeningSocket)),
     m_listeningAddr(std::move(listeningAddr))
 {

@@ -20,6 +20,10 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <WinSock2.h>
 // ctl headers
 #include <ctSockaddr.hpp>
+#include <ctThreadIocp.hpp>
+#include <ctThreadIocp_shard.hpp>
+#include <ctCpuAffinity.hpp>
+#include <mstcpip.h>
 // project headers
 #include "ctsConfig.h"
 #include "ctsSocket.h"
@@ -141,30 +145,118 @@ namespace ctsTraffic
             // 'listen' to each address
             for (const auto& addr : ctsConfig::g_configSettings->ListenAddresses)
             {
-                wil::unique_socket listening(ctsConfig::CreateSocket(addr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
-
-                auto error = ctsConfig::SetPreBindOptions(listening.get(), addr);
-                if (error != NO_ERROR)
+                if (ctsConfig::g_configSettings->EnableRecvSharding)
                 {
-                    THROW_WIN32_MSG(error, "SetPreBindOptions (ctsMediaStreamServer)");
-                }
+                    auto shardCount = static_cast<int>(ctsConfig::g_configSettings->ShardCount);
+                    if (shardCount == 0) {
+                        const auto info = ctl::QueryCpuAffinitySupport();
+                        const uint32_t logical = info.LogicalProcessorCount ? info.LogicalProcessorCount : 1u;
+                        shardCount = static_cast<int>(logical);
+                    }
 
-                if (SOCKET_ERROR == bind(listening.get(), addr.sockaddr(), addr.length()))
+                    // compute per-shard affinities (round-robin per-cpu)
+                    std::optional<std::vector<ctl::GroupAffinity>> maybeAffinities = ctl::ComputeShardAffinities(static_cast<uint32_t>(shardCount), ctl::CpuAffinityPolicy::PerCpu);
+
+                    for (int shard = 0; shard < shardCount; ++shard)
+                    {
+                        wil::unique_socket listening(ctsConfig::CreateSocket(addr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
+
+                        auto error = ctsConfig::SetPreBindOptions(listening.get(), addr);
+                        if (error != NO_ERROR)
+                        {
+                            THROW_WIN32_MSG(error, "SetPreBindOptions (ctsMediaStreamServer)");
+                        }
+
+                        // capture the socket value before moved into the vector
+                        const SOCKET listeningSocketToPrint(listening.get());
+
+                        // If we have affinity mapping, attempt to apply SIO_CPU_AFFINITY for this socket
+                        if (maybeAffinities && shard < static_cast<int>(maybeAffinities->size()))
+                        {
+                            const ctl::GroupAffinity& ga = (*maybeAffinities)[shard];
+                            SOCKET_PROCESSOR_AFFINITY spa{};
+                            // fill PROCESSOR_NUMBER fields: Group + Number. Determine Number from mask (single-bit expected).
+                            spa.Processor.Group = ga.Group;
+                            spa.Processor.Reserved = 0;
+                            // compute local index from mask
+                            unsigned int localIndex = 0;
+                            KAFFINITY mask = ga.Mask;
+                            for (unsigned int b = 0; b < (sizeof(KAFFINITY) * 8); ++b)
+                            {
+                                if ((mask >> b) & 1ULL)
+                                {
+                                    localIndex = b;
+                                    break;
+                                }
+                            }
+                            spa.Processor.Number = static_cast<BYTE>(localIndex);
+
+                            DWORD bytes = 0;
+                            const int rc = WSAIoctl(listening.get(), SIO_CPU_AFFINITY, &spa, sizeof(spa), nullptr, 0, &bytes, nullptr, nullptr);
+                            if (rc != 0)
+                            {
+                                const auto erl = WSAGetLastError();
+                                ctsConfig::PrintErrorInfo(L"WSAIoctl(SIO_CPU_AFFINITY) failed for shard %d with error %d", shard, erl);
+                            }
+                            else
+                            {
+                                PRINT_DEBUG_INFO(L"ctsMediaStreamServer - applied SIO_CPU_AFFINITY (group %u, cpu %u) to socket %Iu\n", spa.Processor.Group, spa.Processor.Number, listeningSocketToPrint);
+                            }
+                        }
+
+                        if (SOCKET_ERROR == bind(listening.get(), addr.sockaddr(), addr.length()))
+                        {
+                            error = WSAGetLastError();
+                            char addrBuffer[ctl::ctSockaddr::FixedStringLength]{};
+                            addr.writeAddress(addrBuffer);
+                            THROW_WIN32_MSG(error, "bind %hs (ctsMediaStreamServer)", addrBuffer);
+                        }
+
+                        // create a shard implementation for this socket with configured worker count
+                        auto threadIocp = std::make_shared<ctl::ctThreadIocp_shard>(listening.get(), static_cast<size_t>(ctsConfig::g_configSettings->ShardWorkerCount));
+
+                        g_listeningSockets.emplace_back(
+                            std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));
+
+                        PRINT_DEBUG_INFO(
+                            L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (shard %d, %Iu)\n",
+                            addr.writeCompleteAddress().c_str(),
+                            shard,
+                            listeningSocketToPrint);
+                    }
+                }
+                else
                 {
-                    error = WSAGetLastError();
-                    char addrBuffer[ctl::ctSockaddr::FixedStringLength]{};
-                    addr.writeAddress(addrBuffer);
-                    THROW_WIN32_MSG(error, "bind %hs (ctsMediaStreamServer)", addrBuffer);
-                }
+                    wil::unique_socket listening(ctsConfig::CreateSocket(addr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
 
-                // capture the socket value before moved into the vector
-                const SOCKET listeningSocketToPrint(listening.get());
-                g_listeningSockets.emplace_back(
-                    std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr));
-                PRINT_DEBUG_INFO(
-                    L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (%Iu)\n",
-                    addr.writeCompleteAddress().c_str(),
-                    listeningSocketToPrint);
+                    auto error = ctsConfig::SetPreBindOptions(listening.get(), addr);
+                    if (error != NO_ERROR)
+                    {
+                        THROW_WIN32_MSG(error, "SetPreBindOptions (ctsMediaStreamServer)");
+                    }
+
+                    if (SOCKET_ERROR == bind(listening.get(), addr.sockaddr(), addr.length()))
+                    {
+                        error = WSAGetLastError();
+                        char addrBuffer[ctl::ctSockaddr::FixedStringLength]{};
+                        addr.writeAddress(addrBuffer);
+                        THROW_WIN32_MSG(error, "bind %hs (ctsMediaStreamServer)", addrBuffer);
+                    }
+
+                    // capture the socket value before moved into the vector
+                    const SOCKET listeningSocketToPrint(listening.get());
+
+                    // non-sharded: original behavior (threadpool IO manager)
+                    std::shared_ptr<ctl::ctThreadIocp_base> threadIocp = std::make_shared<ctl::ctThreadIocp>(listening.get(), ctsConfig::g_configSettings->pTpEnvironment);
+
+                    g_listeningSockets.emplace_back(
+                        std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));
+
+                    PRINT_DEBUG_INFO(
+                        L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (%Iu)\n",
+                        addr.writeCompleteAddress().c_str(),
+                        listeningSocketToPrint);
+                }
             }
 
             if (g_listeningSockets.empty())

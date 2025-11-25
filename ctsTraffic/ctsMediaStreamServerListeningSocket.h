@@ -20,7 +20,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <Windows.h>
 // ctl headers
 #include <ctSockaddr.hpp>
-#include <ctThreadIocp.hpp>
+#include <ctThreadIocp_base.hpp>
 // project headers
 #include "ctsConfig.h"
 
@@ -31,7 +31,7 @@ class ctsMediaStreamServerListeningSocket
 private:
     static constexpr size_t c_recvBufferSize = 1024;
 
-    std::shared_ptr<ctl::ctThreadIocp> m_threadIocp;
+    std::shared_ptr<ctl::ctThreadIocp_base> m_threadIocp;
 
     mutable wil::critical_section m_listeningSocketLock{ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock};
     _Requires_lock_held_(m_listeningSocketLock) wil::unique_socket m_listeningSocket;
@@ -48,7 +48,8 @@ private:
 public:
     ctsMediaStreamServerListeningSocket(
         wil::unique_socket&& listeningSocket,
-        ctl::ctSockaddr listeningAddr);
+        ctl::ctSockaddr listeningAddr,
+        std::shared_ptr<ctl::ctThreadIocp_base> threadIocp);
 
     ~ctsMediaStreamServerListeningSocket() noexcept;
 
