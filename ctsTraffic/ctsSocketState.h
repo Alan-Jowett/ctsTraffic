@@ -92,6 +92,8 @@ private:
     wil::unique_threadpool_work m_threadPoolWorker{};
     mutable wil::critical_section m_stateGuard{ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock};
     std::weak_ptr<ctsSocketBroker> m_broker{};
+
+    std::weak_ptr<ctsSocketBroker> GetBroker() const noexcept { return m_broker; }
     std::shared_ptr<ctsSocket> m_socket{};
     InternalState m_state = InternalState::Creating;
     uint32_t m_lastError = 0UL;

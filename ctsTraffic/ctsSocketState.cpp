@@ -190,6 +190,9 @@ VOID NTAPI ctsSocketState::ThreadPoolWorker(PTP_CALLBACK_INSTANCE, PVOID context
             {
                 thisPtr->m_socket->SetIoPattern();
 
+                // Broker-owned shards are created and bound during broker startup.
+                // The adopt-on-demand path has been removed.
+
                 auto lock = thisPtr->m_stateGuard.lock();
                 thisPtr->m_state = InternalState::InitiatedIo;
                 lock.reset();

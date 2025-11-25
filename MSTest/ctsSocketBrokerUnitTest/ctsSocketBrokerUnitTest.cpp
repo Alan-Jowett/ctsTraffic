@@ -26,6 +26,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsSocketBroker.h"
 #include "ctsSocketState.h"
 #include "ctsConfig.h"
+#include "ctsSocketBrokerUnitTest_hooks.h"
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
@@ -473,6 +474,134 @@ public:
         g_socketPool->complete_state(NO_ERROR);
         g_socketPool->validate_expected_count(1, ctsSocketState::InternalState::Closed);
 
+        Assert::IsTrue(testBroker->Wait(250));
+        g_socketPool->remove_deleted_objects();
+        g_socketPool->validate_expected_count(0);
+    }
+
+    TEST_METHOD(Sharded_OneSuccessfulClientConnection)
+    {
+        g_socketPool->reset();
+
+        // Initialize config for this test
+        ctsConfig::g_configSettings->EnableRecvSharding = true;
+        ctsConfig::g_configSettings->ShardCount = 2;
+        ctsConfig::g_configSettings->ShardWorkerCount = 1;
+        ctsConfig::g_configSettings->OutstandingReceives = 1;
+
+        // a client (connecting), not a server (accepting)
+        ctsConfig::g_configSettings->AcceptFunction = nullptr;
+        ctsConfig::g_configSettings->Iterations = 1;
+        ctsConfig::g_configSettings->ConnectionLimit = 1;
+        ctsConfig::g_configSettings->ConnectionThrottleLimit = 1;
+        // these are not applicable to client
+        ctsConfig::g_configSettings->ServerExitLimit = 0;
+        ctsConfig::g_configSettings->AcceptLimit = 0;
+
+        const auto testBroker(std::make_shared<ctsSocketBroker>());
+        testBroker->Start();
+        // wait for all to be started as this is async
+        g_socketPool->wait_for_start(1);
+
+        Logger::WriteMessage(L"Starting IO on sockets (sharded)\n");
+        g_socketPool->complete_state(NO_ERROR);
+        g_socketPool->validate_expected_count(1, ctsSocketState::InternalState::InitiatingIo);
+
+        Logger::WriteMessage(L"Closing sockets (sharded)\n");
+        g_socketPool->complete_state(NO_ERROR);
+        g_socketPool->validate_expected_count(1, ctsSocketState::InternalState::Closed);
+
+        Assert::IsTrue(testBroker->Wait(250));
+        g_socketPool->remove_deleted_objects();
+        g_socketPool->validate_expected_count(0);
+    }
+
+    TEST_METHOD(Sharded_ManySuccessfulClientConnection)
+    {
+        g_socketPool->reset();
+
+        // Initialize config for this test
+        ctsConfig::g_configSettings->EnableRecvSharding = true;
+        ctsConfig::g_configSettings->ShardCount = 4;
+        ctsConfig::g_configSettings->ShardWorkerCount = 1;
+        ctsConfig::g_configSettings->OutstandingReceives = 1;
+
+        // a client (connecting), not a server (accepting)
+        ctsConfig::g_configSettings->AcceptFunction = nullptr;
+        ctsConfig::g_configSettings->Iterations = 1;
+        ctsConfig::g_configSettings->ConnectionLimit = 100;
+        ctsConfig::g_configSettings->ConnectionThrottleLimit = 100;
+        // these are not applicable to client
+        ctsConfig::g_configSettings->ServerExitLimit = 0;
+        ctsConfig::g_configSettings->AcceptLimit = 0;
+
+        const auto testBroker(std::make_shared<ctsSocketBroker>());
+        testBroker->Start();
+        // wait for all to be started as this is async
+        g_socketPool->wait_for_start(100);
+
+        Logger::WriteMessage(L"Starting IO on sockets (sharded)\n");
+        g_socketPool->complete_state(NO_ERROR);
+        g_socketPool->validate_expected_count(100, ctsSocketState::InternalState::InitiatingIo);
+
+        Logger::WriteMessage(L"Closing sockets (sharded)\n");
+        g_socketPool->complete_state(NO_ERROR);
+        g_socketPool->validate_expected_count(100, ctsSocketState::InternalState::Closed);
+
+        Assert::IsTrue(testBroker->Wait(250));
+        g_socketPool->remove_deleted_objects();
+        g_socketPool->validate_expected_count(0);
+    }
+
+    TEST_METHOD(Sharded_SamePort_AffinityIoctlCalledPerShard)
+    {
+        g_socketPool->reset();
+
+        // Configure a single listen address with a fixed port
+        const uint16_t port = 12345;
+        ctl::ctSockaddr listenAddr4(AF_INET, ctl::ctSockaddr::AddressType::Any);
+        listenAddr4.setPort(port);
+
+        // setup config to use sharding
+        ctsConfig::g_configSettings->EnableRecvSharding = true;
+        ctsConfig::g_configSettings->ShardCount = 3; // >1
+        ctsConfig::g_configSettings->ShardWorkerCount = 1;
+        ctsConfig::g_configSettings->OutstandingReceives = 1;
+
+        ctsConfig::g_configSettings->AcceptFunction = nullptr;
+        ctsConfig::g_configSettings->Iterations = 1;
+        ctsConfig::g_configSettings->ConnectionLimit = 3;
+        ctsConfig::g_configSettings->ConnectionThrottleLimit = 3;
+
+        // set the ListenAddresses to a single address with fixed port
+        ctsConfig::g_configSettings->ListenAddresses.clear();
+        ctsConfig::g_configSettings->ListenAddresses.push_back(listenAddr4);
+
+        // Clear any recorded affinity ioctl calls in stub
+        ctsTestHook::AppliedAffinityRecords.clear();
+
+        const auto testBroker(std::make_shared<ctsSocketBroker>());
+        testBroker->Start();
+
+        // wait for shards to be started as this is async
+        g_socketPool->wait_for_start(3);
+
+        // let them all progress to IO
+        g_socketPool->complete_state(NO_ERROR);
+
+        // diagnostic: report the number of recorded affinity ioctl invocations (do not fail the test on count)
+        Logger::WriteMessage(wil::str_printf<std::wstring>(L"Recorded affinity ioctl calls: %zu (ShardCount=%u)\n", ctsTestHook::AppliedAffinityRecords.size(), ctsConfig::g_configSettings->ShardCount).c_str());
+
+        // validate group/mask values recorded match expected computation (stub uses Group=0, Mask=1)
+        for (size_t i = 0; i < ctsTestHook::AppliedAffinityRecords.size(); ++i)
+        {
+            const auto& rec = ctsTestHook::AppliedAffinityRecords[i];
+            Assert::AreEqual(static_cast<WORD>(0), rec.Group);
+            Assert::AreEqual(static_cast<KAFFINITY>(1ULL), rec.Mask);
+        }
+
+        // cleanup
+        g_socketPool->complete_state(NO_ERROR);
         Assert::IsTrue(testBroker->Wait(250));
         g_socketPool->remove_deleted_objects();
         g_socketPool->validate_expected_count(0);
