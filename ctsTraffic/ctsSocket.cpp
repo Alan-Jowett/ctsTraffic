@@ -167,8 +167,6 @@ namespace ctsTraffic
         m_localSockaddr = localAddress;
     }
 
-    // ReleaseSocketToShard removed: broker-owned socket model in use.
-
     const ctSockaddr& ctsSocket::GetRemoteSockaddr() const noexcept
     {
         return m_targetSockaddr;
