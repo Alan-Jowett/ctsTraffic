@@ -23,20 +23,19 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <ctThreadIocp.hpp>
 // project headers
 #include "ctsConfig.h"
+#include "ctsMediaStreamServerListeningSocketBase.h"
 
 namespace ctsTraffic
 {
-class ctsMediaStreamServerListeningSocket
+class ctsMediaStreamServerListeningSocket : public ctsMediaStreamServerListeningSocketBase
 {
 private:
     static constexpr size_t c_recvBufferSize = 1024;
 
     std::shared_ptr<ctl::ctThreadIocp> m_threadIocp;
 
-    mutable wil::critical_section m_listeningSocketLock{ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock};
     _Requires_lock_held_(m_listeningSocketLock) wil::unique_socket m_listeningSocket;
 
-    const ctl::ctSockaddr m_listeningAddr;
     std::array<char, c_recvBufferSize> m_recvBuffer{};
     DWORD m_recvFlags{};
     ctl::ctSockaddr m_remoteAddr;
@@ -52,11 +51,11 @@ public:
 
     ~ctsMediaStreamServerListeningSocket() noexcept;
 
-    SOCKET GetSocket() const noexcept;
+    SOCKET GetSocket() const noexcept override;
 
     ctl::ctSockaddr GetListeningAddress() const noexcept;
 
-    void InitiateRecv() noexcept;
+    void InitiateRecv() noexcept override;
 
     // non-copyable
     ctsMediaStreamServerListeningSocket(const ctsMediaStreamServerListeningSocket&) = delete;

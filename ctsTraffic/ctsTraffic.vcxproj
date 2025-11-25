@@ -425,6 +425,7 @@
     <ClCompile Include="ctsSocketState.cpp" />
     <ClCompile Include="ctsTraffic.cpp" />
     <ClCompile Include="ctsMediaStreamServerListeningSocket.cpp" />
+    <ClCompile Include="ctsMediaStreamServerListeningSocketBase.cpp" />
     <ClCompile Include="ctsMediaStreamServerConnectedSocket.cpp" />
     <ClCompile Include="ctsWinsockLayer.cpp" />
     <ClCompile Include="ctsWSASocket.cpp" />
@@ -471,6 +472,7 @@
     <ClInclude Include="ctsWinsockLayer.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="ctsMediaStreamClient.h" />
+    <ClInclude Include="ctsMediaStreamServerListeningSocketBase.h" />
     <ClInclude Include="ctsMediaStreamServerListeningSocket.h" />
     <ClInclude Include="ctsMediaStreamProtocol.hpp" />
     <ClInclude Include="ctsMediaStreamServer.h" />

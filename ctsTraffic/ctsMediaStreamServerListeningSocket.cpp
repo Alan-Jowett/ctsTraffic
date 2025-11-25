@@ -23,6 +23,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <ctSockaddr.hpp>
 // project headers
 #include "ctsMediaStreamServerListeningSocket.h"
+#include "ctsMediaStreamServerListeningSocketBase.h"
 #include "ctsMediaStreamServer.h"
 #include "ctsMediaStreamProtocol.hpp"
 #include "ctsConfig.h"
@@ -33,9 +34,9 @@ See the Apache Version 2.0 License for specific language governing permissions a
 namespace ctsTraffic
 {
 ctsMediaStreamServerListeningSocket::ctsMediaStreamServerListeningSocket(wil::unique_socket&& listeningSocket, ctl::ctSockaddr listeningAddr) :
+    ctsMediaStreamServerListeningSocketBase(std::move(listeningAddr)),
     m_threadIocp(std::make_shared<ctl::ctThreadIocp>(listeningSocket.get(), ctsConfig::g_configSettings->pTpEnvironment)),
-    m_listeningSocket(std::move(listeningSocket)),
-    m_listeningAddr(std::move(listeningAddr))
+    m_listeningSocket(std::move(listeningSocket))
 {
     FAIL_FAST_IF_MSG(
         !!(ctsConfig::g_configSettings->Options & ctsConfig::OptionType::HandleInlineIocp),
@@ -60,7 +61,7 @@ SOCKET ctsMediaStreamServerListeningSocket::GetSocket() const noexcept
 
 ctl::ctSockaddr ctsMediaStreamServerListeningSocket::GetListeningAddress() const noexcept
 {
-    return m_listeningAddr;
+    return ctsMediaStreamServerListeningSocketBase::GetListeningAddress();
 }
 
 void ctsMediaStreamServerListeningSocket::InitiateRecv() noexcept
@@ -197,28 +198,12 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
                 // this receive-call failed - do nothing immediately in response
                 // - just attempt to post another recv at the end of this function
             }
-            else
-            {
-                m_priorFailureWasConnectionReset = false;
-                const ctsMediaStreamMessage message(ctsMediaStreamMessage::Extract(m_recvBuffer.data(), bytesReceived));
-                switch (message.m_action)
+                else
                 {
-                    case MediaStreamAction::START:
-                        PRINT_DEBUG_INFO(
-                            L"\t\tctsMediaStreamServer - processing START from %ws\n",
-                            m_remoteAddr.writeCompleteAddress().c_str());
-#ifndef TESTING_IGNORE_START
-                    // Cannot be holding the object_guard when calling into any pimpl-> methods
-                        pimplOperation = [this] {
-                            ctsMediaStreamServerImpl::Start(m_listeningSocket.get(), m_listeningAddr, m_remoteAddr);
-                        };
-#endif
-                        break;
-
-                    default: // NOLINT(clang-diagnostic-covered-switch-default)
-                        FAIL_FAST_MSG("ctsMediaStreamServer - received an unexpected Action: %d (%p)\n", message.m_action, m_recvBuffer.data());
+                    m_priorFailureWasConnectionReset = false;
+                    // Delegate the parsing+dispatch work to the base class helper
+                    ProcessReceivedPacket(m_listeningSocket.get(), m_recvBuffer.data(), bytesReceived, m_remoteAddr, m_recvFlags);
                 }
-            }
         }
 
         // now execute the stored call outside the lock but inside the try/catch
