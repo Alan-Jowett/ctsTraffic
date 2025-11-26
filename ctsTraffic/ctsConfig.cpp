@@ -2829,9 +2829,10 @@ namespace ctsTraffic::ctsConfig
 				L"-ShardCount:###\n"
 				L"   - number of receive shards to create (0 == default to logical processor count)\n"
 				/* OutstandingReceives removed: no longer a configurable option */
-				L"   - number of completions to process per worker loop iteration (default = 64)\n"
 				L"-ShardWorkerCount:###\n"
 				L"   - number of worker threads to run per shard (default = 1)\n"
+				L"-IocpBatchSize:###\n"
+				L"   - number of completions to process per worker loop iteration (default = 64)\n"
 				L"-AffinityPolicy:<PerCpu|PerGroup|RssAligned|Manual>\n"
 				L"   - how to assign CPU affinity to shards when supported (default = PerCpu)\n"
 			);

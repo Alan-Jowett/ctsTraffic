@@ -235,10 +235,18 @@ namespace ctsTraffic
 
                         // create a shard implementation for this socket with configured worker count
                         // pass the IOCP batch size from config; only applicable when sharding is enabled
+                        // If we computed per-shard affinities, pass the shard's affinity so worker threads
+                        // are affinitized consistently with the socket's SIO_CPU_AFFINITY above.
+                        std::vector<ctl::GroupAffinity> workerAffinities;
+                        if (maybeAffinities && shard < static_cast<int>(maybeAffinities->size()))
+                        {
+                            workerAffinities.push_back((*maybeAffinities)[shard]);
+                        }
+
                         auto threadIocp = std::make_shared<ctl::ctThreadIocp_shard>(
                             listening.get(),
                             static_cast<size_t>(ctsConfig::g_configSettings->ShardWorkerCount),
-                            std::vector<ctl::GroupAffinity>{},
+                            std::move(workerAffinities),
                             static_cast<size_t>(ctsConfig::g_configSettings->IocpBatchSize));
 
                         g_listeningSockets.emplace_back(

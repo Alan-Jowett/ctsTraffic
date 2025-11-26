@@ -139,6 +139,8 @@ private:
         const auto assoc = CreateIoCompletionPort(_handle, iocp.get(), 0, 0);
         THROW_LAST_ERROR_IF_NULL(assoc);
 
+        m_iocp = std::move(iocp);
+
         if (numThreads == 0)
         {
             numThreads = std::max<size_t>(1, std::thread::hardware_concurrency());
@@ -149,9 +151,6 @@ private:
         {
             m_workers.emplace_back(&ctThreadIocp_shard::WorkerLoop, this, i);
         }
-
-        // All initialization succeeded; take ownership of the IOCP handle
-        m_iocp = std::move(iocp);
     }
 
     void WorkerLoop(size_t index) noexcept

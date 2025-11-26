@@ -13,6 +13,10 @@ Goals
 - Affinitize worker threads to CPU groups and masks to improve cache locality and load distribution on systems with processor groups.
 - Provide a safe API for request allocation/cancellation and avoid resource leaks on construction failure.
 
+CPU Steering
+------------
+This sharding design intentionally steers receive traffic to specific CPUs by applying `SIO_CPU_AFFINITY` to the listening UDP sockets and by affinitizing the worker threads that service each shard's IOCP. Together these measures ensure receive processing and the kernel's packet steering target the intended CPUs for improved cache locality and predictable load distribution.
+
 Key Components
 --------------
 - `ctl::ctThreadIocp_shard` (header: `ctl/ctThreadIocp_shard.hpp`)
@@ -78,6 +82,8 @@ Rationale
 ---------
 - Using IOCP with overlapped Winsock APIs provides the most scalable receive path for high packet rates and high concurrency.
 - Sharding worker threads and affinitizing by group/mask improves CPU cache locality and scaling on multi-socket/multi-group systems.
+
+Steering traffic to CPUs via socket and thread affinity is the core benefit of sharding: applying `SIO_CPU_AFFINITY` directs kernel-level packet delivery to specific logical processors while affinitizing the IOCP worker threads keeps processing on those processors, reducing cross-core cache thrash and improving throughput.
 
 Worker Loop and Batching
 ------------------------
