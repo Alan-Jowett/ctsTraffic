@@ -51,10 +51,6 @@ ctsMediaStreamServerListeningSocket::~ctsMediaStreamServerListeningSocket() noex
         m_listeningSocket.reset();
     }
     m_threadIocp.reset();
-
-    // Print a summary of accepted connections for this listening socket
-    const uint32_t connCount = GetConnectionCount();
-    PRINT_DEBUG_INFO(L"ctsMediaStreamServerListeningSocket - accepted %u connections on %ws\n", connCount, m_listeningAddr.writeCompleteAddress().c_str());
 }
 
 SOCKET ctsMediaStreamServerListeningSocket::GetSocket() const noexcept
@@ -212,6 +208,7 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
                         PRINT_DEBUG_INFO(
                             L"\t\tctsMediaStreamServer - processing START from %ws\n",
                             m_remoteAddr.writeCompleteAddress().c_str());
+                        IncrementConnectionCount();
 #ifndef TESTING_IGNORE_START
                     // Cannot be holding the object_guard when calling into any pimpl-> methods
                         pimplOperation = [this] {

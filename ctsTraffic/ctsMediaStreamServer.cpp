@@ -317,6 +317,32 @@ namespace ctsTraffic
             }
         }
 
+        std::vector<uint32_t> GetListenerConnectionCounts() noexcept
+        {
+            std::vector<uint32_t> counts;
+            counts.reserve(g_listeningSockets.size());
+            for (const auto& listener : g_listeningSockets)
+            {
+                counts.push_back(listener->GetConnectionCount());
+            }
+            return counts;
+        }
+
+        std::vector<ListenerInfo> GetListenerInfos() noexcept
+        {
+            std::vector<ListenerInfo> infos;
+            infos.reserve(g_listeningSockets.size());
+            for (size_t i = 0; i < g_listeningSockets.size(); ++i)
+            {
+                infos.push_back(ListenerInfo{
+                    g_listeningSockets[i]->GetListeningAddress(),
+                    g_listeningSockets[i]->GetConnectionCount(),
+                    i
+                });
+            }
+            return infos;
+        }
+
         // Schedule the first IO on the specified ctsSocket
         void ScheduleIo(const std::weak_ptr<ctsSocket>& weakSocket, const ctsTask& task)
         {
@@ -410,8 +436,6 @@ namespace ctsTraffic
                         "Could not find the socket (%Iu) in the waiting_endpoint from our listening sockets (%p)\n",
                         waitingEndpoint->first, &g_listeningSockets);
 
-                // increment the per-listener accepted connection count
-                (*foundSocket)->IncrementConnectionCount();
 
                 ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), waitingEndpoint->second);
 
