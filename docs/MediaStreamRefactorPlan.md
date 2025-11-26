@@ -108,7 +108,7 @@ Checklist (quick)
 -----------------
 - [X] Inventory completed and mapped to roles
 - [X] Interface header created and reviewed
-- [ ] `ctsMediaStreamSend.*` added and compiled
+- [X] `ctsMediaStreamSend.*` added and compiled
 - [ ] `ctsMediaStreamReceive.*` added and compiled
 - [ ] Client and server refactored to use interfaces
 - [ ] Project files updated and solution builds

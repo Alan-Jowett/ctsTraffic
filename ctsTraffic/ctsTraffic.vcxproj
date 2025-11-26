@@ -408,6 +408,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ctsAcceptEx.cpp" />
+  <ClCompile Include="ctsMediaStreamSend.cpp" />
     <ClCompile Include="ctsConfig.cpp" />
     <ClCompile Include="ctsConnectByName.cpp" />
     <ClCompile Include="ctsConnectEx.cpp" />

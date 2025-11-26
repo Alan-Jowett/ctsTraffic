@@ -14,13 +14,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsMediaStreamSend.h"
 #include "ctsMediaStreamProtocol.hpp"
 #include "ctsConfig.h"
-<<<<<<< HEAD
-#include <Windows.h>
-#include <WinSock2.h>
-=======
 #include <WinSock2.h>
 #include <Windows.h>
->>>>>>> 2f79fdc (refactor(media): extract server send logic into ctsMediaStreamSend implementation)
 
 namespace ctsTraffic
 {
