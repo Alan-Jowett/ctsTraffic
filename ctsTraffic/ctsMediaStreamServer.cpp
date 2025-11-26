@@ -234,7 +234,12 @@ namespace ctsTraffic
                         }
 
                         // create a shard implementation for this socket with configured worker count
-                        auto threadIocp = std::make_shared<ctl::ctThreadIocp_shard>(listening.get(), static_cast<size_t>(ctsConfig::g_configSettings->ShardWorkerCount));
+                        // pass the IOCP batch size from config; only applicable when sharding is enabled
+                        auto threadIocp = std::make_shared<ctl::ctThreadIocp_shard>(
+                            listening.get(),
+                            static_cast<size_t>(ctsConfig::g_configSettings->ShardWorkerCount),
+                            std::vector<ctl::GroupAffinity>{},
+                            static_cast<size_t>(ctsConfig::g_configSettings->IocpBatchSize));
 
                         g_listeningSockets.emplace_back(
                             std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));

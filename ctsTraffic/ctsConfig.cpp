@@ -2315,6 +2315,25 @@ namespace ctsTraffic::ctsConfig
 			args.erase(foundWorker);
 		}
 
+		// Parse IOCP batch size for sharded receive (optional)
+		const auto foundBatch = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-IocpBatchSize");
+				return value != nullptr;
+			});
+		if (foundBatch != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundBatch, L"-IocpBatchSize"));
+			if (val == 0)
+			{
+				throw invalid_argument("-IocpBatchSize");
+			}
+			// clamp to a reasonable upper bound to avoid excessive allocations
+			const uint32_t c_maxBatchSize = 256U;
+			g_configSettings->IocpBatchSize = std::min<uint32_t>(val, c_maxBatchSize);
+			args.erase(foundBatch);
+		}
+
 		const auto foundAffinity = ranges::find_if(args, [](const wchar_t* parameter) -> bool
 			{
 				const auto* const value = ParseArgument(parameter, L"-AffinityPolicy");

@@ -52,7 +52,7 @@ public:
         using Factory = std::function<std::unique_ptr<ctl::ctThreadIocp_base>(SOCKET)>;
 
         std::vector<Factory> factories;
-        factories.push_back([](SOCKET s) { return std::make_unique<ctl::ctThreadIocp_shard>(s, 1); });
+        factories.push_back([](SOCKET s) { return std::make_unique<ctl::ctThreadIocp_shard>(s, 1, std::vector<ctl::GroupAffinity>{}, 1); });
         factories.push_back([](SOCKET s) { return std::make_unique<ctl::ctThreadIocp>(s); });
 
         for (const auto& makeTp : factories)
@@ -134,7 +134,7 @@ public:
         using Factory = std::function<std::unique_ptr<ctl::ctThreadIocp_base>(SOCKET)>;
 
         std::vector<Factory> factories;
-        factories.push_back([](SOCKET s) { return std::make_unique<ctl::ctThreadIocp_shard>(s, 1); });
+        factories.push_back([](SOCKET s) { return std::make_unique<ctl::ctThreadIocp_shard>(s, 1, std::vector<ctl::GroupAffinity>{}, 1); });
         factories.push_back([](SOCKET s) { return std::make_unique<ctl::ctThreadIocp>(s); });
 
         for (const auto& makeTp : factories)

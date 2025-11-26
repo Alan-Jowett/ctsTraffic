@@ -79,10 +79,14 @@ Rationale
 - Using IOCP with overlapped Winsock APIs provides the most scalable receive path for high packet rates and high concurrency.
 - Sharding worker threads and affinitizing by group/mask improves CPU cache locality and scaling on multi-socket/multi-group systems.
 
+Worker Loop and Batching
+------------------------
+- The worker loop uses `GetQueuedCompletionStatusEx` to retrieve multiple completions per syscall. Completions are processed in batches using a `std::vector<OVERLAPPED_ENTRY>` sized by the `batchSize` constructor parameter.
+- Each completion is dispatched via a single helper (`ProcessOverlapped`) which contains the SEH-protected invocation of the stored callback and deletion of the callback info object. This ensures handling matches the ctThreadIocp behavior.
+
 Future Work
 -----------
 - Add instrumentation to measure per-shard receive rates and to expose metrics.
 - Allow dynamic resizing of worker threads based on runtime load.
 - Add stronger validation of supplied `GroupAffinity` entries and expose an API to compute affinities from user constraints.
 
-*** End of document

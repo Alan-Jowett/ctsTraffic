@@ -48,15 +48,15 @@ class ctThreadIocp_shard : public ctThreadIocp_base
 {
 public:
     // Constructor that accepts GroupAffinity entries so callers can supply group+mask
-    explicit ctThreadIocp_shard(HANDLE _handle, size_t numThreads = 0, const std::vector<GroupAffinity>& groupAffinities = {})
-        : m_shutdown(false), m_groupAffinities(groupAffinities)
+    explicit ctThreadIocp_shard(HANDLE _handle, size_t numThreads = 0, const std::vector<GroupAffinity>& groupAffinities = {}, size_t batchSize = 1)
+        : m_shutdown(false), m_groupAffinities(groupAffinities), m_batchSize(batchSize)
     {
         Init(_handle, numThreads);
     }
 
     // SOCKET overload forwards to HANDLE constructor
-    explicit ctThreadIocp_shard(SOCKET _socket, size_t numThreads = 0, const std::vector<GroupAffinity>& groupAffinities = {})
-        : ctThreadIocp_shard(reinterpret_cast<HANDLE>(_socket), numThreads, groupAffinities) // NOLINT(performance-no-int-to-ptr)
+    explicit ctThreadIocp_shard(SOCKET _socket, size_t numThreads = 0, const std::vector<GroupAffinity>& groupAffinities = {}, size_t batchSize = 1)
+        : ctThreadIocp_shard(reinterpret_cast<HANDLE>(_socket), numThreads, groupAffinities, batchSize) // NOLINT(performance-no-int-to-ptr)
     {
     }
 
@@ -95,6 +95,38 @@ private:
     std::vector<std::thread> m_workers;
     std::atomic<bool> m_shutdown;
     std::vector<GroupAffinity> m_groupAffinities;
+    const size_t m_batchSize;
+
+    void ProcessOverlapped(OVERLAPPED* pOverlapped) noexcept
+    {
+        if (pOverlapped == nullptr)
+        {
+            return;
+        }
+
+        const EXCEPTION_POINTERS* exr = nullptr;
+        __try
+        {
+            auto* request = reinterpret_cast<ctThreadIocpCallbackInfo*>(pOverlapped);
+            request->callback(pOverlapped);
+            delete request;
+        }
+        __except (exr = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER)
+        {
+            __try
+            {
+                RaiseException(
+                    exr->ExceptionRecord->ExceptionCode,
+                    EXCEPTION_NONCONTINUABLE,
+                    exr->ExceptionRecord->NumberParameters,
+                    exr->ExceptionRecord->ExceptionInformation);
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER)
+            {
+                __debugbreak();
+            }
+        }
+    }
 
     void Init(HANDLE _handle, size_t numThreads)
     {
@@ -134,51 +166,40 @@ private:
             // ignore return value; affinity is best-effort
             SetThreadGroupAffinity(GetCurrentThread(), &gaff, nullptr);
         }
-        // legacy cpu-index API removed; only GroupAffinity is supported now
 
-        DWORD bytesTransferred = 0;
-        ULONG_PTR completionKey = 0;
-        OVERLAPPED* pOverlapped = nullptr;
-
-        while (!m_shutdown.load(std::memory_order_acquire))
+        try
         {
-            const BOOL ok = GetQueuedCompletionStatus(m_iocp.get(), &bytesTransferred, &completionKey, &pOverlapped, INFINITE);
-            (void)ok;
+            std::vector<OVERLAPPED_ENTRY> entries(m_batchSize);
 
-            // a NULL overlapped is our shutdown signal (or a benign empty post)
-            if (pOverlapped == nullptr)
+            while (!m_shutdown.load(std::memory_order_acquire))
             {
-                if (m_shutdown.load(std::memory_order_acquire))
-                {
-                    break;
-                }
-                continue;
-            }
+                ULONG numRemoved = 0;
+                const BOOL ok = GetQueuedCompletionStatusEx(m_iocp.get(), entries.data(), static_cast<ULONG>(entries.size()), &numRemoved, INFINITE, FALSE);
+                (void)ok;
 
-            // run callback; mimic original SEH handling to avoid TP swallowing SEH
-            const EXCEPTION_POINTERS* exr = nullptr;
-            __try
-            {
-                auto* request = reinterpret_cast<ctThreadIocpCallbackInfo*>(pOverlapped);
-                request->callback(pOverlapped);
-                delete request;
-            }
-            __except (exr = GetExceptionInformation(), EXCEPTION_EXECUTE_HANDLER)
-            {
-                __try
+                for (ULONG i = 0; i < numRemoved; ++i)
                 {
-                    RaiseException(
-                        exr->ExceptionRecord->ExceptionCode,
-                        EXCEPTION_NONCONTINUABLE,
-                        exr->ExceptionRecord->NumberParameters,
-                        exr->ExceptionRecord->ExceptionInformation);
-                }
-                __except (EXCEPTION_EXECUTE_HANDLER)
-                {
-                    __debugbreak();
+                    OVERLAPPED_ENTRY& e = entries[i];
+                    OVERLAPPED* pOv = e.lpOverlapped;
+
+                    if (pOv == nullptr)
+                    {
+                        if (m_shutdown.load(std::memory_order_acquire))
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+
+                    ProcessOverlapped(pOv);
                 }
             }
         }
+        catch (...)
+        {
+            return;
+        }
+    
     }
 
     void ShutdownAndJoin() noexcept

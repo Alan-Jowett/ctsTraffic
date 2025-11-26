@@ -425,6 +425,7 @@ namespace ctsTraffic
             uint32_t ShardCount = 0; // 0 means default to logical processor count
             uint32_t ShardWorkerCount = 1;
             AffinityPolicy ShardAffinityPolicy = AffinityPolicy::PerCpu;
+            uint32_t IocpBatchSize = 64;
 
             uint32_t PushBytes = 0;
             uint32_t PullBytes = 0;
