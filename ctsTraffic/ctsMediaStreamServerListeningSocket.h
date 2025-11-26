@@ -45,7 +45,15 @@ private:
 
     void RecvCompletion(OVERLAPPED* pOverlapped) noexcept;
 
+    // number of established connections accepted on this listening socket
+    std::atomic<uint32_t> m_connectionCount{0};
+
 public:
+    // increment the per-listener accepted connection count
+    void IncrementConnectionCount() noexcept { m_connectionCount.fetch_add(1, std::memory_order_relaxed); }
+
+    // query the accepted connection count
+    uint32_t GetConnectionCount() const noexcept { return m_connectionCount.load(std::memory_order_relaxed); }
     ctsMediaStreamServerListeningSocket(
         wil::unique_socket&& listeningSocket,
         ctl::ctSockaddr listeningAddr,

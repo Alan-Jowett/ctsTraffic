@@ -410,6 +410,9 @@ namespace ctsTraffic
                         "Could not find the socket (%Iu) in the waiting_endpoint from our listening sockets (%p)\n",
                         waitingEndpoint->first, &g_listeningSockets);
 
+                // increment the per-listener accepted connection count
+                (*foundSocket)->IncrementConnectionCount();
+
                 ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), waitingEndpoint->second);
 
                 sharedSocket->SetLocalSockaddr((*foundSocket)->GetListeningAddress());

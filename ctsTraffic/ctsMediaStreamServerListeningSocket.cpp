@@ -15,6 +15,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <exception>
 #include <memory>
 #include <utility>
+#include <atomic>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -50,6 +51,10 @@ ctsMediaStreamServerListeningSocket::~ctsMediaStreamServerListeningSocket() noex
         m_listeningSocket.reset();
     }
     m_threadIocp.reset();
+
+    // Print a summary of accepted connections for this listening socket
+    const uint32_t connCount = GetConnectionCount();
+    PRINT_DEBUG_INFO(L"ctsMediaStreamServerListeningSocket - accepted %u connections on %ws\n", connCount, m_listeningAddr.writeCompleteAddress().c_str());
 }
 
 SOCKET ctsMediaStreamServerListeningSocket::GetSocket() const noexcept
