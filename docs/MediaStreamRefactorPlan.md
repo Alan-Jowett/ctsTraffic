@@ -1,5 +1,15 @@
 # Media Stream Refactor Plan
 
+Copyright (c) Microsoft Corporation
+All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
+
+See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+
+
 Goal
 ----
 Extract media streaming send and receive logic into clear, reusable modules so that either the client or the server can act as the sender. Keep runtime behaviour unchanged by default and keep threading/IOCP contracts intact.
@@ -96,8 +106,8 @@ Risks and mitigations
 
 Checklist (quick)
 -----------------
-- [ ] Inventory completed and mapped to roles
-- [ ] Interface header created and reviewed
+- [X] Inventory completed and mapped to roles
+- [X] Interface header created and reviewed
 - [ ] `ctsMediaStreamSend.*` added and compiled
 - [ ] `ctsMediaStreamReceive.*` added and compiled
 - [ ] Client and server refactored to use interfaces
@@ -160,7 +170,3 @@ Important constraints for refactoring
 - Minimize API changes across the codebase: introduce small interfaces and adapters rather than changing existing call sites extensively.
 - Ensure lifetime and ownership of sockets and buffers remain consistent with current `ctsSocket` and `ctsTask` semantics to avoid races.
 
-Next recommended step
-- Draft a small interface header `ctsMediaStreamInterfaces.hpp` that exposes `IMediaStreamSender` and `IMediaStreamReceiver` (minimal methods), and provide adapter examples showing how `ctsMediaStreamServerConnectedSocket` and `ctsMediaStreamClient` would call into those interfaces.
-
-If you'd like, I can now create that interface header and small adapter examples. Say "Create interfaces" to proceed.
