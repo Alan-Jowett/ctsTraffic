@@ -116,3 +116,51 @@ Next steps
 2. I will start the inventory step and list the exact functions/classes mapped to send/receive roles.
 
 If you approve, say "Proceed with inventory" and I'll begin inspecting the code and update the todo progress.
+
+Inventory Results (completed)
+--------------------------------
+The following is the result of the inventory pass: a mapping of send vs receive responsibilities, the specific files and functions involved, and observations/constraints to consider when refactoring.
+
+Send responsibilities (files & locations):
+- `ctsMediaStreamProtocol.hpp`
+   - `ctsMediaStreamSendRequests`: iterator and buffer composition, QPC/QPF stamping and datagram splitting (core send-side framing logic).
+- `ctsMediaStreamServer.cpp`
+   - `ctsMediaStreamServerImpl::ConnectedSocketIo`: constructs `ctsMediaStreamSendRequests`, iterates over WSABUF arrays, performs `WSASendTo` per datagram, handles `UdpConnectionId` special-case.
+- `ctsMediaStreamServerConnectedSocket.*`
+   - `ScheduleTask`, `MediaStreamTimerCallback` (in `.cpp`) drive when sends occur; timers invoke the IO functor to perform synchronous sends.
+   - `IncrementSequence()` manages sequence numbers for outgoing frames.
+- `ctsMediaStreamClient.cpp`
+   - `ctsMediaStreamClientConnect` sends `START` messages via `ctsWSASendTo` (async send helper).
+   - `ctsMediaStreamClientIoImpl` handles `ctsTaskAction::Send` using `ctsWSASendTo` for async send requests from the IO pattern.
+
+Receive responsibilities (files & locations):
+- `ctsMediaStreamProtocol.hpp`
+   - `ctsMediaStreamMessage::ValidateBufferLengthFromTask`, `Extract`, `Construct`: datagram validation and parsing for control messages like `START` and connection-id frames.
+- `ctsMediaStreamServerListeningSocket.*`
+   - `InitiateRecv`, `RecvCompletion`: posts `WSARecvFrom`, parses datagrams and on `START` calls `ctsMediaStreamServerImpl::Start(...)` to match/queue accepting sockets.
+- `ctsMediaStreamClient.cpp`
+   - `ctsMediaStreamClientIoImpl`, `ctsMediaStreamClientIoCompletionCallback`: handle `Recv` completions and dispatch `lockedPattern->CompleteIo` to the protocol.
+
+Cross-cutting protocol / flow notes:
+- The `ctsIOPattern` / `ctsTask` (via `InitiateIo` / `CompleteIo`) are the protocol boundary that decides whether Send or Recv is the next action. Extracted modules must preserve these semantics.
+- The server send path uses synchronous `WSASendTo` inside a timer callback. Preserving synchronous semantics (and the timer-based scheduling) is important to avoid changing thread/IO semantics.
+- The client send path uses asynchronous `ctsWSASendTo` (with a completion callback). The send module should support both sync and async send surfaces or provide a thin adapter.
+- `ctsMediaStreamSendRequests` is currently in the protocol header and is tightly coupled to how data is split; keep it accessible to the send implementation (likely keep it in the header as now).
+
+Files inspected
+- `ctsMediaStreamClient.cpp`, `ctsMediaStreamClient.h`
+- `ctsMediaStreamServer.cpp`, `ctsMediaStreamServer.h`
+- `ctsMediaStreamProtocol.hpp`
+- `ctsMediaStreamServerConnectedSocket.cpp`, `ctsMediaStreamServerConnectedSocket.h`
+- `ctsMediaStreamServerListeningSocket.cpp`, `ctsMediaStreamServerListeningSocket.h`
+- referenced helpers: `ctsWinsockLayer.*`, `ctsIOTask.hpp`, `ctsIOPattern.*`, `ctsSocket.*`, `ctsConfig.*`
+
+Important constraints for refactoring
+- Preserve IO semantics: keep IOCP/RIO usage and send/recv completion behavior unchanged for the first refactor iteration.
+- Minimize API changes across the codebase: introduce small interfaces and adapters rather than changing existing call sites extensively.
+- Ensure lifetime and ownership of sockets and buffers remain consistent with current `ctsSocket` and `ctsTask` semantics to avoid races.
+
+Next recommended step
+- Draft a small interface header `ctsMediaStreamInterfaces.hpp` that exposes `IMediaStreamSender` and `IMediaStreamReceiver` (minimal methods), and provide adapter examples showing how `ctsMediaStreamServerConnectedSocket` and `ctsMediaStreamClient` would call into those interfaces.
+
+If you'd like, I can now create that interface header and small adapter examples. Say "Create interfaces" to proceed.
