@@ -18,6 +18,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
+#include <intrin.h>
 // ctl headers
 #include <ctSockaddr.hpp>
 #include <ctThreadIocp.hpp>
@@ -195,25 +196,21 @@ namespace ctsTraffic
                         if (maybeAffinities && shard < static_cast<int>(maybeAffinities->size()))
                         {
                             const ctl::GroupAffinity& ga = (*maybeAffinities)[shard];
-                            SOCKET_PROCESSOR_AFFINITY spa{};
-                            // fill PROCESSOR_NUMBER fields: Group + Number. Determine Number from mask (single-bit expected).
-                            spa.Processor.Group = ga.Group;
-                            spa.Processor.Reserved = 0;
-                            // compute local index from mask
+                            // Per MSDN, SIO_CPU_AFFINITY expects a USHORT processor index (0-based)
+                            // as its input buffer. Compute the local processor index from the
+                            // GroupAffinity mask (single-bit expected) using a CPU-friendly
+                            // bit-scan instruction and pass that as a USHORT.
                             unsigned int localIndex = 0;
-                            KAFFINITY mask = ga.Mask;
-                            for (unsigned int b = 0; b < (sizeof(KAFFINITY) * 8); ++b)
+                            const KAFFINITY mask = ga.Mask;
+                            unsigned long idx = 0;
+                            if (_BitScanForward64(&idx, static_cast<unsigned __int64>(mask)))
                             {
-                                if ((mask >> b) & 1ULL)
-                                {
-                                    localIndex = b;
-                                    break;
-                                }
+                                localIndex = static_cast<unsigned int>(idx);
                             }
-                            spa.Processor.Number = static_cast<BYTE>(localIndex);
 
+                            USHORT processorIndex = static_cast<USHORT>(localIndex);
                             DWORD bytes = 0;
-                            const int rc = WSAIoctl(listening.get(), SIO_CPU_AFFINITY, &spa, sizeof(spa), nullptr, 0, &bytes, nullptr, nullptr);
+                            const int rc = WSAIoctl(listening.get(), SIO_CPU_AFFINITY, &processorIndex, sizeof(processorIndex), nullptr, 0, &bytes, nullptr, nullptr);
                             if (rc != 0)
                             {
                                 const auto erl = WSAGetLastError();
@@ -221,7 +218,7 @@ namespace ctsTraffic
                             }
                             else
                             {
-                                PRINT_DEBUG_INFO(L"ctsMediaStreamServer - applied SIO_CPU_AFFINITY (group %u, cpu %u) to socket %Iu\n", spa.Processor.Group, spa.Processor.Number, listeningSocketToPrint);
+                                PRINT_DEBUG_INFO(L"ctsMediaStreamServer - applied SIO_CPU_AFFINITY (group %u, cpu %u) to socket %Iu\n", ga.Group, processorIndex, listeningSocketToPrint);
                             }
                         }
 

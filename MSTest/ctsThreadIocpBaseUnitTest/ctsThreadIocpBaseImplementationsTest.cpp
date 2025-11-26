@@ -104,11 +104,21 @@ public:
             DWORD recvBytes = 0;
             const int wsaRes = WSARecvFrom(s, &wbuf, 1, &recvBytes, &flags, reinterpret_cast<sockaddr*>(&from), &fromlen, ov, nullptr);
 
-            // WSARecvFrom returns SOCKET_ERROR and WSAGetLastError() == WSA_IO_PENDING when async queued
+            // WSARecvFrom may either complete synchronously (returns 0) or return
+            // SOCKET_ERROR with WSAGetLastError() == WSA_IO_PENDING to indicate
+            // the operation was queued for asynchronous completion. Handle both.
             if (wsaRes == SOCKET_ERROR)
             {
                 const int err = WSAGetLastError();
                 Assert::IsTrue(err == WSA_IO_PENDING);
+            }
+            else
+            {
+                // Synchronous success (wsaRes == 0): signal the done event now
+                // because no completion will be posted to the IOCP for this
+                // overlapped operation.
+                Assert::AreEqual(0, wsaRes);
+                SetEvent(done);
             }
 
             // send a small UDP packet from a temporary socket to trigger completion

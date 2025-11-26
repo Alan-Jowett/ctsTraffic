@@ -49,7 +49,7 @@ class ctThreadIocp_shard : public ctThreadIocp_base
 public:
     // Constructor that accepts GroupAffinity entries so callers can supply group+mask
     explicit ctThreadIocp_shard(HANDLE _handle, size_t numThreads = 0, const std::vector<GroupAffinity>& groupAffinities = {}, size_t batchSize = 1)
-        : m_shutdown(false), m_groupAffinities(groupAffinities), m_batchSize(batchSize)
+        : m_shutdown(false), m_groupAffinities(groupAffinities), m_batchSize(batchSize ? batchSize : 1)
     {
         Init(_handle, numThreads);
     }

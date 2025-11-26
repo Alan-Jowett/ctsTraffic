@@ -58,9 +58,9 @@ Design Details
 
 Testing
 -------
-- Unit tests in `MSTest/ctsThreadIocpShardUnitTest` exercise:
-  - Successful overlapped receive flow via `WSARecvFrom` + sendto trigger.
-  - `cancel_request` to confirm immediate failure path frees the request and does not invoke the callback.
+-- Unit tests in `MSTest/ctsThreadIocpBaseUnitTest` exercise:
+   - Successful overlapped receive flow via `WSARecvFrom` + sendto trigger.
+   - `cancel_request` to confirm immediate failure path frees the request and does not invoke the callback.
 
 Limitations & Notes
 -------------------
@@ -76,7 +76,7 @@ Security & Stability
 Files
 -----
 - `ctl/ctThreadIocp_shard.hpp` — main implementation header (lightweight, header-only behavior for this component).
-- `MSTest/ctsThreadIocpShardUnitTest/ctsThreadIocpShardUnitTest.cpp` — unit tests that validate receive and cancel paths.
+-- `MSTest/ctsThreadIocpBaseUnitTest/ctsThreadIocpBaseImplementationsTest.cpp` — unit tests that validate receive and cancel paths.
 
 Rationale
 ---------
