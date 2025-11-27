@@ -27,6 +27,14 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsIOPatternRateLimitPolicy
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsMediaStreamServerConnectedSocketUnitTest", "MSTest\ctsMediaStreamServerConnectedSocketUnitTest\ctsMediaStreamServerConnectedSocketUnitTest.vcxproj", "{47AB4470-4617-47FA-9529-3A1D1DA7FAA0}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsMediaUploadServerConnectedSocketUnitTest", "MSTest\ctsMediaUploadServerConnectedSocketUnitTest\ctsMediaUploadServerConnectedSocketUnitTest.vcxproj", "{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0001}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsMediaUploadServerListeningSocketUnitTest", "MSTest\ctsMediaUploadServerListeningSocketUnitTest\ctsMediaUploadServerListeningSocketUnitTest.vcxproj", "{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0002}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsMediaUploadServerUnitTest", "MSTest\ctsMediaUploadServerUnitTest\ctsMediaUploadServerUnitTest.vcxproj", "{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0003}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsMediaUploadClientUnitTest", "MSTest\ctsMediaUploadClientUnitTest\ctsMediaUploadClientUnitTest.vcxproj", "{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0004}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "UnitTests", "UnitTests", "{F6BA338C-59FD-4354-9F13-1B5511486DC9}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsPerf", "ctsPerf\ctsPerf.vcxproj", "{F7316F57-89E3-4BC7-A642-8B000EA06C44}"
@@ -136,6 +144,18 @@ Global
 		{47AB4470-4617-47FA-9529-3A1D1DA7FAA0}.Release|ARM64.ActiveCfg = Release|ARM64
 		{47AB4470-4617-47FA-9529-3A1D1DA7FAA0}.Release|Win32.ActiveCfg = Release|Win32
 		{47AB4470-4617-47FA-9529-3A1D1DA7FAA0}.Release|x64.ActiveCfg = Release|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0001}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0001}.Debug|x64.Build.0 = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0001}.Release|x64.ActiveCfg = Release|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0002}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0002}.Debug|x64.Build.0 = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0002}.Release|x64.ActiveCfg = Release|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0003}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0003}.Debug|x64.Build.0 = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0003}.Release|x64.ActiveCfg = Release|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0004}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0004}.Debug|x64.Build.0 = Debug|x64
+		{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0004}.Release|x64.ActiveCfg = Release|x64
 		{F7316F57-89E3-4BC7-A642-8B000EA06C44}.Debug|ARM64.ActiveCfg = Debug|ARM64
 		{F7316F57-89E3-4BC7-A642-8B000EA06C44}.Debug|ARM64.Build.0 = Debug|ARM64
 		{F7316F57-89E3-4BC7-A642-8B000EA06C44}.Debug|Win32.ActiveCfg = Debug|Win32

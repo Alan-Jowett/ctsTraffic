@@ -414,6 +414,8 @@
     <ClCompile Include="ctsIOPattern.cpp" />
     <ClCompile Include="ctsIOPatternMediaStream.cpp" />
     <ClCompile Include="ctsMediaStreamClient.cpp" />
+    <ClCompile Include="ctsMediaUploadClient.cpp" />
+    <ClCompile Include="ctsMediaUploadServer.cpp" />
     <ClCompile Include="ctsMediaStreamServer.cpp" />
     <ClCompile Include="ctsReadWriteIocp.cpp" />
     <ClCompile Include="ctsRioIocp.cpp" />
@@ -426,6 +428,8 @@
     <ClCompile Include="ctsTraffic.cpp" />
     <ClCompile Include="ctsMediaStreamServerListeningSocket.cpp" />
     <ClCompile Include="ctsMediaStreamServerConnectedSocket.cpp" />
+    <ClCompile Include="ctsMediaUploadServerListeningSocket.cpp" />
+    <ClCompile Include="ctsMediaUploadServerConnectedSocket.cpp" />
     <ClCompile Include="ctsWinsockLayer.cpp" />
     <ClCompile Include="ctsWSASocket.cpp" />
   </ItemGroup>
@@ -475,6 +479,11 @@
     <ClInclude Include="ctsMediaStreamProtocol.hpp" />
     <ClInclude Include="ctsMediaStreamServer.h" />
     <ClInclude Include="ctsMediaStreamServerConnectedSocket.h" />
+    <ClInclude Include="ctsMediaUploadClient.h" />
+    <ClInclude Include="ctsMediaUploadServerListeningSocket.h" />
+    <ClInclude Include="ctsMediaUploadProtocol.hpp" />
+    <ClInclude Include="ctsMediaUploadServer.h" />
+    <ClInclude Include="ctsMediaUploadServerConnectedSocket.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>

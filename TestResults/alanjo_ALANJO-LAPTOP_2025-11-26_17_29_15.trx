@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="1a997e8b-5fe1-484d-a1a8-d425b1edfd96" name="alanjo@ALANJO-LAPTOP 2025-11-26 17:29:15" runUser="REDMOND\alanjo" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2025-11-26T17:29:15.9808528-08:00" queuing="2025-11-26T17:29:15.9808528-08:00" start="2025-11-26T17:29:14.1437122-08:00" finish="2025-11-26T17:29:16.0031453-08:00" />
+  <TestSettings name="default" id="aff3d645-b725-4770-bf4d-42476d939ce7">
+    <Deployment runDeploymentRoot="alanjo_ALANJO-LAPTOP_2025-11-26_17_29_15" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="7e9ea517-618e-4dc4-8732-113030faf36a" testId="f0963a51-a8d5-99e3-a339-c8328bc6c546" testName="Extract_StartMessage" computerName="ALANJO-LAPTOP" duration="00:00:00.0000085" startTime="2025-11-26T17:29:15.7993884-08:00" endTime="2025-11-26T17:29:15.7993969-08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7e9ea517-618e-4dc4-8732-113030faf36a" />
+    <UnitTestResult executionId="4ad50ffd-1679-4a69-8484-6104466816ef" testId="341634ea-9367-f02f-d92e-50791d8f71e4" testName="Extract_InvalidThrows" computerName="ALANJO-LAPTOP" duration="00:00:00.0019910" startTime="2025-11-26T17:29:15.8106417-08:00" endTime="2025-11-26T17:29:15.8126327-08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4ad50ffd-1679-4a69-8484-6104466816ef" />
+    <UnitTestResult executionId="c8222f78-7e50-4d7b-b579-c642e98fd483" testId="9ed3ab75-3475-7bd3-0fe2-5d207b3e370c" testName="MakeConnectionIdTask_ContainsHeader" computerName="ALANJO-LAPTOP" duration="00:00:00.0000616" startTime="2025-11-26T17:29:15.8174070-08:00" endTime="2025-11-26T17:29:15.8174686-08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c8222f78-7e50-4d7b-b579-c642e98fd483" />
+    <UnitTestResult executionId="efce4e6a-87f2-4b1b-9a63-763e74c1cfd4" testId="74833903-ddf5-ea2e-a98d-da635115f71f" testName="ValidateBufferLengthFromTask_DataAndId" computerName="ALANJO-LAPTOP" duration="00:00:00.0000083" startTime="2025-11-26T17:29:15.8174070-08:00" endTime="2025-11-26T17:29:15.8174153-08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="efce4e6a-87f2-4b1b-9a63-763e74c1cfd4" />
+    <UnitTestResult executionId="05414ef0-cd39-4967-8cdf-d19a6f2f355d" testId="63f5c938-b3cf-9100-eae3-9493d09d3307" testName="MakeConnectionIdTask_Length" computerName="ALANJO-LAPTOP" duration="00:00:00.0001710" startTime="2025-11-26T17:29:15.8135566-08:00" endTime="2025-11-26T17:29:15.8137276-08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="05414ef0-cd39-4967-8cdf-d19a6f2f355d" />
+    <UnitTestResult executionId="a9d6ff46-945b-4d98-afcc-166449e0b48b" testId="e810bbc0-846f-a816-b54f-a48585574d25" testName="Construct_StartTask" computerName="ALANJO-LAPTOP" duration="00:00:00.0000056" startTime="2025-11-26T17:29:15.8135566-08:00" endTime="2025-11-26T17:29:15.8135622-08:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a9d6ff46-945b-4d98-afcc-166449e0b48b" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="ValidateBufferLengthFromTask_DataAndId" storage="f:\ctstraffic\x64\debug\ctsmediauploadserverconnectedsocketunittest.dll" id="74833903-ddf5-ea2e-a98d-da635115f71f">
+      <Execution id="efce4e6a-87f2-4b1b-9a63-763e74c1cfd4" />
+      <TestMethod codeBase="f:\ctsTraffic\x64\Debug\ctsMediaUploadServerConnectedSocketUnitTest.dll" adapterTypeName="executor://cppunittestexecutor/v1" className="ctsUnitTest.ctsMediaUploadServerConnectedSocketUnitTest" name="ctsUnitTest::ctsMediaUploadServerConnectedSocketUnitTest::ValidateBufferLengthFromTask_DataAndId" />
+    </UnitTest>
+    <UnitTest name="Construct_StartTask" storage="f:\ctstraffic\x64\debug\ctsmediauploadserverlisteningsocketunittest.dll" id="e810bbc0-846f-a816-b54f-a48585574d25">
+      <Execution id="a9d6ff46-945b-4d98-afcc-166449e0b48b" />
+      <TestMethod codeBase="f:\ctsTraffic\x64\Debug\ctsMediaUploadServerListeningSocketUnitTest.dll" adapterTypeName="executor://cppunittestexecutor/v1" className="ctsUnitTest.ctsMediaUploadServerListeningSocketUnitTest" name="ctsUnitTest::ctsMediaUploadServerListeningSocketUnitTest::Construct_StartTask" />
+    </UnitTest>
+    <UnitTest name="MakeConnectionIdTask_ContainsHeader" storage="f:\ctstraffic\x64\debug\ctsmediauploadserverunittest.dll" id="9ed3ab75-3475-7bd3-0fe2-5d207b3e370c">
+      <Execution id="c8222f78-7e50-4d7b-b579-c642e98fd483" />
+      <TestMethod codeBase="f:\ctsTraffic\x64\Debug\ctsMediaUploadServerUnitTest.dll" adapterTypeName="executor://cppunittestexecutor/v1" className="ctsUnitTest.ctsMediaUploadServerUnitTest" name="ctsUnitTest::ctsMediaUploadServerUnitTest::MakeConnectionIdTask_ContainsHeader" />
+    </UnitTest>
+    <UnitTest name="Extract_InvalidThrows" storage="f:\ctstraffic\x64\debug\ctsmediauploadclientunittest.dll" id="341634ea-9367-f02f-d92e-50791d8f71e4">
+      <Execution id="4ad50ffd-1679-4a69-8484-6104466816ef" />
+      <TestMethod codeBase="f:\ctsTraffic\x64\Debug\ctsMediaUploadClientUnitTest.dll" adapterTypeName="executor://cppunittestexecutor/v1" className="ctsUnitTest.ctsMediaUploadClientUnitTest" name="ctsUnitTest::ctsMediaUploadClientUnitTest::Extract_InvalidThrows" />
+    </UnitTest>
+    <UnitTest name="Extract_StartMessage" storage="f:\ctstraffic\x64\debug\ctsmediauploadclientunittest.dll" id="f0963a51-a8d5-99e3-a339-c8328bc6c546">
+      <Execution id="7e9ea517-618e-4dc4-8732-113030faf36a" />
+      <TestMethod codeBase="f:\ctsTraffic\x64\Debug\ctsMediaUploadClientUnitTest.dll" adapterTypeName="executor://cppunittestexecutor/v1" className="ctsUnitTest.ctsMediaUploadClientUnitTest" name="ctsUnitTest::ctsMediaUploadClientUnitTest::Extract_StartMessage" />
+    </UnitTest>
+    <UnitTest name="MakeConnectionIdTask_Length" storage="f:\ctstraffic\x64\debug\ctsmediauploadserverlisteningsocketunittest.dll" id="63f5c938-b3cf-9100-eae3-9493d09d3307">
+      <Execution id="05414ef0-cd39-4967-8cdf-d19a6f2f355d" />
+      <TestMethod codeBase="f:\ctsTraffic\x64\Debug\ctsMediaUploadServerListeningSocketUnitTest.dll" adapterTypeName="executor://cppunittestexecutor/v1" className="ctsUnitTest.ctsMediaUploadServerListeningSocketUnitTest" name="ctsUnitTest::ctsMediaUploadServerListeningSocketUnitTest::MakeConnectionIdTask_Length" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="f0963a51-a8d5-99e3-a339-c8328bc6c546" executionId="7e9ea517-618e-4dc4-8732-113030faf36a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="341634ea-9367-f02f-d92e-50791d8f71e4" executionId="4ad50ffd-1679-4a69-8484-6104466816ef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9ed3ab75-3475-7bd3-0fe2-5d207b3e370c" executionId="c8222f78-7e50-4d7b-b579-c642e98fd483" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="74833903-ddf5-ea2e-a98d-da635115f71f" executionId="efce4e6a-87f2-4b1b-9a63-763e74c1cfd4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="63f5c938-b3cf-9100-eae3-9493d09d3307" executionId="05414ef0-cd39-4967-8cdf-d19a6f2f355d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e810bbc0-846f-a816-b54f-a48585574d25" executionId="a9d6ff46-945b-4d98-afcc-166449e0b48b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <RunInfos>
+      <RunInfo computerName="ALANJO-LAPTOP" outcome="Warning" timestamp="2025-11-26T17:29:15.0595896-08:00">
+        <Text>Data collection : Unable to find a datacollector with friendly name 'Code Coverage'.</Text>
+      </RunInfo>
+      <RunInfo computerName="ALANJO-LAPTOP" outcome="Warning" timestamp="2025-11-26T17:29:15.0634561-08:00">
+        <Text>Data collection : Could not find data collector 'Code Coverage'</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>
