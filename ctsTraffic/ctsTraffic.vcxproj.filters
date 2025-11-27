@@ -99,6 +99,21 @@
     <ClCompile Include="ctsConnectByName.cpp">
       <Filter>TCPFunctions</Filter>
     </ClCompile>
+    <ClCompile Include="ctsIOPatternMediaUpload.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="ctsMediaUploadClient.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="ctsMediaUploadServer.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="ctsMediaUploadServerConnectedSocket.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="ctsMediaUploadServerListeningSocket.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
@@ -234,6 +249,20 @@
     </ClInclude>
     <ClInclude Include="..\ctl\ctThreadIocp_shard.hpp">
       <Filter>ctl</Filter>
+    <ClInclude Include="ctsMediaUploadClient.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="ctsMediaUploadProtocol.hpp">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="ctsMediaUploadServer.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="ctsMediaUploadServerConnectedSocket.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="ctsMediaUploadServerListeningSocket.h">
+      <Filter>MediaStreaming</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

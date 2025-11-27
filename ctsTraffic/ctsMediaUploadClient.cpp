@@ -176,7 +176,55 @@ namespace ctsTraffic
         switch (task.m_ioAction)
         {
         case ctsTaskAction::Send:
-            [[fallthrough]];
+            {
+                // If this send should be paced, schedule it on the socket timer instead of issuing immediately
+                if (task.m_timeOffsetMilliseconds >= 2)
+                {
+                    try
+                    {
+                        sharedSocket->SetTimer(task,
+                            [weak_reference = std::weak_ptr(sharedSocket)](std::weak_ptr<ctsSocket> /*w*/, const ctsTask& t) noexcept
+                            {
+                                // when the timer fires, perform the IO via the completion path
+                                const auto shared = weak_reference.lock();
+                                if (!shared)
+                                {
+                                    return;
+                                }
+                                const auto locked = shared->AcquireSocketLock();
+                                const auto pattern = locked.GetPattern();
+                                if (!pattern || locked.GetSocket() == INVALID_SOCKET)
+                                {
+                                    return;
+                                }
+                                // Create a copy of the task with zero offset so IoImpl will perform the send immediately
+                                ctsTask immediateTask = t;
+                                immediateTask.m_timeOffsetMilliseconds = 0;
+                                if (shared->IncrementIo() > 1)
+                                {
+                                    const IoImplStatus inner = ctsMediaUploadClientIoImpl(shared, locked.GetSocket(), pattern, immediateTask);
+                                    if (shared->DecrementIo() == 0)
+                                    {
+                                        shared->CompleteState(inner.m_errorCode);
+                                    }
+                                }
+                                else
+                                {
+                                    shared->DecrementIo();
+                                }
+                            });
+                        returnStatus.m_errorCode = static_cast<int>(WSA_IO_PENDING);
+                        returnStatus.m_continueIo = true; // indicate we can continue; actual IO will happen later
+                    }
+                    catch (...)
+                    {
+                        returnStatus.m_errorCode = ctsConfig::PrintThrownException();
+                        returnStatus.m_continueIo = false;
+                    }
+                    break;
+                }
+                [[fallthrough]];
+            }
         case ctsTaskAction::Recv:
             {
                 sharedSocket->IncrementIo();
@@ -191,6 +239,10 @@ namespace ctsTraffic
                 {
                     functionName = "WSASendTo";
                     result = ctsWSASendTo(sharedSocket, socket, task, std::move(callback));
+                    PRINT_DEBUG_INFO(
+                        L"\t\tctsMediaUploadClient sent %u bytes to %ws\n",
+                        task.m_bufferLength,
+                        sharedSocket->GetRemoteSockaddr().writeCompleteAddress().c_str());
                 }
                 else if (ctsTaskAction::Recv == task.m_ioAction)
                 {
@@ -435,4 +487,6 @@ namespace ctsTraffic
 
         sharedSocket->CompleteState(gle);
     }
+
+    
 } // namespace
