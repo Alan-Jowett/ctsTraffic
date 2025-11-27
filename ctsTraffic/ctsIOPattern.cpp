@@ -1111,7 +1111,7 @@ namespace ctsTraffic
         m_frameSizeBytes(ctsConfig::GetMediaStream().FrameSizeBytes),
         m_frameRateFps(ctsConfig::GetMediaStream().FramesPerSecond)
     {
-        PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamServer - frame rate in milliseconds per frame : %lld\n", static_cast<int64_t>(1000UL / m_frameRateFps));
+        PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamSender - frame rate in milliseconds per frame : %lld\n", static_cast<int64_t>(1000UL / m_frameRateFps));
     }
 
     // required virtual functions
