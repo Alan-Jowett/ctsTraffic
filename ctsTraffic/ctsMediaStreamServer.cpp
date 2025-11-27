@@ -298,17 +298,6 @@ namespace ctsTraffic
             }
         }
 
-        std::vector<uint32_t> GetListenerConnectionCounts() noexcept
-        {
-            std::vector<uint32_t> counts;
-            counts.reserve(g_listeningSockets.size());
-            for (const auto& listener : g_listeningSockets)
-            {
-                counts.push_back(listener->GetConnectionCount());
-            }
-            return counts;
-        }
-
         std::vector<ListenerInfo> GetListenerInfos() noexcept
         {
             std::vector<ListenerInfo> infos;

@@ -62,9 +62,6 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
             size_t ShardIndex;
         };
 
-        // Return the per-listener accepted connection counts (one entry per listening socket).
-        std::vector<uint32_t> GetListenerConnectionCounts() noexcept;
-
         // Return detailed listener info including address and shard index for reporting
         std::vector<ListenerInfo> GetListenerInfos() noexcept;
     }

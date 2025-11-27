@@ -5546,10 +5546,10 @@ namespace ctsTraffic::ctsConfig
 			settingString.append(
 				wil::str_printf<std::wstring>(
 					L"\tReceive sharding is enabled (will affinitize receives to RSS)\n"
-					L"\t\t<ShardCount: %u>\n"
-					L"\t\t<ShardWorkerCount: %u>\n"
-					L"\t\t<ShardAffinityPolicy: %u>\n"
-					L"\t\t<IocpBatchSize: %u>\n",
+					L"\t\tShardCount: %u\n"
+					L"\t\tShardWorkerCount: %u\n"
+					L"\t\tShardAffinityPolicy: %u\n"
+					L"\t\tIocpBatchSize: %u\n",
 					g_configSettings->ShardCount,
 					g_configSettings->ShardWorkerCount,
 					static_cast<uint32_t>(g_configSettings->ShardAffinityPolicy),

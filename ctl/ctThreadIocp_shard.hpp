@@ -117,9 +117,9 @@ namespace ctl
 				numThreads = std::max<size_t>(1, std::thread::hardware_concurrency());
 			}
 			m_workers.reserve(numThreads);
-			for (size_t i = 0; i < numThreads; ++i)
+			for (size_t threadCount = 0; threadCount < numThreads; ++threadCount)
 			{
-				m_workers.emplace_back(&ctThreadIocp_shard::WorkerLoop, this, i);
+				m_workers.emplace_back(&ctThreadIocp_shard::WorkerLoop, this, threadCount);
 			}
 		}
 
@@ -134,6 +134,13 @@ namespace ctl
 				gaff.Mask = ga.Mask;
 				// ignore return value; affinity is best-effort
 				SetThreadGroupAffinity(GetCurrentThread(), &gaff, nullptr);
+				// TODO: leaving in the printf for now until I find a better way to
+				// communicate how threads are being created and affinitized
+			    wprintf(L"Worker thread %lu : index %zu set to Group %u, Mask 0x%llx\n",
+					GetCurrentThreadId(),
+					index,
+					static_cast<unsigned>(gaff.Group),
+					static_cast<unsigned long long>(gaff.Mask));
 			}
 
 			try
