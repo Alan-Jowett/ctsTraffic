@@ -148,38 +148,13 @@ namespace ctsTraffic
             {
                 if (ctsConfig::g_configSettings->EnableRecvSharding)
                 {
-                    auto shardCount = static_cast<int>(ctsConfig::g_configSettings->ShardCount);
-                    if (shardCount == 0) {
-                        const auto info = ctl::QueryCpuAffinitySupport();
-                        const uint32_t logical = info.LogicalProcessorCount ? info.LogicalProcessorCount : 1u;
-                        shardCount = static_cast<int>(logical);
-                    }
-
-                    // Translate from ctsConfig::g_configSettings->ShardAffinityPolicy to ctl::CpuAffinityPolicy
-                    ctl::CpuAffinityPolicy affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
-                    switch (ctsConfig::g_configSettings->ShardAffinityPolicy)
-                    {
-                    case ctsConfig::AffinityPolicy::PerCpu:
-                        affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
-                        break;
-                    case ctsConfig::AffinityPolicy::PerGroup:
-                        affinityPolicy = ctl::CpuAffinityPolicy::PerGroup;
-                        break;
-                    case ctsConfig::AffinityPolicy::RssAligned:
-                        affinityPolicy = ctl::CpuAffinityPolicy::RssAligned;
-                        break;
-                    case ctsConfig::AffinityPolicy::Manual:
-                        affinityPolicy = ctl::CpuAffinityPolicy::Manual;
-                        break;
-                    default:
-                        affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
-                        break;
-                    }
+                    const auto shardCount = ctsConfig::GetShardCount();
+                    const auto affinityPolicy = ctsConfig::GetCpuAffinityPolicy();
 
                     // compute per-shard affinities (round-robin per-cpu)
-                    std::optional<std::vector<ctl::GroupAffinity>> maybeAffinities = ctl::ComputeShardAffinities(static_cast<uint32_t>(shardCount), affinityPolicy);
+                    std::optional<std::vector<ctl::GroupAffinity>> maybeAffinities = ctl::ComputeShardAffinities(shardCount, affinityPolicy);
 
-                    for (int shard = 0; shard < shardCount; ++shard)
+                    for (uint32_t shard = 0; shard < shardCount; ++shard)
                     {
                         wil::unique_socket listening(ctsConfig::CreateSocket(addr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
 
@@ -193,7 +168,7 @@ namespace ctsTraffic
                         const SOCKET listeningSocketToPrint(listening.get());
 
                         // If we have affinity mapping, attempt to apply SIO_CPU_AFFINITY for this socket
-                        if (maybeAffinities && shard < static_cast<int>(maybeAffinities->size()))
+                        if (maybeAffinities && shard < static_cast<uint32_t>(maybeAffinities->size()))
                         {
                             const ctl::GroupAffinity& ga = (*maybeAffinities)[shard];
                             // Per MSDN, SIO_CPU_AFFINITY expects a USHORT processor index (0-based)
@@ -203,11 +178,17 @@ namespace ctsTraffic
                             unsigned int localIndex = 0;
                             const KAFFINITY mask = ga.Mask;
                             unsigned long idx = 0;
-                            if (_BitScanForward64(&idx, static_cast<unsigned __int64>(mask)))
+#if defined(__MACHINEX86)
+							if (_BitScanForward(&idx, static_cast<unsigned long>(mask)))
+							{
+								localIndex = static_cast<unsigned int>(idx);
+							}
+#else
+                            if (_BitScanForward64(&idx, static_cast<unsigned long long>(mask)))
                             {
                                 localIndex = static_cast<unsigned int>(idx);
                             }
-
+#endif
                             USHORT processorIndex = static_cast<USHORT>(localIndex);
                             DWORD bytes = 0;
                             const int rc = WSAIoctl(listening.get(), SIO_CPU_AFFINITY, &processorIndex, sizeof(processorIndex), nullptr, 0, &bytes, nullptr, nullptr);
@@ -235,12 +216,12 @@ namespace ctsTraffic
                         // If we computed per-shard affinities, pass the shard's affinity so worker threads
                         // are affinitized consistently with the socket's SIO_CPU_AFFINITY above.
                         std::vector<ctl::GroupAffinity> workerAffinities;
-                        if (maybeAffinities && shard < static_cast<int>(maybeAffinities->size()))
+                        if (maybeAffinities && shard < static_cast<uint32_t>(maybeAffinities->size()))
                         {
                             workerAffinities.push_back((*maybeAffinities)[shard]);
                         }
 
-                        auto threadIocp = std::make_shared<ctl::ctThreadIocp_shard>(
+                        const auto threadIocp = std::make_shared<ctl::ctThreadIocp_shard>(
                             listening.get(),
                             static_cast<size_t>(ctsConfig::g_configSettings->ShardWorkerCount),
                             std::move(workerAffinities),
@@ -278,7 +259,7 @@ namespace ctsTraffic
                     const SOCKET listeningSocketToPrint(listening.get());
 
                     // non-sharded: original behavior (threadpool IO manager)
-                    std::shared_ptr<ctl::ctThreadIocp_base> threadIocp = std::make_shared<ctl::ctThreadIocp>(listening.get(), ctsConfig::g_configSettings->pTpEnvironment);
+                    const auto threadIocp = std::make_shared<ctl::ctThreadIocp>(listening.get(), ctsConfig::g_configSettings->pTpEnvironment);
 
                     g_listeningSockets.emplace_back(
                         std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));

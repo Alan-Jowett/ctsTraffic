@@ -44,6 +44,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsMediaStreamServer.h"
 #include "ctsWinsockLayer.h"
 // wil headers always included last
+#include <ctCpuAffinity.hpp>
 #include <wil/stl.h>
 #include <wil/resource.h>
 
@@ -72,6 +73,7 @@ namespace ctsTraffic::ctsConfig
 	constexpr uint32_t c_defaultTcpConnectionLimit = 8;
 	constexpr uint32_t c_defaultUdpConnectionLimit = 1;
 	constexpr uint32_t c_defaultConnectionThrottleLimit = 1000;
+	constexpr uint32_t c_maxIocpBatchSize = 256U;
 
 	static PTP_POOL g_threadPool = nullptr;
 	static TP_CALLBACK_ENVIRON g_threadPoolEnvironment;
@@ -2246,35 +2248,20 @@ namespace ctsTraffic::ctsConfig
 	// -AffinityPolicy:<PerCpu|PerGroup|RssAligned|Manual>
 	static void ParseForRecvSharding(vector<const wchar_t*>& args)
 	{
-		const auto foundEnable = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool
 			{
-				if (ctString::iordinal_equals(parameter, L"-EnableRecvSharding"))
-				{
-					return true; // bare flag
-				}
-				// only consider -EnableRecvSharding:... forms for ParseArgument
-				if (!ctString::istarts_with(parameter, L"-EnableRecvSharding:"))
-				{
-					return false;
-				}
 				const auto* const value = ParseArgument(parameter, L"-EnableRecvSharding");
 				return value != nullptr;
 			});
-		if (foundEnable != end(args))
+		if (foundArgument != end(args))
 		{
-			const auto* const arg = *foundEnable;
-			const auto* const value = ctString::iordinal_equals(arg, L"-EnableRecvSharding") ? nullptr : ParseArgument(arg, L"-EnableRecvSharding");
+			const auto* value = ParseArgument(*foundArgument, L"-EnableRecvSharding");
 
-			if (value == nullptr)
-			{
-				// bare flag == enable
-				g_configSettings->EnableRecvSharding = true;
-			}
-			else if (ctString::iordinal_equals(value, L"1") || ctString::iordinal_equals(value, L"on") || ctString::iordinal_equals(value, L"true"))
+			if (ctString::iordinal_equals(value, L"on"))
 			{
 				g_configSettings->EnableRecvSharding = true;
 			}
-			else if (ctString::iordinal_equals(value, L"0") || ctString::iordinal_equals(value, L"off") || ctString::iordinal_equals(value, L"false"))
+			else if (ctString::iordinal_equals(value, L"off"))
 			{
 				g_configSettings->EnableRecvSharding = false;
 			}
@@ -2283,7 +2270,7 @@ namespace ctsTraffic::ctsConfig
 				const auto err = std::string("Invalid -EnableRecvSharding value: ") + ctString::convert_to_string(value);
 				throw std::invalid_argument(err);
 			}
-			args.erase(foundEnable);
+			args.erase(foundArgument);
 		}
 
 		const auto foundShardCount = ranges::find_if(args, [](const wchar_t* parameter) -> bool
@@ -2328,9 +2315,12 @@ namespace ctsTraffic::ctsConfig
 			{
 				throw invalid_argument("-IocpBatchSize");
 			}
+			if (val > c_maxIocpBatchSize)
+			{
+				throw invalid_argument(std::string("-IocpBatchSize : exceeds maximum size of ") + std::to_string(c_maxIocpBatchSize));
+			}
 			// clamp to a reasonable upper bound to avoid excessive allocations
-			const uint32_t c_maxBatchSize = 256U;
-			g_configSettings->IocpBatchSize = std::min<uint32_t>(val, c_maxBatchSize);
+			g_configSettings->IocpBatchSize = std::min<uint32_t>(val, c_maxIocpBatchSize);
 			args.erase(foundBatch);
 		}
 
@@ -2827,14 +2817,18 @@ namespace ctsTraffic::ctsConfig
 				L"     UDP socket and one IOCP per shard and run dedicated worker threads.\n"
 				L"     <default> == off\n"
 				L"-ShardCount:###\n"
-				L"   - number of receive shards to create (0 == default to logical processor count)\n"
+				L"   - number of receive shards to create\n"
+				L"     <default> == 0 (defaults to logical processor count)\n"
 				/* OutstandingReceives removed: no longer a configurable option */
 				L"-ShardWorkerCount:###\n"
-				L"   - number of worker threads to run per shard (default = 1)\n"
+				L"   - number of worker threads to run per shard\n"
+				L"     <default> == 1\n"
 				L"-IocpBatchSize:###\n"
-				L"   - number of completions to process per worker loop iteration (default = 64)\n"
+				L"   - number of completions to process per worker loop iteration\n"
+				L"     <default> == 64\n"
 				L"-AffinityPolicy:<PerCpu|PerGroup|RssAligned|Manual>\n"
-				L"   - how to assign CPU affinity to shards when supported (default = PerCpu)\n"
+				L"   - how to assign CPU affinity to shards when supported\n"
+				L"     <default> == PerCpu  (infinite)\n"
 			);
 			break;
 
@@ -4740,6 +4734,42 @@ namespace ctsTraffic::ctsConfig
 	float GetStatusTimeStamp() noexcept
 	{
 		return static_cast<float>(ctTimer::snap_qpc_as_msec() - g_configSettings->StartTimeMilliseconds) / 1000.0f;
+	}
+
+	uint32_t GetShardCount() noexcept
+	{
+		auto shardCount = static_cast<int>(g_configSettings->ShardCount);
+		if (shardCount == 0) {
+			const auto info = ctl::QueryCpuAffinitySupport();
+			const uint32_t logical = info.LogicalProcessorCount ? info.LogicalProcessorCount : 1u;
+			shardCount = static_cast<int>(logical);
+		}
+		return shardCount;
+	}
+
+    // Translate from ctsConfig::g_configSettings->ShardAffinityPolicy to ctl::CpuAffinityPolicy
+	ctl::CpuAffinityPolicy GetCpuAffinityPolicy() noexcept
+	{
+		ctl::CpuAffinityPolicy affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+		switch (g_configSettings->ShardAffinityPolicy)
+		{
+		case AffinityPolicy::PerCpu:
+			affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+			break;
+		case AffinityPolicy::PerGroup:
+			affinityPolicy = ctl::CpuAffinityPolicy::PerGroup;
+			break;
+		case AffinityPolicy::RssAligned:
+			affinityPolicy = ctl::CpuAffinityPolicy::RssAligned;
+			break;
+		case AffinityPolicy::Manual:
+			affinityPolicy = ctl::CpuAffinityPolicy::Manual;
+			break;
+		default:
+			affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+			break;
+		}
+		return affinityPolicy;
 	}
 
 	//

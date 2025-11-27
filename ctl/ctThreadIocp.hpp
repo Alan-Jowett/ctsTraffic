@@ -112,7 +112,7 @@ public:
         THROW_LAST_ERROR_IF_NULL(m_tpIo);
     }
 
-    ~ctThreadIocp() noexcept = default;
+    ~ctThreadIocp() noexcept override = default;
 
     ctThreadIocp(ctThreadIocp&& rhs) noexcept :
         m_tpIo(std::move(rhs.m_tpIo))

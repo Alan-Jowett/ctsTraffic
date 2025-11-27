@@ -99,9 +99,6 @@
     <ClCompile Include="ctsConnectByName.cpp">
       <Filter>TCPFunctions</Filter>
     </ClCompile>
-    <ClCompile Include="..\ctl\ctCpuAffinity.cpp">
-      <Filter>ctl</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
@@ -232,6 +229,12 @@
     <ClInclude Include="..\ctl\ctThreadpoolQueue.hpp">
       <Filter>ctl</Filter>
     </ClInclude>
+    <ClInclude Include="..\ctl\ctThreadIocp_base.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctThreadIocp_shard.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\TestScripts\ctsTraffic_acceptance_test.cmd">
@@ -251,9 +254,5 @@
     <Manifest Include="ctsTraffic.exe.manifest">
       <Filter>Resource Files</Filter>
     </Manifest>
-  </ItemGroup>
-  <ItemGroup>
-    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
-    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
   </ItemGroup>
 </Project>

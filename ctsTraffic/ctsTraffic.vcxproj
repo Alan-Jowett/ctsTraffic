@@ -428,7 +428,6 @@
     <ClCompile Include="ctsMediaStreamServerConnectedSocket.cpp" />
     <ClCompile Include="ctsWinsockLayer.cpp" />
     <ClCompile Include="ctsWSASocket.cpp" />
-    <ClCompile Include="..\ctl\ctCpuAffinity.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
@@ -436,6 +435,8 @@
   <ItemGroup>
     <ClInclude Include="..\ctl\ctMath.hpp" />
     <ClInclude Include="..\ctl\ctNetAdapterAddresses.hpp" />
+    <ClInclude Include="..\ctl\ctThreadIocp_base.hpp" />
+    <ClInclude Include="..\ctl\ctThreadIocp_shard.hpp" />
     <ClInclude Include="..\ctl\ctThreadpoolQueue.hpp" />
     <ClInclude Include="..\ctl\ctRandom.hpp" />
     <ClInclude Include="..\ctl\ctSockaddr.hpp" />

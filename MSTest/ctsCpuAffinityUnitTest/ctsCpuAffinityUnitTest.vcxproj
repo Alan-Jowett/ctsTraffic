@@ -149,7 +149,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ctsCpuAffinityUnitTest.cpp" />
-    <ClCompile Include="..\..\ctl\ctCpuAffinity.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

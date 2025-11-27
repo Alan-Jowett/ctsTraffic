@@ -31,6 +31,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // - except for ctsStatistics.hpp
 // - this header *can* be included here because it does not include any cts* headers
 //
+#include <ctCpuAffinity.hpp>
+
 #include "ctsStatistics.hpp"
 
 namespace ctsTraffic
@@ -266,6 +268,9 @@ namespace ctsTraffic
 
         int32_t GetListenBacklog() noexcept;
         bool IsListening() noexcept;
+
+        uint32_t GetShardCount() noexcept;
+        ctl::CpuAffinityPolicy GetCpuAffinityPolicy() noexcept;
 
         TcpShutdownType GetShutdownType() noexcept;
 
