@@ -121,6 +121,8 @@ namespace ctsTraffic::ctsConfig
 	static shared_ptr<ctsLogger> g_jitterLogger;
 	static shared_ptr<ctsLogger> g_tcpInfoLogger;
 
+	static bool g_isRssEnabledOnAnyProcessor = false;
+
 	static bool g_breakOnError = false;
 	static ExitProcessType g_processStatus = ExitProcessType::Running;
 
@@ -261,7 +263,10 @@ namespace ctsTraffic::ctsConfig
 
 			bool enabled = false;
 			setting.get(L"Enabled", &enabled);
-
+			if (enabled)
+			{
+			    g_isRssEnabledOnAnyProcessor = true;
+			}
 			return wil::str_printf<std::wstring>(
 				L"RSS:%ws", enabled ? EnabledString : NotEnabledString);
 		}
@@ -2245,6 +2250,7 @@ namespace ctsTraffic::ctsConfig
 	// -EnableRecvSharding[:on|:off]
 	// -ShardCount:###
 	// -ShardWorkerCount:###
+	// -IocpBatchSize:###
 	// -AffinityPolicy:<PerCpu|PerGroup|RssAligned|Manual>
 	static void ParseForRecvSharding(vector<const wchar_t*>& args)
 	{
@@ -2271,6 +2277,12 @@ namespace ctsTraffic::ctsConfig
 				throw std::invalid_argument(err);
 			}
 			args.erase(foundArgument);
+		}
+
+		if (!g_configSettings->EnableRecvSharding)
+		{
+			// no further parsing needed
+			return;
 		}
 
 		const auto foundShardCount = ranges::find_if(args, [](const wchar_t* parameter) -> bool
@@ -3431,6 +3443,13 @@ namespace ctsTraffic::ctsConfig
 
 		// move parsing into a helper consistent with the codebase style
 		ParseForRecvSharding(args);
+
+		// if sharding is enabled, there must be at least one adapter with RSS enabled
+		// else they will get really poor performance since all recv completions will be on one CPU
+		if (g_configSettings->EnableRecvSharding && !g_isRssEnabledOnAnyProcessor)
+		{
+			throw invalid_argument("-EnableRecvSharding requires at least one network adapter to have RSS enabled");
+		}
 
 		if (!args.empty())
 		{
@@ -4747,7 +4766,7 @@ namespace ctsTraffic::ctsConfig
 		return shardCount;
 	}
 
-    // Translate from ctsConfig::g_configSettings->ShardAffinityPolicy to ctl::CpuAffinityPolicy
+	// Translate from ctsConfig::g_configSettings->ShardAffinityPolicy to ctl::CpuAffinityPolicy
 	ctl::CpuAffinityPolicy GetCpuAffinityPolicy() noexcept
 	{
 		ctl::CpuAffinityPolicy affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
@@ -5520,6 +5539,21 @@ namespace ctsTraffic::ctsConfig
 				wil::str_printf<std::wstring>(
 					L"\tAffinitized to all CPU IDs on CPU Group %lu\n",
 					g_configSettings->CpuGroupId.value()));
+		}
+
+		if (g_configSettings->EnableRecvSharding)
+		{
+			settingString.append(
+				wil::str_printf<std::wstring>(
+					L"\tReceive sharding is enabled (will affinitize receives to RSS)\n"
+					L"\t\t<ShardCount: %u>\n"
+					L"\t\t<ShardWorkerCount: %u>\n"
+					L"\t\t<ShardAffinityPolicy: %u>\n"
+					L"\t\t<IocpBatchSize: %u>\n",
+					g_configSettings->ShardCount,
+					g_configSettings->ShardWorkerCount,
+					static_cast<uint32_t>(g_configSettings->ShardAffinityPolicy),
+					g_configSettings->IocpBatchSize));
 		}
 
 		settingString.append(L"\n");
