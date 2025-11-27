@@ -20,7 +20,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <Windows.h>
 // ctl headers
 #include <ctSockaddr.hpp>
-#include <ctThreadIocp.hpp>
+#include <ctThreadIocp_base.hpp>
 // project headers
 #include "ctsConfig.h"
 
@@ -31,7 +31,7 @@ class ctsMediaStreamServerListeningSocket
 private:
     static constexpr size_t c_recvBufferSize = 1024;
 
-    std::shared_ptr<ctl::ctThreadIocp> m_threadIocp;
+    std::shared_ptr<ctl::ctThreadIocp_base> m_threadIocp;
 
     mutable wil::critical_section m_listeningSocketLock{ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock};
     _Requires_lock_held_(m_listeningSocketLock) wil::unique_socket m_listeningSocket;
@@ -45,10 +45,19 @@ private:
 
     void RecvCompletion(OVERLAPPED* pOverlapped) noexcept;
 
+    // number of established connections accepted on this listening socket
+    std::atomic<uint32_t> m_connectionCount{0};
+
 public:
+    // increment the per-listener accepted connection count
+    void IncrementConnectionCount() noexcept { m_connectionCount.fetch_add(1, std::memory_order_relaxed); }
+
+    // query the accepted connection count
+    uint32_t GetConnectionCount() const noexcept { return m_connectionCount.load(std::memory_order_relaxed); }
     ctsMediaStreamServerListeningSocket(
         wil::unique_socket&& listeningSocket,
-        ctl::ctSockaddr listeningAddr);
+        ctl::ctSockaddr listeningAddr,
+        std::shared_ptr<ctl::ctThreadIocp_base> threadIocp);
 
     ~ctsMediaStreamServerListeningSocket() noexcept;
 

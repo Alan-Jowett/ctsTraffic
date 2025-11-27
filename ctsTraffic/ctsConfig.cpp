@@ -44,6 +44,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsMediaStreamServer.h"
 #include "ctsWinsockLayer.h"
 // wil headers always included last
+#include <ctCpuAffinity.hpp>
 #include <wil/stl.h>
 #include <wil/resource.h>
 
@@ -72,6 +73,7 @@ namespace ctsTraffic::ctsConfig
 	constexpr uint32_t c_defaultTcpConnectionLimit = 8;
 	constexpr uint32_t c_defaultUdpConnectionLimit = 1;
 	constexpr uint32_t c_defaultConnectionThrottleLimit = 1000;
+	constexpr uint32_t c_maxIocpBatchSize = 256U;
 
 	static PTP_POOL g_threadPool = nullptr;
 	static TP_CALLBACK_ENVIRON g_threadPoolEnvironment;
@@ -119,6 +121,8 @@ namespace ctsTraffic::ctsConfig
 	static shared_ptr<ctsLogger> g_jitterLogger;
 	static shared_ptr<ctsLogger> g_tcpInfoLogger;
 
+	static bool g_isRssEnabledOnAnyProcessor = false;
+
 	static bool g_breakOnError = false;
 	static ExitProcessType g_processStatus = ExitProcessType::Running;
 
@@ -137,6 +141,13 @@ namespace ctsTraffic::ctsConfig
 		// defaulting to verifying - therefore not using a shared buffer
 		g_configSettings->ShouldVerifyBuffers = true;
 		g_configSettings->UseSharedBuffer = false;
+
+		// sharded receive defaults
+		g_configSettings->EnableRecvSharding = false;
+		// default shard count to number of logical processors when 0
+		g_configSettings->ShardCount = 0;
+		g_configSettings->ShardWorkerCount = 1;
+		g_configSettings->ShardAffinityPolicy = AffinityPolicy::PerCpu;
 
 		g_previousPrintTimeslice = 0LL;
 		g_printTimesliceCount = 0LL;
@@ -252,7 +263,10 @@ namespace ctsTraffic::ctsConfig
 
 			bool enabled = false;
 			setting.get(L"Enabled", &enabled);
-
+			if (enabled)
+			{
+			    g_isRssEnabledOnAnyProcessor = true;
+			}
 			return wil::str_printf<std::wstring>(
 				L"RSS:%ws", enabled ? EnabledString : NotEnabledString);
 		}
@@ -2232,6 +2246,150 @@ namespace ctsTraffic::ctsConfig
 		}
 	}
 
+	// Parses sharded receive options
+	// -EnableRecvSharding[:on|:off]
+	// -ShardCount:###
+	// -ShardWorkerCount:###
+	// -IocpBatchSize:###
+	// -AffinityPolicy:<PerCpu|PerGroup|RssAligned|Manual>
+	static void ParseForRecvSharding(vector<const wchar_t*>& args)
+	{
+		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-EnableRecvSharding");
+				return value != nullptr;
+			});
+		if (foundArgument != end(args))
+		{
+			const auto* value = ParseArgument(*foundArgument, L"-EnableRecvSharding");
+
+			if (ctString::iordinal_equals(value, L"on"))
+			{
+				g_configSettings->EnableRecvSharding = true;
+			}
+			else if (ctString::iordinal_equals(value, L"off"))
+			{
+				g_configSettings->EnableRecvSharding = false;
+			}
+			else
+			{
+				const auto err = std::string("Invalid -EnableRecvSharding value: ") + ctString::convert_to_string(value);
+				throw std::invalid_argument(err);
+			}
+			args.erase(foundArgument);
+		}
+
+		if (!g_configSettings->EnableRecvSharding)
+		{
+			// no further parsing needed
+			return;
+		}
+
+		const auto foundShardCount = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-ShardCount");
+				return value != nullptr;
+			});
+		if (foundShardCount != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundShardCount, L"-ShardCount"));
+			// 0 is a valid sentinel meaning "default to logical processor count"
+			g_configSettings->ShardCount = val;
+			args.erase(foundShardCount);
+		}
+
+		const auto foundWorker = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-ShardWorkerCount");
+				return value != nullptr;
+			});
+		if (foundWorker != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundWorker, L"-ShardWorkerCount"));
+			if (val == 0)
+			{
+				throw invalid_argument("-ShardWorkerCount");
+			}
+			g_configSettings->ShardWorkerCount = val;
+			args.erase(foundWorker);
+		}
+
+		// Parse IOCP batch size for sharded receive (optional)
+		const auto foundBatch = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-IocpBatchSize");
+				return value != nullptr;
+			});
+		if (foundBatch != end(args))
+		{
+			const auto val = ConvertToIntegral<uint32_t>(ParseArgument(*foundBatch, L"-IocpBatchSize"));
+			if (val == 0)
+			{
+				throw invalid_argument("-IocpBatchSize");
+			}
+			if (val > c_maxIocpBatchSize)
+			{
+				throw invalid_argument(std::string("-IocpBatchSize : exceeds maximum size of ") + std::to_string(c_maxIocpBatchSize));
+			}
+			// clamp to a reasonable upper bound to avoid excessive allocations
+			g_configSettings->IocpBatchSize = std::min<uint32_t>(val, c_maxIocpBatchSize);
+			args.erase(foundBatch);
+		}
+
+		const auto foundAffinity = ranges::find_if(args, [](const wchar_t* parameter) -> bool
+			{
+				const auto* const value = ParseArgument(parameter, L"-AffinityPolicy");
+				return value != nullptr;
+			});
+		if (foundAffinity != end(args))
+		{
+			const auto* const value = ParseArgument(*foundAffinity, L"-AffinityPolicy");
+			if (ctString::iordinal_equals(value, L"PerCpu"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::PerCpu;
+			}
+			else if (ctString::iordinal_equals(value, L"PerGroup"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::PerGroup;
+			}
+			else if (ctString::iordinal_equals(value, L"RssAligned"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::RssAligned;
+			}
+			else if (ctString::iordinal_equals(value, L"Manual"))
+			{
+				g_configSettings->ShardAffinityPolicy = AffinityPolicy::Manual;
+			}
+			else
+			{
+				throw invalid_argument("-AffinityPolicy");
+			}
+			args.erase(foundAffinity);
+		}
+
+		// Post-parse validations
+		if (g_configSettings->EnableRecvSharding)
+		{
+			// Sharded receive mode currently only supported for UDP servers
+			if (g_configSettings->Protocol != ProtocolType::UDP)
+			{
+				throw invalid_argument("-EnableRecvSharding (only valid with -Protocol:udp)");
+			}
+
+			// Must be in listening/server mode (at least one -Listen provided)
+			if (g_configSettings->ListenAddresses.empty())
+			{
+				throw invalid_argument("-EnableRecvSharding (requires the server to be listening; specify -Listen:<addr>)");
+			}
+
+			// numeric ranges already validated above for zero; additional range checks could be added here
+			if (g_configSettings->ShardWorkerCount == 0)
+			{
+				throw invalid_argument("-ShardWorkerCount");
+			}
+		}
+	}
+
 	//
 	// Sets an IP Compartment (routing domain)
 	//
@@ -2663,6 +2821,26 @@ namespace ctsTraffic::ctsConfig
 				L"-ServerExitLimit:####\n"
 				L"   - the total # of accepted connections before server gracefully exits\n"
 				L"     <default> == 0  (infinite)\n"
+				L"\n"
+				L"  UDP server-only: Sharded receive options\n"
+				L"    (applies to UDP servers only)\n"
+				L"-EnableRecvSharding[:on|:off]\n"
+				L"   - opt-in receive sharding mode. When enabled, ctsTraffic will create one\n"
+				L"     UDP socket and one IOCP per shard and run dedicated worker threads.\n"
+				L"     <default> == off\n"
+				L"-ShardCount:###\n"
+				L"   - number of receive shards to create\n"
+				L"     <default> == 0 (defaults to logical processor count)\n"
+				/* OutstandingReceives removed: no longer a configurable option */
+				L"-ShardWorkerCount:###\n"
+				L"   - number of worker threads to run per shard\n"
+				L"     <default> == 1\n"
+				L"-IocpBatchSize:###\n"
+				L"   - number of completions to process per worker loop iteration\n"
+				L"     <default> == 64\n"
+				L"-AffinityPolicy:<PerCpu|PerGroup|RssAligned|Manual>\n"
+				L"   - how to assign CPU affinity to shards when supported\n"
+				L"     <default> == PerCpu  (infinite)\n"
 			);
 			break;
 
@@ -3262,6 +3440,16 @@ namespace ctsTraffic::ctsConfig
 		ParseForPrePostSends(args);
 		ParseForRecvBufValue(args);
 		ParseForSendBufValue(args);
+
+		// move parsing into a helper consistent with the codebase style
+		ParseForRecvSharding(args);
+
+		// if sharding is enabled, there must be at least one adapter with RSS enabled
+		// else they will get really poor performance since all recv completions will be on one CPU
+		if (g_configSettings->EnableRecvSharding && !g_isRssEnabledOnAnyProcessor)
+		{
+			throw invalid_argument("-EnableRecvSharding requires at least one network adapter to have RSS enabled");
+		}
 
 		if (!args.empty())
 		{
@@ -4567,6 +4755,42 @@ namespace ctsTraffic::ctsConfig
 		return static_cast<float>(ctTimer::snap_qpc_as_msec() - g_configSettings->StartTimeMilliseconds) / 1000.0f;
 	}
 
+	uint32_t GetShardCount() noexcept
+	{
+		auto shardCount = static_cast<int>(g_configSettings->ShardCount);
+		if (shardCount == 0) {
+			const auto info = ctl::QueryCpuAffinitySupport();
+			const uint32_t logical = info.LogicalProcessorCount ? info.LogicalProcessorCount : 1u;
+			shardCount = static_cast<int>(logical);
+		}
+		return shardCount;
+	}
+
+	// Translate from ctsConfig::g_configSettings->ShardAffinityPolicy to ctl::CpuAffinityPolicy
+	ctl::CpuAffinityPolicy GetCpuAffinityPolicy() noexcept
+	{
+		ctl::CpuAffinityPolicy affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+		switch (g_configSettings->ShardAffinityPolicy)
+		{
+		case AffinityPolicy::PerCpu:
+			affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+			break;
+		case AffinityPolicy::PerGroup:
+			affinityPolicy = ctl::CpuAffinityPolicy::PerGroup;
+			break;
+		case AffinityPolicy::RssAligned:
+			affinityPolicy = ctl::CpuAffinityPolicy::RssAligned;
+			break;
+		case AffinityPolicy::Manual:
+			affinityPolicy = ctl::CpuAffinityPolicy::Manual;
+			break;
+		default:
+			affinityPolicy = ctl::CpuAffinityPolicy::PerCpu;
+			break;
+		}
+		return affinityPolicy;
+	}
+
 	//
 	// Set*Options
 	// - functions capturing any options that need to be set on a socket across different states
@@ -5315,6 +5539,21 @@ namespace ctsTraffic::ctsConfig
 				wil::str_printf<std::wstring>(
 					L"\tAffinitized to all CPU IDs on CPU Group %lu\n",
 					g_configSettings->CpuGroupId.value()));
+		}
+
+		if (g_configSettings->EnableRecvSharding)
+		{
+			settingString.append(
+				wil::str_printf<std::wstring>(
+					L"\tReceive sharding is enabled (will affinitize receives to RSS)\n"
+					L"\t\tShardCount: %u\n"
+					L"\t\tShardWorkerCount: %u\n"
+					L"\t\tShardAffinityPolicy: %u\n"
+					L"\t\tIocpBatchSize: %u\n",
+					g_configSettings->ShardCount,
+					g_configSettings->ShardWorkerCount,
+					static_cast<uint32_t>(g_configSettings->ShardAffinityPolicy),
+					g_configSettings->IocpBatchSize));
 		}
 
 		settingString.append(L"\n");

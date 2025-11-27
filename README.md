@@ -1,6 +1,11 @@
 # ctsTraffic
 ctsTraffic is a highly scalable client/server networking tool giving detailed performance and reliability analytics
 
+## Requirements
+
+- **Windows 10 or later**: This project uses modern Windows networking and threading APIs (IO Completion Ports, `SetThreadGroupAffinity`, and related Winsock features) that require Windows 10+ for full behavior and processor-group support. Building and running on older Windows versions may result in missing API support or degraded behavior.
+
+
 If you would like to download the latest build and not have to pull down the source code to build it yourself, you can download them from [https://github.com/microsoft/ctsTraffic/tree/master/Releases/2.0.3.9](https://github.com/microsoft/ctsTraffic/tree/master/Releases/2.0.3.9) .
 
 # New Visualization Tool!

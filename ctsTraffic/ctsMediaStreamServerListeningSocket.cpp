@@ -15,11 +15,12 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <exception>
 #include <memory>
 #include <utility>
+#include <atomic>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
 // ctl headers
-#include <ctThreadIocp.hpp>
+#include <ctThreadIocp_base.hpp>
 #include <ctSockaddr.hpp>
 // project headers
 #include "ctsMediaStreamServerListeningSocket.h"
@@ -32,8 +33,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-ctsMediaStreamServerListeningSocket::ctsMediaStreamServerListeningSocket(wil::unique_socket&& listeningSocket, ctl::ctSockaddr listeningAddr) :
-    m_threadIocp(std::make_shared<ctl::ctThreadIocp>(listeningSocket.get(), ctsConfig::g_configSettings->pTpEnvironment)),
+ctsMediaStreamServerListeningSocket::ctsMediaStreamServerListeningSocket(wil::unique_socket&& listeningSocket, ctl::ctSockaddr listeningAddr, std::shared_ptr<ctl::ctThreadIocp_base> threadIocp) :
+    m_threadIocp(std::move(threadIocp)),
     m_listeningSocket(std::move(listeningSocket)),
     m_listeningAddr(std::move(listeningAddr))
 {
@@ -207,6 +208,7 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
                         PRINT_DEBUG_INFO(
                             L"\t\tctsMediaStreamServer - processing START from %ws\n",
                             m_remoteAddr.writeCompleteAddress().c_str());
+                        IncrementConnectionCount();
 #ifndef TESTING_IGNORE_START
                     // Cannot be holding the object_guard when calling into any pimpl-> methods
                         pimplOperation = [this] {

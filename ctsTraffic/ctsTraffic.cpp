@@ -26,6 +26,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // local headers
 #include "ctsConfig.h"
 #include "ctsSocketBroker.h"
+#include "ctsMediaStreamServer.h"
 
 using namespace ctsTraffic;
 using namespace ctl;
@@ -201,6 +202,25 @@ int __cdecl wmain(int argc, _In_reads_z_(argc) const wchar_t** argv)
                 totalFrames > 0 ? static_cast<double>(duplicateFrames) / static_cast<double>(totalFrames) * 100.0 : 0.0,
                 errorFrames,
                 totalFrames > 0 ? static_cast<double>(errorFrames) / static_cast<double>(totalFrames) * 100.0 : 0.0);
+        }
+        else if (ctsConfig::g_configSettings->EnableRecvSharding)
+        {
+
+            // If using the media-stream server, print per-listener connection counts
+            const auto listenerInfos = ctsMediaStreamServerImpl::GetListenerInfos();
+            if (!listenerInfos.empty())
+            {
+                ctsConfig::PrintSummary(L"\n  Connections per listener (shard):\n");
+                for (size_t i = 0; i < listenerInfos.size(); ++i)
+                {
+                    const auto& info = listenerInfos[i];
+                    ctsConfig::PrintSummary(
+                        L"    Listener %zu : %ws : %u\n",
+                        i,
+                        info.ListeningAddress.writeCompleteAddress().c_str(),
+                        info.ConnectionCount);
+                }
+            }
         }
     }
     ctsConfig::PrintSummary(

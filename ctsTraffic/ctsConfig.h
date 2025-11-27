@@ -31,6 +31,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // - except for ctsStatistics.hpp
 // - this header *can* be included here because it does not include any cts* headers
 //
+#include <ctCpuAffinity.hpp>
+
 #include "ctsStatistics.hpp"
 
 namespace ctsTraffic
@@ -80,6 +82,14 @@ namespace ctsTraffic
             PushPull,
             Duplex,
             MediaStream
+        };
+
+        enum class AffinityPolicy : std::uint8_t
+        {
+            PerCpu,
+            PerGroup,
+            RssAligned,
+            Manual
         };
 
         enum class StatusFormatting : std::uint8_t
@@ -259,6 +269,9 @@ namespace ctsTraffic
         int32_t GetListenBacklog() noexcept;
         bool IsListening() noexcept;
 
+        uint32_t GetShardCount() noexcept;
+        ctl::CpuAffinityPolicy GetCpuAffinityPolicy() noexcept;
+
         TcpShutdownType GetShutdownType() noexcept;
 
         // Set* functions
@@ -411,6 +424,13 @@ namespace ctsTraffic
             uint32_t RecvBufValue = 0;
             uint32_t SendBufValue = 0;
             uint32_t KeepAliveValue = 0;
+
+            // Sharded UDP receive configuration
+            bool EnableRecvSharding = false;
+            uint32_t ShardCount = 0; // 0 means default to logical processor count
+            uint32_t ShardWorkerCount = 1;
+            AffinityPolicy ShardAffinityPolicy = AffinityPolicy::PerCpu;
+            uint32_t IocpBatchSize = 64;
 
             uint32_t PushBytes = 0;
             uint32_t PullBytes = 0;
