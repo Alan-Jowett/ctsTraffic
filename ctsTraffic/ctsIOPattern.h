@@ -607,22 +607,22 @@ private:
 };
 
 //
-// UDP Media server
+// UDP Media sender
 //  - Receives a START message from a client to establish a 'connection'
 //  - Streams datagrams at the specified BitRate and FrameRate
 //  - Responds to RESEND requests out-of-band from the normal stream
 //  - Remains alive until the DONE message is sent from the client
 //
-class ctsIoPatternMediaStreamServer final : public ctsIoPatternStatistics<ctsUdpStatistics>
+class ctsIoPatternMediaStreamSender final : public ctsIoPatternStatistics<ctsUdpStatistics>
 {
 public:
-    ctsIoPatternMediaStreamServer() noexcept;
-    ~ctsIoPatternMediaStreamServer() noexcept override = default;
+    ctsIoPatternMediaStreamSender() noexcept;
+    ~ctsIoPatternMediaStreamSender() noexcept override = default;
 
-    ctsIoPatternMediaStreamServer(const ctsIoPatternMediaStreamServer&) = delete;
-    ctsIoPatternMediaStreamServer& operator=(const ctsIoPatternMediaStreamServer&) = delete;
-    ctsIoPatternMediaStreamServer(ctsIoPatternMediaStreamServer&&) = delete;
-    ctsIoPatternMediaStreamServer& operator=(ctsIoPatternMediaStreamServer&&) = delete;
+    ctsIoPatternMediaStreamSender(const ctsIoPatternMediaStreamSender&) = delete;
+    ctsIoPatternMediaStreamSender& operator=(const ctsIoPatternMediaStreamSender&) = delete;
+    ctsIoPatternMediaStreamSender(ctsIoPatternMediaStreamSender&&) = delete;
+    ctsIoPatternMediaStreamSender& operator=(ctsIoPatternMediaStreamSender&&) = delete;
 
     // required virtual functions
     ctsTask GetNextTaskFromPattern() noexcept override;
@@ -645,7 +645,7 @@ private:
 };
 
 //
-// UDP Media client
+// UDP Media receiver
 //  - Sends a START message to the server to establish a 'connection'
 //  - Receives a stream of datagrams at the specified BitRate and FrameRate
 //  - Sends a RESEND requests out-of-band from the normal stream if peeks ahead 
@@ -653,16 +653,16 @@ private:
 //  - Processes frames after a Buffering period of time
 //  - Sends a DONE message to the server after processing all frames
 //
-class ctsIoPatternMediaStreamClient final : public ctsIoPatternStatistics<ctsUdpStatistics>
+class ctsIoPatternMediaStreamReceiver final : public ctsIoPatternStatistics<ctsUdpStatistics>
 {
 public:
-    ctsIoPatternMediaStreamClient();
-    ~ctsIoPatternMediaStreamClient() noexcept override;
+    ctsIoPatternMediaStreamReceiver();
+    ~ctsIoPatternMediaStreamReceiver() noexcept override;
 
-    ctsIoPatternMediaStreamClient(const ctsIoPatternMediaStreamClient&) = delete;
-    ctsIoPatternMediaStreamClient& operator=(const ctsIoPatternMediaStreamClient&) = delete;
-    ctsIoPatternMediaStreamClient(ctsIoPatternMediaStreamClient&&) = delete;
-    ctsIoPatternMediaStreamClient& operator=(ctsIoPatternMediaStreamClient&&) = delete;
+    ctsIoPatternMediaStreamReceiver(const ctsIoPatternMediaStreamReceiver&) = delete;
+    ctsIoPatternMediaStreamReceiver& operator=(const ctsIoPatternMediaStreamReceiver&) = delete;
+    ctsIoPatternMediaStreamReceiver(ctsIoPatternMediaStreamReceiver&&) = delete;
+    ctsIoPatternMediaStreamReceiver& operator=(ctsIoPatternMediaStreamReceiver&&) = delete;
 
     // required virtual functions
     ctsTask GetNextTaskFromPattern() noexcept override;

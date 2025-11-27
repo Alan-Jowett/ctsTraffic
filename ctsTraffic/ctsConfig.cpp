@@ -40,7 +40,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsPrintStatus.hpp"
 // project headers
 #include "ctsTCPFunctions.h"
-#include "ctsMediaStreamClient.h"
+#include "ctsMediaStreamReceiver.h"
 #include "ctsMediaStreamServer.h"
 #include "ctsWinsockLayer.h"
 // wil headers always included last
@@ -601,8 +601,8 @@ namespace ctsTraffic::ctsConfig
 			}
 			else
 			{
-				g_configSettings->ConnectFunction = ctsMediaStreamClientConnect;
-				g_connectFunctionName = L"MediaStream Client Connect";
+				g_configSettings->ConnectFunction = ctsMediaStreamReceiverConnect;
+				g_connectFunctionName = L"MediaStream Receiver Connect";
 			}
 		}
 
@@ -739,12 +739,12 @@ namespace ctsTraffic::ctsConfig
 				else
 				{
 					constexpr auto udpRecvBuff = 1048576ul; // 1 MB
-					g_configSettings->IoFunction = ctsMediaStreamClient;
+					g_configSettings->IoFunction = ctsMediaStreamReceiver;
 					g_configSettings->Options |= SetRecvBuf;
 					g_configSettings->RecvBufValue = udpRecvBuff;
 					g_configSettings->Options |= HandleInlineIocp;
 					g_configSettings->Options |= EnableCircularQueueing;
-					g_ioFunctionName = L"MediaStream Client";
+					g_ioFunctionName = L"MediaStream Receiver";
 				}
 			}
 		}

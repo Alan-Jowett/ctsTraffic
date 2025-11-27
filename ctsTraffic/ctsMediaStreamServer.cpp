@@ -31,7 +31,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsIOTask.hpp"
 #include "ctsWinsockLayer.h"
 #include "ctsMediaStreamServer.h"
-#include "ctsMediaStreamServerConnectedSocket.h"
+#include "ctsMediaStreamSender.h"
 #include "ctsMediaStreamServerListeningSocket.h"
 #include "ctsMediaStreamProtocol.hpp"
 // wil headers always included last
@@ -121,13 +121,13 @@ namespace ctsTraffic
     namespace ctsMediaStreamServerImpl
     {
         // function for doing the actual IO for a UDP media stream datagram connection
-        static wsIOResult ConnectedSocketIo(_In_ ctsMediaStreamServerConnectedSocket* connectedSocket) noexcept;
+        static wsIOResult ConnectedSocketIo(_In_ ctsMediaStreamSender* connectedSocket) noexcept;
 
         static std::vector<std::unique_ptr<ctsMediaStreamServerListeningSocket>> g_listeningSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         static wil::critical_section g_socketVectorGuard{ ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock }; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
 
-        _Guarded_by_(g_socketVectorGuard) static std::vector<std::shared_ptr<ctsMediaStreamServerConnectedSocket>> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
+        _Guarded_by_(g_socketVectorGuard) static std::vector<std::shared_ptr<ctsMediaStreamSender>> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         // weak_ptr<> to ctsSocket objects ready to accept a connection
         _Guarded_by_(g_socketVectorGuard) static std::vector<std::weak_ptr<ctsSocket>> g_acceptingSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
@@ -322,7 +322,7 @@ namespace ctsTraffic
                 THROW_WIN32_MSG(WSAECONNABORTED, "ctsSocket already freed");
             }
 
-            std::shared_ptr<ctsMediaStreamServerConnectedSocket> sharedConnectedSocket;
+            std::shared_ptr<ctsMediaStreamSender> sharedConnectedSocket;
             {
                 // must guard connected_sockets since we need to add it
                 const auto lockConnectedObject = g_socketVectorGuard.lock();
@@ -330,7 +330,7 @@ namespace ctsTraffic
                 // find the matching connected_socket
                 const auto foundSocket = std::ranges::find_if(
                     g_connectedSockets,
-                    [&sharedSocket](const std::shared_ptr<ctsMediaStreamServerConnectedSocket>& connectedSocket) noexcept {
+                    [&sharedSocket](const std::shared_ptr<ctsMediaStreamSender>& connectedSocket) noexcept {
                         return sharedSocket->GetRemoteSockaddr() == connectedSocket->GetRemoteAddress();
                     }
                 );
@@ -353,7 +353,7 @@ namespace ctsTraffic
 
         // Process a new ctsSocket from the ctsSocketBroker
         // - accept_socket takes the ctsSocket to create a new entry
-        //   which will create a corresponding ctsMediaStreamServerConnectedSocket in the process
+        //   which will create a corresponding ctsMediaStreamSender in the process
         void AcceptSocket(const std::weak_ptr<ctsSocket>& weakSocket)
         {
             if (const auto sharedSocket = weakSocket.lock())
@@ -371,7 +371,7 @@ namespace ctsTraffic
 
                     const auto existingSocket = std::ranges::find_if(
                         g_connectedSockets,
-                        [&](const std::shared_ptr<ctsMediaStreamServerConnectedSocket>& connectedSocket) noexcept {
+                        [&](const std::shared_ptr<ctsMediaStreamSender>& connectedSocket) noexcept {
                             return waitingEndpoint->second == connectedSocket->GetRemoteAddress();
                         });
 
@@ -386,7 +386,7 @@ namespace ctsTraffic
                     }
 
                     g_connectedSockets.emplace_back(
-                        std::make_shared<ctsMediaStreamServerConnectedSocket>(
+                        std::make_shared<ctsMediaStreamSender>(
                             weakSocket,
                             waitingEndpoint->first,
                             waitingEndpoint->second,
@@ -428,7 +428,7 @@ namespace ctsTraffic
 
             const auto foundSocket = std::ranges::find_if(
                 g_connectedSockets,
-                [&targetAddr](const std::shared_ptr<ctsMediaStreamServerConnectedSocket>& connectedSocket) noexcept {
+                [&targetAddr](const std::shared_ptr<ctsMediaStreamSender>& connectedSocket) noexcept {
                     return targetAddr == connectedSocket->GetRemoteAddress();
                 });
 
@@ -447,7 +447,7 @@ namespace ctsTraffic
 
             const auto existingSocket = std::ranges::find_if(
                 g_connectedSockets,
-                [&targetAddr](const std::shared_ptr<ctsMediaStreamServerConnectedSocket>& connectedSocket) noexcept {
+                [&targetAddr](const std::shared_ptr<ctsMediaStreamSender>& connectedSocket) noexcept {
                     return targetAddr == connectedSocket->GetRemoteAddress();
                 });
             if (existingSocket != std::end(g_connectedSockets))
@@ -484,7 +484,7 @@ namespace ctsTraffic
                 {
                     // 'move' the accepting socket to connected
                     g_connectedSockets.emplace_back(
-                        std::make_shared<ctsMediaStreamServerConnectedSocket>(weakInstance, socket, targetAddr, ConnectedSocketIo));
+                        std::make_shared<ctsMediaStreamSender>(weakInstance, socket, targetAddr, ConnectedSocketIo));
 
                     PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::start - socket with remote address %ws added to connected_sockets",
                         targetAddr.writeCompleteAddress().c_str());
@@ -516,7 +516,7 @@ namespace ctsTraffic
             }
         }
 
-        wsIOResult ConnectedSocketIo(_In_ ctsMediaStreamServerConnectedSocket* connectedSocket) noexcept
+        wsIOResult ConnectedSocketIo(_In_ ctsMediaStreamSender* connectedSocket) noexcept
         {
             const SOCKET socket = connectedSocket->GetSendingSocket();
             if (INVALID_SOCKET == socket)
@@ -610,8 +610,8 @@ namespace ctsTraffic
 
                     // successfully completed synchronously
                     returnResults.m_bytesTransferred += bytesSent;
-                    PRINT_DEBUG_INFO(
-                        L"\t\tctsMediaStreamServer sending seq number %lld (%u sent-bytes, %u frame-bytes)\n",
+                            PRINT_DEBUG_INFO(
+                        L"\t\tctsMediaStreamSender sending seq number %lld (%u sent-bytes, %u frame-bytes)\n",
                         sequenceNumber, bytesSent, returnResults.m_bytesTransferred);
                 }
             }
