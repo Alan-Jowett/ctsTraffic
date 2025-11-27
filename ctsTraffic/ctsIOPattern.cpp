@@ -112,9 +112,9 @@ namespace ctsTraffic
         case ctsConfig::IoPatternType::MediaStream:
             if (ctsConfig::IsListening())
             {
-                return make_shared<ctsIoPatternMediaStreamServer>();
+                return make_shared<ctsIoPatternMediaStreamSender>();
             }
-            return make_shared<ctsIoPatternMediaStreamClient>();
+            return make_shared<ctsIoPatternMediaStreamReceiver>();
 
         case ctsConfig::IoPatternType::NoIoSet: // fall through
         default: // NOLINT(clang-diagnostic-covered-switch-default)
@@ -1098,7 +1098,7 @@ namespace ctsTraffic
     }
 
     //
-    // ctsIoPatternMediaStreamServer
+    // ctsIoPatternMediaStreamSender
     // - ctsIOPatternMediaStream (Server) Pattern
     //   - UDP-only
     //   - The server sends data at a specified rate
@@ -1106,7 +1106,7 @@ namespace ctsTraffic
     //     After a 'buffer period' of data has been received,
     //     The client starts as timer to 'process' a time-slice of data
     //
-    ctsIoPatternMediaStreamServer::ctsIoPatternMediaStreamServer() noexcept :
+    ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender() noexcept :
         ctsIoPatternStatistics(1), // the pattern will use the recv writeable-buffer for sending a connection ID
         m_frameSizeBytes(ctsConfig::GetMediaStream().FrameSizeBytes),
         m_frameRateFps(ctsConfig::GetMediaStream().FramesPerSecond)
@@ -1115,7 +1115,7 @@ namespace ctsTraffic
     }
 
     // required virtual functions
-    ctsTask ctsIoPatternMediaStreamServer::GetNextTaskFromPattern() noexcept
+    ctsTask ctsIoPatternMediaStreamSender::GetNextTaskFromPattern() noexcept
     {
         ctsTask returnTask;
         switch (m_state)
@@ -1152,7 +1152,7 @@ namespace ctsTraffic
         return returnTask;
     }
 
-    ctsIoPatternError ctsIoPatternMediaStreamServer::CompleteTaskBackToPattern(const ctsTask& task, uint32_t currentTransfer) noexcept
+    ctsIoPatternError ctsIoPatternMediaStreamSender::CompleteTaskBackToPattern(const ctsTask& task, uint32_t currentTransfer) noexcept
     {
         if (task.m_bufferType != ctsTask::BufferType::UdpConnectionId)
         {

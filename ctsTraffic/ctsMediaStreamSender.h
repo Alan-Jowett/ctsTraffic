@@ -15,6 +15,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 // cpp headers
 #include <memory>
+#include <functional>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -29,10 +30,10 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-class ctsMediaStreamServerConnectedSocket;
-using ctsMediaStreamConnectedSocketIoFunctor = std::function<wsIOResult (ctsMediaStreamServerConnectedSocket*)>;
+class ctsMediaStreamSender;
+using ctsMediaStreamSenderIoFunctor = std::function<wsIOResult (ctsMediaStreamSender*)>;
 
-class ctsMediaStreamServerConnectedSocket
+class ctsMediaStreamSender
 {
 private:
     // the CS is mutable, so we can take a lock / release a lock in const methods
@@ -46,7 +47,7 @@ private:
     const std::weak_ptr<ctsSocket> m_weakSocket;
 
     // invoked to do actual IO on the socket
-    const ctsMediaStreamConnectedSocketIoFunctor m_ioFunctor;
+    const ctsMediaStreamSenderIoFunctor m_ioFunctor;
 
     // sending_socket is a shared socket from the datagram server
     // that (potentially) many connected datagram sockets will send from
@@ -58,13 +59,13 @@ private:
     const int64_t m_connectTime = 0LL;
 
 public:
-    ctsMediaStreamServerConnectedSocket(
+    ctsMediaStreamSender(
         std::weak_ptr<ctsSocket> weakSocket,
         SOCKET sendingSocket,
         ctl::ctSockaddr remoteAddr,
-        ctsMediaStreamConnectedSocketIoFunctor ioFunctor);
+        ctsMediaStreamSenderIoFunctor ioFunctor);
 
-    ~ctsMediaStreamServerConnectedSocket() noexcept;
+    ~ctsMediaStreamSender() noexcept;
 
     const ctl::ctSockaddr& GetRemoteAddress() const noexcept
     {
@@ -97,12 +98,12 @@ public:
     void CompleteState(uint32_t errorCode) const noexcept;
 
     // non-copyable
-    ctsMediaStreamServerConnectedSocket(const ctsMediaStreamServerConnectedSocket&) = delete;
-    ctsMediaStreamServerConnectedSocket& operator=(const ctsMediaStreamServerConnectedSocket&) = delete;
-    ctsMediaStreamServerConnectedSocket(ctsMediaStreamServerConnectedSocket&&) = delete;
-    ctsMediaStreamServerConnectedSocket& operator=(ctsMediaStreamServerConnectedSocket&&) = delete;
+    ctsMediaStreamSender(const ctsMediaStreamSender&) = delete;
+    ctsMediaStreamSender& operator=(const ctsMediaStreamSender&) = delete;
+    ctsMediaStreamSender(ctsMediaStreamSender&&) = delete;
+    ctsMediaStreamSender& operator=(ctsMediaStreamSender&&) = delete;
 
 private:
     static VOID CALLBACK MediaStreamTimerCallback(PTP_CALLBACK_INSTANCE, PVOID context, PTP_TIMER) noexcept;
 };
-}
+} 
