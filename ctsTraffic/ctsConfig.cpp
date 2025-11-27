@@ -995,32 +995,52 @@ namespace ctsTraffic::ctsConfig
 			});
 		if (foundArgument != end(args))
 		{
-			if (g_configSettings->Protocol != ProtocolType::TCP)
-			{
-				throw invalid_argument("-pattern (only applicable to TCP)");
-			}
-
 			const auto* const value = ParseArgument(*foundArgument, L"-pattern");
-			if (ctString::iordinal_equals(L"push", value))
+
+			if (g_configSettings->Protocol == ProtocolType::TCP)
 			{
-				g_configSettings->IoPattern = IoPatternType::Push;
+				if (ctString::iordinal_equals(L"push", value))
+				{
+					g_configSettings->IoPattern = IoPatternType::Push;
+				}
+				else if (ctString::iordinal_equals(L"pull", value))
+				{
+					g_configSettings->IoPattern = IoPatternType::Pull;
+				}
+				else if (ctString::iordinal_equals(L"pushpull", value))
+				{
+					g_configSettings->IoPattern = IoPatternType::PushPull;
+				}
+				else if (ctString::iordinal_equals(L"flood", value) || ctString::iordinal_equals(L"duplex", value))
+				{
+					// the old name for this was 'flood'
+					g_configSettings->IoPattern = IoPatternType::Duplex;
+				}
+				else
+				{
+					throw invalid_argument("-pattern");
+				}
 			}
-			else if (ctString::iordinal_equals(L"pull", value))
+			else if (g_configSettings->Protocol == ProtocolType::UDP)
 			{
-				g_configSettings->IoPattern = IoPatternType::Pull;
-			}
-			else if (ctString::iordinal_equals(L"pushpull", value))
-			{
-				g_configSettings->IoPattern = IoPatternType::PushPull;
-			}
-			else if (ctString::iordinal_equals(L"flood", value) || ctString::iordinal_equals(L"duplex", value))
-			{
-				// the old name for this was 'flood'
-				g_configSettings->IoPattern = IoPatternType::Duplex;
+				// For UDP, map push -> MediaUpload (client->server uploads)
+				// and pull -> MediaStream (server->client media stream)
+				if (ctString::iordinal_equals(L"push", value))
+				{
+					g_configSettings->IoPattern = IoPatternType::MediaUpload;
+				}
+				else if (ctString::iordinal_equals(L"pull", value))
+				{
+					g_configSettings->IoPattern = IoPatternType::MediaStream;
+				}
+				else
+				{
+					throw invalid_argument("-pattern");
+				}
 			}
 			else
 			{
-				throw invalid_argument("-pattern");
+				throw invalid_argument("-pattern (only applicable to TCP/UDP)");
 			}
 
 			// always remove the arg from our vector

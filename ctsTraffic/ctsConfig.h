@@ -81,6 +81,7 @@ namespace ctsTraffic
             Pull,
             PushPull,
             Duplex,
+            MediaUpload,
             MediaStream
         };
 
