@@ -712,4 +712,103 @@ private:
     // Callback to track when the server has actually started sending
     static VOID CALLBACK StartCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept;
 };
+
+// UDP Media upload server (receives uploads from clients)
+// - Receives a START message from a client to establish a 'connection'
+// - Accepts streaming datagrams from clients and processes them
+// - Responds to control messages as needed
+class ctsIoPatternMediaUploadServer final : public ctsIoPatternStatistics<ctsUdpStatistics>
+{
+public:
+    ctsIoPatternMediaUploadServer() noexcept;
+    ~ctsIoPatternMediaUploadServer() noexcept override = default;
+
+    ctsIoPatternMediaUploadServer(const ctsIoPatternMediaUploadServer&) = delete;
+    ctsIoPatternMediaUploadServer& operator=(const ctsIoPatternMediaUploadServer&) = delete;
+    ctsIoPatternMediaUploadServer(ctsIoPatternMediaUploadServer&&) = delete;
+    ctsIoPatternMediaUploadServer& operator=(ctsIoPatternMediaUploadServer&&) = delete;
+
+    // required virtual functions
+    ctsTask GetNextTaskFromPattern() noexcept override;
+    ctsIoPatternError CompleteTaskBackToPattern(const ctsTask& task, uint32_t currentTransfer) noexcept override;
+
+private:
+    uint32_t m_frameSizeBytes{0};
+    uint32_t m_currentFrameRequested{0};
+    uint32_t m_currentFrameCompleted{0};
+    uint32_t m_frameRateFps{0};
+    uint32_t m_currentFrame{1};
+    int64_t m_baseTimeMilliseconds{0};
+    uint32_t m_recvNeeded = ctsConfig::g_configSettings->PrePostRecvs;
+
+    enum class ServerState : std::uint8_t
+    {
+        NotStarted,
+        IdSent,
+        IoStarted
+    } m_state{ServerState::NotStarted};
+};
+
+// UDP Media upload client (sends uploads to server)
+class ctsIoPatternMediaUploadClient final : public ctsIoPatternStatistics<ctsUdpStatistics>
+{
+public:
+    ctsIoPatternMediaUploadClient();
+    ~ctsIoPatternMediaUploadClient() noexcept override;
+
+    ctsIoPatternMediaUploadClient(const ctsIoPatternMediaUploadClient&) = delete;
+    ctsIoPatternMediaUploadClient& operator=(const ctsIoPatternMediaUploadClient&) = delete;
+    ctsIoPatternMediaUploadClient(ctsIoPatternMediaUploadClient&&) = delete;
+    ctsIoPatternMediaUploadClient& operator=(ctsIoPatternMediaUploadClient&&) = delete;
+
+    // required virtual functions
+    ctsTask GetNextTaskFromPattern() noexcept override;
+    ctsIoPatternError CompleteTaskBackToPattern(const ctsTask& task, uint32_t completedBytes) noexcept override;
+
+private:
+    PTP_TIMER m_rendererTimer = nullptr;
+    PTP_TIMER m_startTimer = nullptr;
+
+    int64_t m_baseTimeMilliseconds = 0LL;
+    const double m_frameRateMsPerFrame = 0LL;
+    const uint32_t m_frameSizeBytes = ctsConfig::GetMediaStream().FrameSizeBytes;
+    const uint32_t m_finalFrame = ctsConfig::GetMediaStream().StreamLengthFrames;
+
+    uint32_t m_frameRateFps{0};
+    uint32_t m_currentFrameRequested{0};
+    uint32_t m_currentFrameCompleted{0};
+    uint32_t m_currentFrame{1};
+    enum class ServerState : std::uint8_t
+    {
+        NotStarted,
+        IdSent,
+        IoStarted
+    } m_state{ServerState::NotStarted};
+
+    uint32_t m_initialBufferFrames = ctsConfig::GetMediaStream().BufferedFrames;
+    uint32_t m_timerWheelOffsetFrames = 0UL;
+    uint32_t m_recvNeeded = ctsConfig::g_configSettings->PrePostRecvs;
+    uint32_t m_maxDatagramSize = 0UL;
+
+    std::vector<ctsConfig::JitterFrameEntry> m_frameEntries;
+    std::vector<ctsConfig::JitterFrameEntry>::iterator m_headEntry;
+
+    ctsConfig::JitterFrameEntry m_firstFrame;
+    ctsConfig::JitterFrameEntry m_previousFrame;
+
+    bool m_finishedStream = false;
+
+    std::vector<ctsConfig::JitterFrameEntry>::iterator FindSequenceNumber(int64_t sequenceNumber) noexcept;
+
+    bool ReceivedBufferedFrames() noexcept;
+
+    [[nodiscard]] bool SetNextTimer(bool initialTimer) const noexcept;
+
+    void SetNextStartTimer() const noexcept;
+
+    void RenderFrame() noexcept;
+
+    static VOID CALLBACK TimerCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept;
+    static VOID CALLBACK StartCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept;
+};
 } //namespace

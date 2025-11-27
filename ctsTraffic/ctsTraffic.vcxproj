@@ -412,6 +412,7 @@
     <ClCompile Include="ctsConnectByName.cpp" />
     <ClCompile Include="ctsConnectEx.cpp" />
     <ClCompile Include="ctsIOPattern.cpp" />
+    <ClCompile Include="ctsIOPatternMediaUpload.cpp" />
     <ClCompile Include="ctsIOPatternMediaStream.cpp" />
     <ClCompile Include="ctsMediaStreamClient.cpp" />
     <ClCompile Include="ctsMediaUploadClient.cpp" />

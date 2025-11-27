@@ -42,6 +42,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsTCPFunctions.h"
 #include "ctsMediaStreamClient.h"
 #include "ctsMediaStreamServer.h"
+#include "ctsMediaUploadClient.h"
+#include "ctsMediaUploadServer.h"
 #include "ctsWinsockLayer.h"
 // wil headers always included last
 #include <ctCpuAffinity.hpp>
@@ -156,6 +158,12 @@ namespace ctsTraffic::ctsConfig
 	static void ctsConfigInitOnce() noexcept
 	{
 		FAIL_FAST_IF(!InitOnceExecuteOnce(&g_configInitImpl, InitOnceConfigImpl, nullptr, nullptr));
+	}
+
+	// Helper: return true for media-style IoPattern types
+	bool ctsTraffic::ctsConfig::IsMediaPattern(IoPatternType pattern) noexcept
+	{
+		return (pattern == IoPatternType::MediaStream) || (pattern == IoPatternType::MediaUpload);
 	}
 
 	//
@@ -594,21 +602,30 @@ namespace ctsTraffic::ctsConfig
 		}
 		else
 		{
-			if (g_configSettings->IoPattern != IoPatternType::MediaStream)
+			if (!IsMediaPattern(g_configSettings->IoPattern))
 			{
 				g_configSettings->ConnectFunction = ctsConnectEx;
 				g_connectFunctionName = L"ConnectEx";
 			}
 			else
 			{
-				g_configSettings->ConnectFunction = ctsMediaStreamClientConnect;
-				g_connectFunctionName = L"MediaStream Client Connect";
+				// MediaStream client connect for UDP pull (server->client) and MediaUpload client connect for UDP push (client->server)
+				if (g_configSettings->IoPattern == IoPatternType::MediaUpload)
+				{
+					g_configSettings->ConnectFunction = ctsMediaUploadClientConnect;
+					g_connectFunctionName = L"MediaUpload Client Connect";
+				}
+				else
+				{
+					g_configSettings->ConnectFunction = ctsMediaStreamClientConnect;
+					g_connectFunctionName = L"MediaStream Client Connect";
+				}
 			}
 		}
 
-		if (IoPatternType::MediaStream == g_configSettings->IoPattern && connectSpecified)
+		if (IsMediaPattern(g_configSettings->IoPattern) && connectSpecified)
 		{
-			throw invalid_argument("-conn (MediaStream has its own internal connection handler)");
+			throw invalid_argument("-conn (MediaStream/MediaUpload has its own internal connection handler)");
 		}
 	}
 
@@ -654,7 +671,7 @@ namespace ctsTraffic::ctsConfig
 		}
 		else if (!g_configSettings->ListenAddresses.empty())
 		{
-			if (IoPatternType::MediaStream != g_configSettings->IoPattern)
+			if (!IsMediaPattern(g_configSettings->IoPattern))
 			{
 				// only default an Accept function if listening
 				g_configSettings->AcceptFunction = ctsAcceptEx;
@@ -662,8 +679,16 @@ namespace ctsTraffic::ctsConfig
 			}
 			else
 			{
-				g_configSettings->AcceptFunction = ctsMediaStreamServerListener;
-				g_acceptFunctionName = L"MediaStream Server Listener";
+				if (g_configSettings->IoPattern == IoPatternType::MediaUpload)
+				{
+					g_configSettings->AcceptFunction = ctsMediaUploadServerListener;
+					g_acceptFunctionName = L"MediaUpload Server Listener";
+				}
+				else
+				{
+					g_configSettings->AcceptFunction = ctsMediaStreamServerListener;
+					g_acceptFunctionName = L"MediaStream Server Listener";
+				}
 			}
 		}
 	}
@@ -731,20 +756,41 @@ namespace ctsTraffic::ctsConfig
 			{
 				if (IsListening())
 				{
-					g_configSettings->IoFunction = ctsMediaStreamServerIo;
-					// server also has a closing function to remove the closed socket
-					g_configSettings->ClosingFunction = ctsMediaStreamServerClose;
-					g_ioFunctionName = L"MediaStream Server";
+					if (g_configSettings->IoPattern == IoPatternType::MediaUpload)
+					{
+						g_configSettings->IoFunction = ctsMediaUploadServerIo;
+						g_configSettings->ClosingFunction = ctsMediaUploadServerClose;
+						g_ioFunctionName = L"MediaUpload Server";
+					}
+					else
+					{
+						g_configSettings->IoFunction = ctsMediaStreamServerIo;
+						// server also has a closing function to remove the closed socket
+						g_configSettings->ClosingFunction = ctsMediaStreamServerClose;
+						g_ioFunctionName = L"MediaStream Server";
+					}
 				}
 				else
 				{
 					constexpr auto udpRecvBuff = 1048576ul; // 1 MB
-					g_configSettings->IoFunction = ctsMediaStreamClient;
-					g_configSettings->Options |= SetRecvBuf;
-					g_configSettings->RecvBufValue = udpRecvBuff;
-					g_configSettings->Options |= HandleInlineIocp;
-					g_configSettings->Options |= EnableCircularQueueing;
-					g_ioFunctionName = L"MediaStream Client";
+					if (g_configSettings->IoPattern == IoPatternType::MediaUpload)
+					{
+						g_configSettings->IoFunction = ctsMediaUploadClient;
+						g_configSettings->Options |= SetRecvBuf;
+						g_configSettings->RecvBufValue = udpRecvBuff;
+						g_configSettings->Options |= HandleInlineIocp;
+						g_configSettings->Options |= EnableCircularQueueing;
+						g_ioFunctionName = L"MediaUpload Client";
+					}
+					else
+					{
+						g_configSettings->IoFunction = ctsMediaStreamClient;
+						g_configSettings->Options |= SetRecvBuf;
+						g_configSettings->RecvBufValue = udpRecvBuff;
+						g_configSettings->Options |= HandleInlineIocp;
+						g_configSettings->Options |= EnableCircularQueueing;
+						g_ioFunctionName = L"MediaStream Client";
+					}
 				}
 			}
 		}
@@ -3274,14 +3320,14 @@ namespace ctsTraffic::ctsConfig
 		ParseForThreadpool(args);
 		// validate protocol & pattern combinations
 		if (ProtocolType::UDP == g_configSettings->Protocol &&
-			IoPatternType::MediaStream != g_configSettings->IoPattern)
+			!IsMediaPattern(g_configSettings->IoPattern))
 		{
-			throw invalid_argument("UDP only supports the MediaStream IO Pattern");
+			throw invalid_argument("UDP only supports the MediaStream or MediaUpload IO Pattern");
 		}
 		if (ProtocolType::TCP == g_configSettings->Protocol &&
-			IoPatternType::MediaStream == g_configSettings->IoPattern)
+			IsMediaPattern(g_configSettings->IoPattern))
 		{
-			throw invalid_argument("TCP does not support the MediaStream IO Pattern");
+			throw invalid_argument("TCP does not support the MediaStream or MediaUpload IO Pattern");
 		}
 		// set appropriate defaults for # of connections for TCP vs. UDP
 		if (ProtocolType::UDP == g_configSettings->Protocol)
@@ -5312,6 +5358,9 @@ namespace ctsTraffic::ctsConfig
 			break;
 		case IoPatternType::MediaStream:
 			settingString.append(L"MediaStream <UDP controlled stream from server to client>\n");
+			break;
+		case IoPatternType::MediaUpload:
+			settingString.append(L"MediaUpload <UDP client->server media upload>\n");
 			break;
 
 		case IoPatternType::NoIoSet:

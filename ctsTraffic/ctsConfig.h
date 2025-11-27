@@ -92,6 +92,9 @@ namespace ctsTraffic
             RssAligned,
             Manual
         };
+       
+        // Helper: true when the configured IO pattern is a media-style pattern
+        bool IsMediaPattern(IoPatternType pattern) noexcept;
 
         enum class StatusFormatting : std::uint8_t
         {

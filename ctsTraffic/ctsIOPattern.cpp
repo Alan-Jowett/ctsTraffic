@@ -115,6 +115,12 @@ namespace ctsTraffic
                 return make_shared<ctsIoPatternMediaStreamServer>();
             }
             return make_shared<ctsIoPatternMediaStreamClient>();
+        case ctsConfig::IoPatternType::MediaUpload:
+            if (ctsConfig::IsListening())
+            {
+                return make_shared<ctsIoPatternMediaUploadServer>();
+            }
+            return make_shared<ctsIoPatternMediaUploadClient>();
 
         case ctsConfig::IoPatternType::NoIoSet: // fall through
         default: // NOLINT(clang-diagnostic-covered-switch-default)
@@ -1171,4 +1177,6 @@ namespace ctsTraffic
         }
         return ctsIoPatternError::NoError;
     }
+
+        // MediaUpload implementations are in ctsIOPatternMediaUpload.cpp
 } //namespace

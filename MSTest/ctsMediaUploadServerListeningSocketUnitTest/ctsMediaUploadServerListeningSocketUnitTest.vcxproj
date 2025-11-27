@@ -11,7 +11,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{A1B3D8B4-1234-4EBD-9EA1-FAKEGUID0002}</ProjectGuid>
+    <ProjectGuid>{C106A864-1897-4D38-818A-48C2D6152B60}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>ctsMediaUploadServerListeningSocketUnitTest</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
