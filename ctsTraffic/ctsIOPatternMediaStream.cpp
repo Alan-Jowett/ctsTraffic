@@ -181,6 +181,38 @@ ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(con
             return ctsIoPatternError::NoError;
         }
 
+        // Check for control frames (SYN-ACK) when 3-way handshake enabled
+        if (ctsConfig::IsMediaStream3WayEnabled())
+        {
+            const auto protocol = ctsMediaStreamMessage::GetProtocolHeaderFromTask(task);
+            if (protocol == c_udpDatagramFlagSynAck)
+            {
+                // extract assigned connection id
+                char connectionId[ctsStatistics::ConnectionIdLength]{};
+                if (ctsMediaStreamMessage::ParseControlFrame(connectionId, task, completedBytes))
+                {
+                    // update our local connection id
+                    memcpy_s(GetConnectionIdentifier(), ctsStatistics::ConnectionIdLength, connectionId, ctsStatistics::ConnectionIdLength);
+
+                    // construct an ACK control frame and send it immediately
+                    const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+                    ctsTask rawTask;
+                    rawTask.m_ioAction = ctsTaskAction::Send;
+                    rawTask.m_trackIo = false;
+                    rawTask.m_bufferType = ctsTask::BufferType::Dynamic;
+                    rawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                    rawTask.m_buffer = static_cast<char*>(malloc(requiredSize));
+                    if (rawTask.m_buffer)
+                    {
+                        auto ackTask = ctsMediaStreamMessage::MakeAckTask(rawTask, connectionId);
+                        // Send via callback path so it's queued with the other sends
+                        this->SendTaskToCallback(ackTask);
+                        free(rawTask.m_buffer);
+                    }
+                }
+            }
+        }
+
         // validate the buffer contents
         ctsTask validationTask(task);
         validationTask.m_bufferOffset = c_udpDatagramDataHeaderLength; // skip the UdpDatagramDataHeaderLength since we use them for our own stuff

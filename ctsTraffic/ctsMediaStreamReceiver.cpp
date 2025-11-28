@@ -389,9 +389,18 @@ namespace ctsTraffic
                                 rawTask.m_bufferType = ctsTask::BufferType::Static;
                                 rawTask.m_trackIo = false;
 
-                                // Do not attempt to read the protected connection-id from the pattern here
-                                // Build a SYN-ACK without an assigned connection id (zeros)
-                                auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(rawTask, true, nullptr);
+                                // Generate a responder-assigned connection id and store it
+                                char assignedId[ctsStatistics::ConnectionIdLength]{};
+                                // Use the existing statistics helper to generate a UUID string
+                                {
+                                    ctsUdpStatistics tmpStats;
+                                    ctsStatistics::GenerateConnectionId(tmpStats);
+                                    memcpy_s(assignedId, ctsStatistics::ConnectionIdLength, tmpStats.m_connectionIdentifier, ctsStatistics::ConnectionIdLength);
+                                }
+                                info.assignedConnectionId = std::string(assignedId, ctsStatistics::ConnectionIdLength);
+
+                                // Build a SYN-ACK including the assigned connection id
+                                auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(rawTask, true, assignedId);
                                 // MakeSynAckTask sets Dynamic bufferType; override to Static since we're using a local buffer
                                 synAckTask.m_bufferType = ctsTask::BufferType::Static;
 
