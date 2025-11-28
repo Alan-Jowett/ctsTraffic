@@ -363,10 +363,22 @@ namespace ctsTraffic
                         {
                             // build a SYN-ACK response using the same buffer length
                             const uint32_t sendBufferLength = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
-                            auto sendTask = CreateUntrackedTask(ctsTaskAction::Send, sendBufferLength);
-                            // Use assigned connection id from our local connection identifier
-                            const char* assignedConnectionId = GetConnectionIdentifier();
-                            auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(sendTask, true, assignedConnectionId);
+                            // allocate a temporary buffer on the stack to build the SYN-ACK
+                            std::vector<char> tempBuffer(sendBufferLength);
+                            ctsTask rawTask;
+                            rawTask.m_ioAction = ctsTaskAction::Send;
+                            rawTask.m_buffer = tempBuffer.data();
+                            rawTask.m_bufferLength = sendBufferLength;
+                            rawTask.m_bufferOffset = 0;
+                            rawTask.m_bufferType = ctsTask::BufferType::Static;
+                            rawTask.m_trackIo = false;
+
+                            // Do not attempt to read the protected connection-id from the pattern here
+                            // Build a SYN-ACK without an assigned connection id (zeros)
+                            auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(rawTask, true, nullptr);
+                            // MakeSynAckTask sets Dynamic bufferType; override to Static since we're using a local buffer
+                            synAckTask.m_bufferType = ctsTask::BufferType::Static;
+
                             // send immediately using low-level send helper
                             const auto response = ctsWSASendTo(sharedSocket, lockedSocket.GetSocket(), synAckTask, [](OVERLAPPED*) noexcept {});
                             if (response.m_errorCode != 0 && response.m_errorCode != WSA_IO_PENDING)
