@@ -66,6 +66,16 @@
 // - exposes match() taking a string to check if it matches the instance it contains
 // - exposes add() taking both types of Access objects + a ULONGLONG time parameter to retrieve the data and add it to the internal map
 
+/**
+ * @file ctPerformanceCounter.hpp
+ * @brief WMI-based performance counter collection utilities.
+ *
+ * This header implements helpers to enumerate, sample, and aggregate
+ * performance counters exposed via WMI. It provides data accessors,
+ * per-counter storage and aggregation, and a manager that schedules
+ * periodic refreshes.
+ */
+
 namespace ctl
 {
 	enum class ctPerformanceCounterCollectionType : std::uint8_t
@@ -698,6 +708,14 @@ namespace ctl
 	// Note: the ctPerformanceCounter class *will* retain WMI service instance
 	//       it's recommended to guarantee it stays alive
 	template <typename T>
+	/**
+	 * @brief Abstract base representing a single named performance counter.
+	 *
+	 * Template consumers derive concrete implementations that know how to
+	 * refresh specific WMI performance classes and extract typed data. The
+	 * base class provides filtering, storage of per-instance time-slices, and
+	 * a callback registration mechanism used by `ctPerformanceCounter`.
+	 */
 	class ctPerformanceCounterCounter
 	{
 	public:
@@ -1151,6 +1169,13 @@ namespace ctl
 	// CAUTION:
 	// - do not access the ctPerformanceCounterCounter instances while between calling start() and stop()
 	// - any iterators returned can be invalidated when more data is added on the next cycle
+	/**
+	 * @brief Manager that schedules periodic sampling of registered counters.
+	 *
+	 * `ctPerformanceCounter` holds a WMI refresher and a list of registered
+	 * counter callbacks. It drives periodic `Refresh` calls on the refresher
+	 * and notifies each registered counter to update or clear collected data.
+	 */
 	class ctPerformanceCounter final
 	{
 	public:
