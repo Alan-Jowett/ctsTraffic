@@ -351,6 +351,32 @@ namespace ctsTraffic
         {
         case ctsIoStatus::ContinueIo:
             {
+                // If this completion was a receive, check for control frames (SYN/SYN-ACK/ACK)
+                if (task.m_ioAction == ctsTaskAction::Recv && transferred >= (c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength))
+                {
+                    const auto protocol = ctsMediaStreamMessage::GetProtocolHeaderFromTask(task);
+                    if (protocol == c_udpDatagramFlagSyn)
+                    {
+                        // parse and optionally extract connection id
+                        char connectionId[ctsStatistics::ConnectionIdLength]{};
+                        if (ctsMediaStreamMessage::ParseControlFrame(connectionId, task, transferred))
+                        {
+                            // build a SYN-ACK response using the same buffer length
+                            const uint32_t sendBufferLength = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+                            auto sendTask = CreateUntrackedTask(ctsTaskAction::Send, sendBufferLength);
+                            // Use assigned connection id from our local connection identifier
+                            const char* assignedConnectionId = GetConnectionIdentifier();
+                            auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(sendTask, true, assignedConnectionId);
+                            // send immediately using low-level send helper
+                            const auto response = ctsWSASendTo(sharedSocket, lockedSocket.GetSocket(), synAckTask, [](OVERLAPPED*) noexcept {});
+                            if (response.m_errorCode != 0 && response.m_errorCode != WSA_IO_PENDING)
+                            {
+                                ctsConfig::PrintErrorIfFailed("SYN-ACK send", response.m_errorCode);
+                            }
+                        }
+                    }
+                }
+
                 IoImplStatus status;
                 do
                 {
