@@ -194,6 +194,19 @@ ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(con
                     // update our local connection id
                     memcpy_s(GetConnectionIdentifier(), ctsStatistics::ConnectionIdLength, connectionId, ctsStatistics::ConnectionIdLength);
 
+                    // Flush local dedup/reassembly caches per 3-way handshake rules
+                    // Ensure subsequent SequenceNumbers are treated as new and not deduplicated
+                    for (auto &entry : m_frameEntries)
+                    {
+                        entry.m_bytesReceived = 0;
+                        entry.m_senderQpc = 0;
+                        entry.m_senderQpf = 0;
+                        entry.m_receiverQpc = 0;
+                        entry.m_receiverQpf = 0;
+                    }
+                    // reset head to beginning so rendering logic starts fresh
+                    m_headEntry = m_frameEntries.begin();
+
                     // construct an ACK control frame and send it immediately
                     const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
                     ctsTask rawTask;
