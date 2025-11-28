@@ -19,25 +19,36 @@ High-level migration steps (recommended order)
 1. Add ProtocolFlag constants and control-frame helpers
    - Files: `ctsMediaStreamProtocol.hpp`
    - Actions:
-     - Define new ProtocolFlag constants (e.g., `c_udpDatagramFlagSyn = 0x0100`, `c_udpDatagramFlagSynAck = 0x0101`, `c_udpDatagramFlagAck = 0x0102`).
-     - Add fixed sizes and helper prototypes for control frames (encoder/decoder) in the header file.
-     - Add `MakeSynTask`, `MakeSynAckTask`, `MakeAckTask` functions similar in shape to `MakeConnectionIdTask` but which produce headered datagrams (26-byte header + control body).
-     - Add `ParseControlFrame` helper to validate control frame payloads and extract fields (Version, Flags, 37-byte connection id, optional TLVs).
+    - Define new ProtocolFlag constants (e.g., `c_udpDatagramFlagSyn = 0x0100`, `c_udpDatagramFlagSynAck = 0x0101`, `c_udpDatagramFlagAck = 0x0102`).
+      - Implemented in: `ctsTraffic/ctsTraffic/ctsMediaStreamProtocol.hpp` (constants present).
+    - Add fixed sizes and helper prototypes for control frames (encoder/decoder) in the header file.
+      - Implemented in: `ctsTraffic/ctsTraffic/ctsMediaStreamProtocol.hpp` (control lengths and prototypes present).
+    - Add `MakeSynTask`, `MakeSynAckTask`, `MakeAckTask` functions similar in shape to `MakeConnectionIdTask` but which produce headered datagrams (26-byte header + control body).
+      - Implemented in: `ctsTraffic/ctsTraffic/ctsMediaStreamProtocol.cpp` (functions `MakeSynTask`, `MakeSynAckTask`, `MakeAckTask`).
+    - Add `ParseControlFrame` helper to validate control frame payloads and extract fields (Version, Flags, 37-byte connection id, optional TLVs).
+      - Implemented in: `ctsTraffic/ctsTraffic/ctsMediaStreamProtocol.cpp` (`ParseControlFrame` present).
+    - Status: COMPLETE (constants, helpers, and implementations added).
 
 2. Add control frame implementations
    - Files: `ctsMediaStreamProtocol.hpp` (inline small helpers) or new `ctsMediaStreamProtocol.cpp` if preferred for implementation code.
    - Actions:
      - Implement `MakeSynTask`/`MakeSynAckTask`/`MakeAckTask` to populate a `ctsTask` that will be queued on the socket sending path. These should set the ProtocolFlag in the first 2 bytes and follow the 26-byte header layout for headered datagrams. For control frames SequenceNumber/QPC/QPF SHOULD be zero.
+       - Implementations found in `ctsTraffic/ctsTraffic/ctsMediaStreamProtocol.cpp`.
      - Implement `ParseControlFrame` to run during receive parsing when ProtocolFlag is a control value.
+       - Implemented in `ctsTraffic/ctsTraffic/ctsMediaStreamProtocol.cpp`.
+     - Status: COMPLETE (control frame encode/decode implemented).
 
 3. Update send-side code to use SYN when enabled; otherwise preserve START behavior
-   - Files: `ctsIOPatternMediaStream.cpp`, potentially other IO pattern or client-init code that sends `START`.
+  - Files: `ctsIOPatternMediaStream.cpp`, potentially other IO pattern or client-init code that sends `START`.
    - Locations:
      - `ctsIOPatternMediaStream.cpp` — replace `c_startBuffer[] = "START"` and its `resendTask` / Send logic with calls to produce a `SYN` control task (using `MakeSynTask`).
      - Any other call-sites that construct a task with `g_udpDatagramStartString` or `MediaStreamAction::START` (see `ctsMediaStreamProtocol.hpp`) should be updated to build a SYN headered frame instead.
    - Actions:
      - When the 3‑way handshake mode is enabled (via CLI/config), replace send of the 5-byte payload with an enqueued headered `SYN` task. When disabled, preserve the existing `START` send logic.
+       - Implemented: `ctsTraffic/ctsTraffic/ctsIOPatternMediaStream.cpp` — `StartCallback` checks `ctsConfig::IsMediaStream3WayEnabled()` and sends a SYN via `ctsMediaStreamMessage::MakeSynTask` when enabled; otherwise it sends the legacy 5-byte `START` payload.
      - Ensure retransmission/backoff logic is preserved and applies to whichever discovery mechanism is active (legacy START or 3‑way SYN).
+       - Partially implemented: timer/backoff logic reuses `SetNextStartTimer()` for both START and SYN retransmits in `ctsIOPatternMediaStream.cpp`.
+     - Status: COMPLETE for send-side switching; retransmit/backoff behavior appears preserved.
 
 4. Update receive-side parsing and handshake state machine
    - Files: `ctsMediaStreamProtocol.hpp`, `ctsIOPatternMediaStream.cpp`, `ctsIOPattern.cpp`, `ctsSocketBroker.cpp`/`ctsSocket.cpp` (where inbound datagrams are parsed/handled).
@@ -49,15 +60,23 @@ High-level migration steps (recommended order)
        - If ProtocolFlag denotes a control frame (`0x0100`..`0x0102`), invoke `ParseControlFrame` and handle handshake state transitions: when `SYN` arrives, generate/send `SYN-ACK`; when `SYN-ACK` arrives, generate/send `ACK`; when `ACK` arrives, bind the tuple to the connection-id and flush dedup caches as specified.
    - Actions:
      - Implement a small handshake state table per tuple (or reuse existing session mapping structures) to track whether `SYN` received/sent, `SYN-ACK` sent/received, and `ACK` confirmed.
+       - Implemented: `ctsTraffic/ctsTraffic/ctsMediaStreamReceiver.cpp` declares `g_handshakeMap` and `g_handshakeMapMutex` and updates `HandshakeInfo` on SYN reception (records `SynReceived`, `lastUpdate`, and assigns an `assignedConnectionId`).
      - Ensure reassembly/deduplication caches are flushed when connection-id changes or handshake completes per new rules.
+       - Implemented on client (receiver) side: `ctsIOPatternMediaStream.cpp` in `CompleteTaskBackToPattern` flushes local dedup/reassembly frame entries when receiving `SYN-ACK` and assigns the connection id to the receiver's local identifier.
      - Add handling to accept connection-id datagrams and map them to tuple state.
+       - Partial: `ctsMediaStreamMessage::ValidateBufferLengthFromTask` and `GetProtocolHeaderFromTask` support `c_udpDatagramProtocolHeaderFlagId` (connection-id), and `ctsIOPatternMediaStreamReceiver::CompleteTaskBackToPattern` handles ProtocolFlagId by calling `SetConnectionIdFromTask`. The receiver-side mapping of connection-id datagrams to handshake state is partially implemented (client saves connection id on receipt).
+     - Status: PARTIALLY COMPLETE — SYN/SYN-ACK/ACK parsing and basic handshake state storage present on server and client sides; full tuple binding and ACK processing to finalize mapping is implemented in parts (Responder sends SYN-ACK and Initiator sends ACK in `ctsIOPatternMediaStream.cpp` on SYN-ACK receipt). More integration/testing recommended.
 
 5. Expose handshake mode and legacy START handling via CLI/config
-   - Files: `ctsConfig.h` / `ctsConfig.cpp` (or wherever runtime flags/config live). Add a command-line/config option such as `-enable3way` (default: `false`) or a mode switch `-HandshakeMode={legacy|3way}`.
+  - Files: `ctsConfig.h` / `ctsConfig.cpp` (or wherever runtime flags/config live). Add a command-line/config option such as `-enable3way` (default: `false`) or a mode switch `-HandshakeMode={legacy|3way}`.
    - Actions:
      - If `-enable3way` (or `-HandshakeMode=3way`) is provided, enable the 3‑way handshake behavior and treat SYN/SYN-ACK/ACK control frames as described here.
+       - Implemented flag: `ctsConfig::ctsConfigSettings::EnableMediaStream3WayHandshake` (default false) and accessor `ctsConfig::IsMediaStream3WayEnabled()` implemented in `ctsTraffic/ctsTraffic/ctsConfig.cpp` and `ctsTraffic/ctsTraffic/ctsConfig.h`.
      - If the option is not provided (default), retain the legacy START-based discovery behavior unchanged.
+       - Verified: default remains legacy START; send/receive code checks `IsMediaStream3WayEnabled()` to choose behavior.
      - Optionally provide `AllowLegacyStart` as a separate flag when running in 3‑way mode to accept legacy START from peers for migration interoperability.
+       - Not implemented: no explicit `AllowLegacyStart` option found; legacy START acceptance is preserved by default when 3-way is disabled.
+     - Status: PARTIAL (feature-gate present; CLI parsing to set it not yet visible — recommend adding command-line parsing to set `EnableMediaStream3WayHandshake`).
 
 6. Update send-path when responder accepts SYN
    - Files: `ctsIOPatternMediaStream.cpp`, `ctsIOPattern.cpp` (task creation/send path)
