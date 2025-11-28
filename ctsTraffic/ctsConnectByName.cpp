@@ -11,7 +11,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
-#/**
+/**
  * @file ctsConnectByName.cpp
  * @brief Blocking connect helper using WSAConnectByName for name-based connects.
  */
