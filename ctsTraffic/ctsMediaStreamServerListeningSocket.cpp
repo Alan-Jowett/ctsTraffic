@@ -11,6 +11,22 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+/**
+ * @file ctsMediaStreamServerListeningSocket.cpp
+ * @brief Server-side listening socket used by the media-stream service.
+ *
+ * This translation unit implements the runtime behavior for the
+ * `ctsMediaStreamServerListeningSocket` class. It posts UDP receives on a
+ * datagram socket, processes incoming MediaStream control messages (for
+ * example, START), and forwards accepted client start requests into the
+ * media-stream implementation.
+ *
+ * All functions are noexcept and designed to be called on threadpool IOCP
+ * callbacks. Thread-safety notes are provided on the individual functions
+ * where locking is relevant. Existing inline comments have been preserved
+ * and incorporated into these descriptions.
+ */
+
 // cpp headers
 #include <exception>
 #include <memory>

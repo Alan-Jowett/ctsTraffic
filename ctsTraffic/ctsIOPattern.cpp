@@ -11,6 +11,17 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+/**
+ * @file ctsIOPattern.cpp
+ * @brief Implementation of IO patterns used by the ctsTraffic test tool.
+ *
+ * This translation unit contains the concrete implementations for the various
+ * IO patterns (Pull/Push/PushPull/Duplex/MediaStream) and shared buffer
+ * initialization used across connections. The file-level documentation captures
+ * the purpose of the shared buffers, the init-once initialization, and the
+ * factory used to create concrete IO pattern objects.
+ */
+
 
 // parent header
 #include "ctsIOPattern.h"
@@ -32,6 +43,11 @@ namespace ctsTraffic
     using namespace std;
 
     constexpr uint32_t c_bufferPatternSize = 0xffff + 0x1; // fill from 0x0000 to 0xffff
+    /**
+     * Pattern buffer used to generate deterministic byte patterns for send/recv
+     * verification. Each entry is an unsigned short stored into the underlying
+     * unsigned char array (hence * 2 bytes per element).
+     */
     static unsigned char g_bufferPattern[c_bufferPatternSize * 2]; // * 2 as unsigned short values are twice as large as unsigned char
 
     // SharedBuffer is a larger buffer with many copies of BufferPattern in it. This is what the various IO patterns
@@ -40,14 +56,25 @@ namespace ctsTraffic
     // The buffers' sizes will be the constant "BufferPatternSize + ctsConfig::GetMaxBufferSize()", but we
     // need to wait for input parsing before we can set that.
 
+    /** Init-once control used to lazily initialize shared sender/receiver buffers. */
     static INIT_ONCE g_ctsIoPatternInitializer = INIT_ONCE_STATIC_INIT;
+    /** Shared receiver buffer (allocated at InitOnce time). */
     static char* g_receiverSharedBuffer = nullptr;
+    /** Shared sender buffer (allocated at InitOnce time). */
     static char* g_senderSharedBuffer = nullptr;
+    /** Maximum size of the allocated shared buffers. */
     static uint32_t g_maximumBufferSize = 0;
 
     constexpr auto c_maxSupportedBytesInFlight = 0x1000000ul;
+    /** Maximum number of RIO send buffers that will be pre-registered. */
     static uint32_t g_maxNumberOfRioSendBuffers = 0;
 
+    /**
+     * Init-once callback to allocate and prepare the shared sender/receiver
+     * buffers and related bookkeeping.
+     *
+     * @return TRUE on success, otherwise the init-once machinery will retry or fail.
+     */
     static BOOL CALLBACK InitOnceIoPatternCallback(PINIT_ONCE, PVOID, PVOID*) noexcept // NOLINT(bugprone-exception-escape)
     {
         // first create the buffer pattern
@@ -122,6 +149,13 @@ namespace ctsTraffic
         }
     }
 
+    /**
+     * Access the shared sender buffer. The first call triggers the init-once
+     * allocation if it has not already run.
+     *
+     * @return Pointer to the shared sender buffer (read-only for normal use).
+     */
+
     char* ctsIoPattern::AccessSharedBuffer() noexcept
     {
         // this init-once call is no-fail
@@ -129,6 +163,14 @@ namespace ctsTraffic
         return g_senderSharedBuffer;
     }
 
+    /**
+     * @brief Prepare receive buffers for this IO pattern instance.
+     *
+     * If the global configuration requests a shared buffer, this method will
+     * populate the free-list with pointers into the shared receiver buffer.
+     * When using Registered I/O (RIO), buffers are registered and RIO buffer
+     * ids are stored so they can be handed off to the RIO APIs.
+     */
     void ctsIoPattern::CreateRecvBuffers()
     {
         const auto recvCount = m_recvBufferFreeList.size();
@@ -191,6 +233,12 @@ namespace ctsTraffic
         }
     }
 
+    /**
+     * @brief Prepare send buffers for this IO pattern instance.
+     *
+     * Copies the completion message into the completion buffer and registers
+     * any required RIO send buffers when Registered I/O is enabled.
+     */
     void ctsIoPattern::CreateSendBuffers()
     {
         memcpy_s(m_completionMessageBuffer.data(), m_completionMessageBuffer.size(), c_completionMessage, c_completionMessageSize);
@@ -215,6 +263,12 @@ namespace ctsTraffic
         }
     }
 
+    /**
+     * @brief Construct an IO pattern instance.
+     *
+     * @param recvCount [in] Initial number of receive buffers to reserve in
+     *                      the free list for this pattern (may be zero).
+     */
     ctsIoPattern::ctsIoPattern(uint32_t recvCount) :
         // (bytes/sec) * (1 sec/1000 ms) * (x ms/Quantum) == (bytes/quantum)
         m_burstCount{ ctsConfig::g_configSettings->BurstCount },
@@ -247,6 +301,15 @@ namespace ctsTraffic
     //
     // requires that the caller has locked the socket
     // 
+    /**
+     * @brief Determine and return the next IO task for this pattern.
+     *
+     * Caller must hold the associated socket lock when calling this method.
+     * The returned ctsTask describes the IO operation (Send/Recv/Shutdown)
+     * that the caller should perform next.
+     *
+     * @return ctsTask describing the next IO operation.
+     */
     ctsTask ctsIoPattern::InitiateIo() noexcept
     {
         // make sure stats starts tracking IO at the first IO request
@@ -360,6 +423,14 @@ namespace ctsTraffic
     //
     // requires that the caller has locked the socket
     //
+    /**
+     * @brief Complete a previously-issued IO task and update pattern state.
+     *
+     * @param originalTask [in] The original task that was returned from InitiateIo.
+     * @param currentTransfer [in] Number of bytes transferred by the IO.
+     * @param statusCode [in] Win32 status code for the IO (NO_ERROR on success).
+     * @return Current ctsIoStatus after processing the completion.
+     */
     ctsIoStatus ctsIoPattern::CompleteIo(const ctsTask& originalTask, uint32_t currentTransfer, uint32_t statusCode) noexcept // NOLINT(bugprone-exception-escape)
     {
         // preserve the initial state for the prior task
@@ -532,6 +603,12 @@ namespace ctsTraffic
         return GetCurrentStatus();
     }
 
+    /**
+     * @brief Create a task that will be tracked by the pattern (counts towards stats).
+     *
+     * @param action [in] The IO action to create (Send/Recv).
+     * @param maxTransfer [in] Optional maximum transfer size for this task.
+     */
     ctsTask ctsIoPattern::CreateTrackedTask(ctsTaskAction action, uint32_t maxTransfer) noexcept
     {
         ctsTask returnTask(CreateNewTask(action, maxTransfer));
@@ -539,6 +616,12 @@ namespace ctsTraffic
         return returnTask;
     }
 
+    /**
+     * @brief Create a task that will not be tracked by the pattern (no stats).
+     *
+     * @param action [in] The IO action to create (Send/Recv).
+     * @param maxTransfer [in] Optional maximum transfer size for this task.
+     */
     ctsTask ctsIoPattern::CreateUntrackedTask(ctsTaskAction action, uint32_t maxTransfer) noexcept
     {
         ctsTask returnTask(CreateNewTask(action, maxTransfer));
@@ -546,6 +629,16 @@ namespace ctsTraffic
         return returnTask;
     }
 
+    /**
+     * @brief Internal helper to construct a ctsTask with proper buffer sizing.
+     *
+     * Calculates the appropriate buffer size for Send/Recv operations based
+     * on remaining transfer amounts and configuration limits.
+     *
+     * @param action [in] The IO action to create (Send/Recv).
+     * @param maxTransfer [in] Optional maximum transfer size for this task.
+     * @return Constructed ctsTask ready to be returned to the caller.
+     */
     ctsTask ctsIoPattern::CreateNewTask(ctsTaskAction action, uint32_t maxTransfer) noexcept
     {
         //
@@ -740,6 +833,16 @@ namespace ctsTraffic
         return returnTask;
     }
 
+    /**
+     * @brief Verify that the buffer contents match the expected deterministic pattern.
+     *
+     * This deep verification is only performed when the configuration requests
+     * buffer verification; otherwise the function returns true.
+     *
+     * @param originalTask [in] The task that provided the buffer to validate.
+     * @param transferredBytes [in] Number of bytes to validate.
+     * @return true if the validation succeeded, false otherwise.
+     */
     bool ctsIoPattern::VerifyBuffer(const ctsTask& originalTask, uint32_t transferredBytes) noexcept
     {
         // only doing deep verification if the user asked us to
@@ -772,6 +875,14 @@ namespace ctsTraffic
         return lengthMatched == transferredBytes;
     }
 
+    /**
+     * @brief Acquire the parent socket lock for this IO pattern.
+     *
+     * The returned scope-exit helper will release the lock when it goes out of scope.
+     * If the parent socket no longer exists the returned helper will be empty.
+     *
+     * @return A RAII scope-exit object that holds the acquired lock.
+     */
     [[nodiscard]] wil::cs_leave_scope_exit ctsIoPattern::AcquireIoPatternLock() const noexcept
     {
         const auto sharedSocket = m_parentSocket.lock();

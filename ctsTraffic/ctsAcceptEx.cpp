@@ -11,6 +11,16 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+/**
+ * @file ctsAcceptEx.cpp
+ * @brief AcceptEx-based listening and accept helper implementation.
+ *
+ * This file implements a scalable listener that issues multiple overlapped
+ * AcceptEx requests per listening socket and dispatches accepted sockets to
+ * waiting `ctsSocket` consumers. Detailed comments in the file describe the
+ * internal handler algorithm; this change adds Doxygen documentation to types
+ * and public functions.
+ */
 // cpp headers
 #include <memory>
 #include <utility>
@@ -63,30 +73,35 @@ namespace ctsTraffic
 //
 namespace details
 {
-    //
-    // constant defining how many AcceptEx requests we want maintained per listener
-    //
+    /**
+     * @brief Number of concurrent pending AcceptEx requests per listener.
+     */
     constexpr uint32_t c_pendedAcceptRequests = 100;
 
     //
     // necessary forward declarations of internal classes
-    //
     struct ctsAcceptExImpl;
     class ctsAcceptSocketInfo;
 
     static void ctsAcceptExIoCompletionCallback(OVERLAPPED*, _In_ ctsAcceptSocketInfo* acceptInfo) noexcept;
 
-    // struct to capture relevant details of an accepted connection
+    /**
+     * @brief Captures details produced by a completed AcceptEx call.
+     */
     struct ctsAcceptedConnection
     {
-        wil::unique_socket m_acceptSocket;
-        ctl::ctSockaddr m_localAddr;
-        ctl::ctSockaddr m_remoteAddr;
-        DWORD m_lastError = 0;
+        wil::unique_socket m_acceptSocket; /**< Accepted socket ownership. */
+        ctl::ctSockaddr m_localAddr;       /**< Local address of the accepted socket. */
+        ctl::ctSockaddr m_remoteAddr;      /**< Remote peer address. */
+        DWORD m_lastError = 0;             /**< Last error from the AcceptEx operation. */
     };
 
-    // Struct to track listening sockets
-    // - must have a unique IOCP class for each listener
+    /**
+     * @brief Tracks a single listening socket and the IO handler for it.
+     *
+     * Constructs and binds a listening socket for the provided address and
+     * creates a `ctThreadIocp` instance to dispatch completions for this listener.
+     */
     struct ctsListenSocketInfo
     {
         // constructor throws a wil::ResultException or bad_alloc on failure
@@ -140,9 +155,12 @@ namespace details
         std::vector<std::shared_ptr<ctsAcceptSocketInfo>> m_acceptSockets;
     };
 
-    // struct to track accepted sockets
-    // - tracks the 'parent' listen socket structure
-    // - pre-allocates the buffer to use for AcceptEx calls
+    /**
+     * @brief Tracks a single AcceptEx request and its associated state.
+     *
+     * Each instance owns a temporary accept socket, an OVERLAPPED request, and
+     * the required output buffer used by AcceptEx to fill address information.
+     */
     class ctsAcceptSocketInfo
     {
     public:
@@ -154,11 +172,19 @@ namespace details
 
         ~ctsAcceptSocketInfo() noexcept = default;
 
-        // attempts to post a new AcceptEx - internally tracks if succeeds or fails
+        /**
+         * @brief Attempt to post an overlapped AcceptEx for the parent listener.
+         *
+         * If posting fails, the implementation will print an error and leave
+         * the object in a safe state for retries.
+         */
         void InitiateAcceptEx();
 
-        // returns a ctsAcceptedConnection struct describing the result of an AcceptEx call
-        // - must be called only after the previous AcceptEx call has completed its OVERLAPPED call
+        /**
+         * @brief Retrieve the accepted connection details after completion.
+         *
+         * @returns ctsAcceptedConnection populated with socket and address info.
+         */
         ctsAcceptedConnection GetAcceptedSocket() noexcept;
 
         // non-copyable
@@ -172,19 +198,23 @@ namespace details
 
         // the lock to guard access to the SOCKET
         wil::critical_section m_lock{ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock};
-        wil::unique_socket m_acceptSocket;
-        // the raw (non-owning) OVERLAPPED* for the AcceptEx request
-        OVERLAPPED* m_pOverlapped = nullptr;
-        // a weak reference back to the parent listening object
-        const std::weak_ptr<ctsListenSocketInfo> m_listeningSocketInfo;
-        // the buffer to supply to AcceptEx to capture the address information
-        char m_outputBuffer[c_singleOutputBufferSize * 2]{};
+        wil::unique_socket m_acceptSocket;           /**< Temporary socket for the accept. */
+        OVERLAPPED* m_pOverlapped = nullptr;         /**< OVERLAPPED pointer for IO tracking. */
+        const std::weak_ptr<ctsListenSocketInfo> m_listeningSocketInfo; /**< Parent listener reference. */
+        char m_outputBuffer[c_singleOutputBufferSize * 2]{}; /**< Buffer for AcceptEx address output. */
     };
 
     //
     // Impl object to carry around the real member data of ctsAcceptEx
     // - the shared_ptr to the Impl allows an instance of ctsAcceptEx to be copyable
     //
+    /**
+     * @brief Implementation details for the ctsAcceptEx helper.
+     *
+     * Holds listeners, pending requests, and accepted connection queues. The
+     * implementation is intentionally hidden in an Impl struct to allow
+     * copyable user-facing wrappers.
+     */
     struct ctsAcceptExImpl
     {
         // must guard access to internal containers
@@ -202,6 +232,12 @@ namespace details
         //
         ctsAcceptExImpl() = default;
 
+        /**
+         * @brief Start listeners for all configured listen addresses.
+         *
+         * Creates a ctsListenSocketInfo per address and posts an initial
+         * set of AcceptEx requests as defined by `c_pendedAcceptRequests`.
+         */
         void Start()
         {
             // swap in the listen vector only if fully created
@@ -245,6 +281,9 @@ namespace details
             m_listeners.swap(tempListeners);
         }
 
+        /**
+         * @brief Destructor cancels pending requests and completes outstanding callers.
+         */
         ~ctsAcceptExImpl() noexcept
         {
             // remove anything pended under lock since the IOCP callbacks still might be invoked
@@ -437,6 +476,15 @@ namespace details
         return FALSE;
     }
 
+    /**
+     * @brief Completion callback invoked when an AcceptEx completes.
+     *
+     * This function will either fulfill a pending caller's weak_ptr or queue
+     * the accepted connection for later consumption.
+     *
+     * @param _overlapped [in] Unused overlapped pointer for inline completions.
+     * @param acceptInfo [in] The AcceptEx tracking object.
+     */
     static void ctsAcceptExIoCompletionCallback(OVERLAPPED*, _In_ ctsAcceptSocketInfo* acceptInfo) noexcept try
     {
         ctsAcceptedConnection acceptedSocket = acceptInfo->GetAcceptedSocket();

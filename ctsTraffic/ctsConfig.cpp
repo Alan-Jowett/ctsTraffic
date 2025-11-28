@@ -11,6 +11,15 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+/**
+ * @file ctsConfig.cpp
+ * @brief Implementation of configuration parsing and runtime helpers for ctsTraffic.
+ *
+ * This translation unit implements the parsing of command-line arguments,
+ * retrieval of system capabilities, and helpers for printing status and
+ * connection information. Doxygen comments were added to key functions and
+ * helpers to assist with documentation generation.
+ */
 // cpp headers
 // ReSharper disable CppClangTidyCppcoreguidelinesInterfacesGlobalInit
 // ReSharper disable CppClangTidyClangDiagnosticExitTimeDestructors
@@ -161,6 +170,12 @@ namespace ctsTraffic::ctsConfig
 	//
 	// parses the configuration of the local system for options dependent on deployments
 	//
+	/**
+	 * @brief Check whether the system is configured to support SO_REUSE_UNICASTPORT.
+	 *
+	 * Queries WMI for the MSFT_NetTCPSetting.AutoReusePortRangeNumberOfPorts property
+	 * and sets the ReuseUnicastPort option when configured on the host.
+	 */
 	static void CheckReuseUnicastPort() noexcept try
 	{
 		// Windows 10+ exposes a new socket option: SO_REUSE_UNICASTPORT
@@ -192,6 +207,12 @@ namespace ctsTraffic::ctsConfig
 
 	constexpr auto* EnabledString = L"Enabled";
 	constexpr auto* NotEnabledString = L"NOT-ENABLED";
+	/**
+	 * @brief Check RSC (Receive Segment Coalescing) offload settings for an adapter.
+	 *
+	 * @param inputInterfaceDescription [in] Adapter description to query for.
+	 * @returns A short status string describing RSC state for IPv4/IPv6 on the adapter.
+	 */
 	static std::wstring CheckOffloadRsc(const std::wstring& inputInterfaceDescription) noexcept try
 	{
 		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterRscSettingData"))
@@ -221,6 +242,12 @@ namespace ctsTraffic::ctsConfig
 		return {};
 	}
 
+	/**
+	 * @brief Check LSO (Large Send Offload) settings for an adapter.
+	 *
+	 * @param inputInterfaceDescription [in] Adapter description to query for.
+	 * @returns A short status string describing LSO state for IPv4/IPv6 on the adapter.
+	 */
 	static std::wstring CheckOffloadLso(const std::wstring& inputInterfaceDescription) noexcept try
 	{
 		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterLsoSettingData"))
@@ -250,6 +277,12 @@ namespace ctsTraffic::ctsConfig
 		return {};
 	}
 
+	/**
+	 * @brief Check RSS (Receive Side Scaling) settings for an adapter and update global flag.
+	 *
+	 * @param inputInterfaceDescription [in] Adapter description to query for.
+	 * @returns A short status string indicating whether RSS is enabled for the adapter.
+	 */
 	static std::wstring CheckOffloadRss(const std::wstring& inputInterfaceDescription) noexcept try
 	{
 		for (const auto& setting : ctWmiEnumerateInstance::Query(L"SELECT * FROM MSFT_NetAdapterRssSettingData"))
@@ -279,6 +312,16 @@ namespace ctsTraffic::ctsConfig
 		return {};
 	}
 
+	/**
+	 * @brief Print human-readable physical adapter information.
+	 *
+	 * Queries WMI for hardware and advanced property information for the adapter and
+	 * composes a multi-line, human friendly string summarizing the adapter bus and
+	 * advanced property values (e.g., buffer sizes).
+	 *
+	 * @param inputInterfaceDescription [in] Adapter description to query for.
+	 * @returns A std::wstring describing the physical adapter; empty on error.
+	 */
 	static std::wstring PrintPhysicalAdapter(const std::wstring& inputInterfaceDescription) noexcept try
 	{
 		std::wstring returnString;
@@ -395,6 +438,19 @@ namespace ctsTraffic::ctsConfig
 	//
 	// throws invalid_parameter if something is obviously wrong 
 	//
+	/**
+	 * @brief Parse an argument of the form "-param:value" and return the value.
+	 *
+	 * If the provided `inputArgument` starts with the `expectedParam` followed by a
+	 * ':' delimiter this returns a pointer to the character immediately following
+	 * the ':'. The memory pointed to is owned by the caller; this function temporarily
+	 * writes a NUL to the delimiter for comparison and then restores it.
+	 *
+	 * @param inputArgument [in] Full command-line parameter string to parse.
+	 * @param expectedParam [in] Expected parameter name (e.g. L"-Port").
+	 * @returns Pointer to the value portion after ':' on success; nullptr otherwise.
+	 * @throws std::invalid_argument if the argument format is invalid.
+	 */
 	static const wchar_t* ParseArgument(_In_z_ const wchar_t* inputArgument, _In_z_ const wchar_t* expectedParam)
 	{
 		const wchar_t* paramEnd = inputArgument + wcslen(inputArgument);
@@ -435,6 +491,16 @@ namespace ctsTraffic::ctsConfig
 	//       uint64_t test = ConvertToIntegral<uint64_t>(L"-1");
 	//       // test == 0xffffffffffffffff
 	//
+	/**
+	 * @brief Convert an input string to a signed 64-bit integer.
+	 *
+	 * Supports decimal or hexadecimal notation (0x prefix). Validates that the
+	 * entire string was consumed during conversion.
+	 *
+	 * @param inputString [in] Input string to convert.
+	 * @returns Converted signed 64-bit integer value.
+	 * @throws std::invalid_argument when conversion fails or trailing characters exist.
+	 */
 	static int64_t ConvertToIntegralSigned(const wstring& inputString)
 	{
 		auto returnValue = 0ll;
@@ -455,6 +521,16 @@ namespace ctsTraffic::ctsConfig
 		return returnValue;
 	}
 
+	/**
+	 * @brief Convert an input string to an unsigned 64-bit integer.
+	 *
+	 * Supports decimal or hexadecimal notation (0x prefix). Validates that the
+	 * entire string was consumed during conversion.
+	 *
+	 * @param inputString [in] Input string to convert.
+	 * @returns Converted unsigned 64-bit integer value.
+	 * @throws std::invalid_argument when conversion fails or trailing characters exist.
+	 */
 	static uint64_t ConvertToIntegralUnsigned(const wstring& inputString)
 	{
 		auto returnValue = 0ull;
@@ -537,6 +613,14 @@ namespace ctsTraffic::ctsConfig
 	//
 	// Parses for the connect function to use
 	//
+	/**
+	 * @brief Select the default socket creation function when unspecified.
+	 *
+	 * This sets `g_configSettings->CreateFunction` to `ctsWSASocket` when not
+	 * already provided.
+	 *
+	 * @param args [in] Not used; placeholder to match parser signature.
+	 */
 	static void ParseForCreate(const vector<const wchar_t*>&)
 	{
 		if (nullptr == g_configSettings->CreateFunction)
@@ -553,6 +637,15 @@ namespace ctsTraffic::ctsConfig
 	// -conn:ConnectByName
 	// -conn:ConnectEx  (*default)
 	//
+	/**
+	 * @brief Parse the connection function selection from command-line arguments.
+	 *
+	 * Recognizes values for -conn and sets the appropriate connect function and
+	 * descriptive name in `g_configSettings`.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument on invalid or incompatible arguments.
+	 */
 	static void ParseForConnect(vector<const wchar_t*>& args)
 	{
 		auto connectSpecified = false;
@@ -618,6 +711,15 @@ namespace ctsTraffic::ctsConfig
 	// -acc:accept
 	// -acc:acceptex  (*default)
 	//
+	/**
+	 * @brief Parse the accept function selection from command-line arguments.
+	 *
+	 * Sets the AcceptFunction to either `ctsAcceptEx` or `ctsSimpleAccept` based
+	 * on the -acc parameter and whether the process is a listener.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument on invalid or incompatible arguments.
+	 */
 	static void ParseForAccept(vector<const wchar_t*>& args)
 	{
 		g_configSettings->AcceptLimit = c_defaultAcceptExLimit;
@@ -679,6 +781,15 @@ namespace ctsTraffic::ctsConfig
 	// -io:wsapoll
 	// -io:rioiocp
 	//
+	/**
+	 * @brief Parse the IO implementation selection for TCP IO from CLI args.
+	 *
+	 * Selects IO paths such as IOCP, ReadWriteFile, RIO, or MediaStream client/server
+	 * implementations based on -io and other flags.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument on invalid or incompatible arguments.
+	 */
 	static void ParseForIoFunction(vector<const wchar_t*>& args)
 	{
 		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool
@@ -756,6 +867,12 @@ namespace ctsTraffic::ctsConfig
 	// -InlineCompletions:on
 	// -InlineCompletions:off
 	//
+	/**
+	 * @brief Parse the -inlinecompletions option to enable/disable inline completions.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument on invalid option values.
+	 */
 	static void ParseForInlineCompletions(vector<const wchar_t*>& args)
 	{
 		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool
@@ -789,6 +906,11 @@ namespace ctsTraffic::ctsConfig
 	// -MsgWaitAll:on
 	// -MsgWaitAll:off
 	//
+	/**
+	 * @brief Parse the -msgwaitall option which toggles MSG_WAITALL behavior.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 */
 	static void ParseForMsgWaitAll(vector<const wchar_t*>& args)
 	{
 		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool
@@ -826,6 +948,12 @@ namespace ctsTraffic::ctsConfig
 	// -Protocol:tcp
 	// -Protocol:udp
 	//
+	/**
+	 * @brief Parse the -Protocol option to select TCP or UDP.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument on invalid protocol values.
+	 */
 	static void ParseForProtocol(vector<const wchar_t*>& args)
 	{
 		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool
@@ -863,6 +991,12 @@ namespace ctsTraffic::ctsConfig
 	// - allows for more than one option to be set
 	// -Options:<keepalive,tcpfastpath [-Options:<...>] [-Options:<...>]
 	//
+	/**
+	 * @brief Parse -Options, allowing multiple comma-separated option values.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument on invalid or incompatible options.
+	 */
 	static void ParseForOptions(vector<const wchar_t*>& args)
 	{
 		for (;;)
@@ -921,6 +1055,12 @@ namespace ctsTraffic::ctsConfig
 	/// -QosDscpValue:#### [-Options:<...>]
 	///
 	//////////////////////////////////////////////////////////////////////////////////////////
+	/**
+	 * @brief Parse -QosDscpValue to set a DSCP value for QoS operations.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument on invalid values or if > 63.
+	 */
 	static void ParseForDscpValue(vector<const wchar_t*>& args)
 	{
 		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool {
@@ -952,6 +1092,12 @@ namespace ctsTraffic::ctsConfig
 	/// Parses the optional -KeepAliveValue:####
 	///
 	//////////////////////////////////////////////////////////////////////////////////////////
+	/**
+	 * @brief Parse -KeepAliveValue for TCP keep-alive configuration.
+	 *
+	 * @param args [in,out] Argument vector which may be modified (matched args removed).
+	 * @throws std::invalid_argument if used with non-TCP protocols or invalid values.
+	 */
 	static void ParseForKeepAlive(vector<const wchar_t*>& args)
 	{
 		const auto foundArgument = ranges::find_if(args, [](const wchar_t* parameter) -> bool {

@@ -13,6 +13,16 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #pragma once
 
+/**
+ * @file ctsIOPattern.h
+ * @brief Declarations for IO pattern abstractions used by the ctsTraffic tool.
+ *
+ * This header defines the abstract `ctsIoPattern` interface and concrete
+ * pattern implementations (Pull/Push/PushPull/Duplex/MediaStream). Patterns
+ * produce `ctsTask` objects describing IO to perform and update statistics
+ * via the templated `ctsIoPatternStatistics` helper.
+ */
+
 // cpp headers
 #include <array>
 #include <memory>
@@ -40,6 +50,10 @@ enum class ctsIoStatus : std::uint8_t
     CompletedIo,
     FailedIo
 };
+
+/**
+ * @brief Library-wide sentinel status values used to distinguish protocol errors.
+ */
 
 constexpr int c_statusIoRunning = MAXINT;
 constexpr int c_statusErrorNotAllDataTransferred = MAXINT - 1;
@@ -74,21 +88,53 @@ public:
         }
     }
 
-    // Helper factory to build known patterns
+    /**
+     * @brief Factory that constructs a concrete IO pattern based on the
+     * global configuration (`ctsConfig::g_configSettings->IoPattern`).
+     *
+     * @return Shared pointer to a concrete `ctsIoPattern` implementation.
+     */
     static std::shared_ptr<ctsIoPattern> MakeIoPattern();
-    // Making available the shared buffer used for sends and recvs
+
+    /**
+     * @brief Access the global shared sender buffer.
+     *
+     * The buffer is lazily allocated on first access via an init-once helper.
+     *
+     * @return Pointer to the shared sender buffer.
+     */
     static char* AccessSharedBuffer() noexcept;
     // destructor must be virtual as this is a base pure virtual class
     virtual ~ctsIoPattern() noexcept = default;
 
     // Exposing statistics members publicly to ctsSocket
+    /**
+     * @brief Print aggregated statistics for this connection.
+     *
+     * @param localAddr [in] Local socket address for display.
+     * @param remoteAddr [in] Remote socket address for display.
+     */
     virtual void PrintStatistics(const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& remoteAddr) noexcept = 0;
+
+    /**
+     * @brief Print TCP-specific details (socket options, counters).
+     *
+     * @param localAddr [in] Local socket address for display.
+     * @param remoteAddr [in] Remote socket address for display.
+     * @param socket [in] The socket handle used for retrieving TCP info.
+     */
     virtual void PrintTcpInfo(const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& remoteAddr, SOCKET socket) noexcept = 0;
 
     //
     // These are public functions exposed to ctsSocket and the derived types
     // it's required they have already acquired the socket or pattern lock
     //
+    /**
+     * @brief Register an optional callback used to deliver tasks out-of-band.
+     *
+     * @param callback [in] Function invoked with a `ctsTask` when the pattern
+     *                      wishes to send a task asynchronously to the IO caller.
+     */
     virtual void RegisterCallback(std::function<void(const ctsTask&)> callback) noexcept
     {
         m_callback = std::move(callback);
@@ -138,7 +184,21 @@ public:
     //   _current_transfer : the number of bytes successfully transferred from the task
     //   _status_code: the return code from the prior IO operation [assumes a Win32 error code]
     //
+    /**
+     * @brief Request the next IO operation for this pattern.
+     *
+     * @return A `ctsTask` describing the IO the caller should perform next.
+     */
     [[nodiscard]] ctsTask InitiateIo() noexcept;
+
+    /**
+     * @brief Complete a previously-issued IO task and update internal state.
+     *
+     * @param originalTask [in] The task that was returned from `InitiateIo`.
+     * @param currentTransfer [in] Number of bytes transferred by the IO.
+     * @param statusCode [in] Win32 status code (NO_ERROR on success).
+     * @return The connection-level IO status after processing the completion.
+     */
     ctsIoStatus CompleteIo(const ctsTask& originalTask, uint32_t currentTransfer, uint32_t statusCode) noexcept; // NOLINT(bugprone-exception-escape)
 
     ctsIoPattern() = delete;
@@ -164,8 +224,13 @@ private:
         return ctsIoStatus::FailedIo;
     }
 
-    // Private method to return a pre-populated task
-    // - *not* setting the private ctsIOTask::tracked_io property
+    /**
+     * @brief Internal helper to construct a pre-populated `ctsTask`.
+     *
+     * @param action [in] IO action to create (Send/Recv).
+     * @param maxTransfer [in] Optional maximum number of bytes for this task.
+     * @return Constructed `ctsTask` instance.
+     */
     ctsTask CreateNewTask(ctsTaskAction action, uint32_t maxTransfer) noexcept;
 
     //
@@ -181,7 +246,21 @@ private:
     // - cannot throw [if it fails, it must RaiseException to debug]
     // - returns a uint32_t back to the base class to indicate errors
     //
+    /**
+     * @brief Obtain the next task from the concrete pattern implementation.
+     *
+     * Implementations must return either a tracked or untracked task.
+     */
     virtual ctsTask GetNextTaskFromPattern() = 0;
+
+    /**
+     * @brief Notify the derived pattern that a task completed and allow it to
+     *        update its internal state.
+     *
+     * @param task [in] The task that completed.
+     * @param currentTransfer [in] Number of bytes transferred for the task.
+     * @return Pattern-level error code indicating protocol validation outcomes.
+     */
     virtual ctsIoPatternError CompleteTaskBackToPattern(const ctsTask&, uint32_t currentTransfer) noexcept = 0;
 
     // holding a weak reference to the parent socket object

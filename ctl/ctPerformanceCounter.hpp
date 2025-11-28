@@ -66,6 +66,16 @@
 // - exposes match() taking a string to check if it matches the instance it contains
 // - exposes add() taking both types of Access objects + a ULONGLONG time parameter to retrieve the data and add it to the internal map
 
+/**
+ * @file ctPerformanceCounter.hpp
+ * @brief WMI-based performance counter collection utilities.
+ *
+ * This header implements helpers to enumerate, sample, and aggregate
+ * performance counters exposed via WMI. It provides data accessors,
+ * per-counter storage and aggregation, and a manager that schedules
+ * periodic refreshes.
+ */
+
 namespace ctl
 {
 	enum class ctPerformanceCounterCollectionType : std::uint8_t
@@ -698,6 +708,14 @@ namespace ctl
 	// Note: the ctPerformanceCounter class *will* retain WMI service instance
 	//       it's recommended to guarantee it stays alive
 	template <typename T>
+	/**
+	 * @brief Abstract base representing a single named performance counter.
+	 *
+	 * Template consumers derive concrete implementations that know how to
+	 * refresh specific WMI performance classes and extract typed data. The
+	 * base class provides filtering, storage of per-instance time-slices, and
+	 * a callback registration mechanism used by `ctPerformanceCounter`.
+	 */
 	class ctPerformanceCounterCounter
 	{
 	public:
@@ -1151,6 +1169,13 @@ namespace ctl
 	// CAUTION:
 	// - do not access the ctPerformanceCounterCounter instances while between calling start() and stop()
 	// - any iterators returned can be invalidated when more data is added on the next cycle
+	/**
+	 * @brief Manager that schedules periodic sampling of registered counters.
+	 *
+	 * `ctPerformanceCounter` holds a WMI refresher and a list of registered
+	 * counter callbacks. It drives periodic `Refresh` calls on the refresher
+	 * and notifies each registered counter to update or clear collected data.
+	 */
 	class ctPerformanceCounter final
 	{
 	public:
@@ -1309,32 +1334,47 @@ namespace ctl
 		// created with ctMakeStaticPerfCounter
 		Static,
 		// created with ctMakeInstancePerfCounter
-		Instance
-	};
+		/**
+		 * @file ctPerformanceCounter.hpp
+		 * @brief Lightweight wrapper for reading Windows performance counters.
+		 *
+		 * @copyright Copyright (c) Microsoft Corporation
+		 * All rights reserved.
+		 *
+		 * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+		 * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+		 *
+		 * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY OR NON-INFRINGEMENT.
+		 *
+		 * See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+		 */
 
-	enum class ctWmiEnumClassName : std::uint8_t
-	{
-		Uninitialized,
-		Process,
-		Processor,
-		Memory,
-		NetworkAdapter,
-		NetworkInterface,
-		TcpipDiagnostics,
-		TcpipIpv4,
-		TcpipIpv6,
-		TcpipTcpv4,
-		TcpipTcpv6,
-		TcpipUdpv4,
-		TcpipUdpv6,
-		WinsockBsp,
-		WfpFilter,
-		WfpFilterCount,
-	};
+		#pragma once
 
-	struct ctPerformanceCounterCounterProperties
-	{
-		const ctWmiEnumClassType m_classType = ctWmiEnumClassType::Uninitialized;
+		#include <string>
+		#include <wil/resource.h>
+
+		namespace ctl
+		{
+			class ctPerformanceCounter
+			{
+			public:
+				ctPerformanceCounter() = default;
+				~ctPerformanceCounter() = default;
+
+				ctPerformanceCounter(const ctPerformanceCounter&) = delete;
+				ctPerformanceCounter& operator=(const ctPerformanceCounter&) = delete;
+
+				ctPerformanceCounter(ctPerformanceCounter&&) = delete;
+				ctPerformanceCounter& operator=(ctPerformanceCounter&&) = delete;
+
+				void Open(const std::wstring& category, const std::wstring& counter, const std::wstring& instance = L"");
+				void Close();
+				long long Read() const;
+			private:
+				wil::unique_handle m_hCounter;
+			};
+		}
 		const ctWmiEnumClassName m_className = ctWmiEnumClassName::Uninitialized;
 		const wchar_t* m_providerName = nullptr;
 

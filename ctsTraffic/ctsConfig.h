@@ -1,3 +1,16 @@
+/**
+ * @file ctsConfig.h
+ * @brief Configuration and runtime settings for the ctsTraffic test tool.
+ *
+ * This header exposes configuration enums, structures and helper functions
+ * consumed by the ctsTraffic test binaries. It contains global configuration
+ * state, media stream settings, print helpers and utility routines used across
+ * the project.
+ *
+ * Existing comments and behavior are preserved; doxygen annotations were added
+ * at file, namespace, enum, struct, class and function/member levels.
+ */
+#pragma once
 /*
 
 Copyright (c) Microsoft Corporation
@@ -59,6 +72,9 @@ namespace ctsTraffic
             Rude
         };
 
+        /**
+         * @brief Types describing how the process should exit.
+         */
         enum class ProtocolType : std::uint8_t
         {
             NoProtocolSet,
@@ -66,6 +82,9 @@ namespace ctsTraffic
             UDP
         };
 
+        /**
+         * @brief Network protocol selection used by the tool.
+         */
         enum class TcpShutdownType : std::uint8_t
         {
             NoShutdownOptionSet,
@@ -74,6 +93,9 @@ namespace ctsTraffic
             Random
         };
 
+        /**
+         * @brief How TCP sockets should be shutdown on close.
+         */
         enum class IoPatternType : std::uint8_t
         {
             NoIoSet,
@@ -84,6 +106,9 @@ namespace ctsTraffic
             MediaStream
         };
 
+        /**
+         * @brief IO pattern used by sockets (push/pull/media, etc.).
+         */
         enum class AffinityPolicy : std::uint8_t
         {
             PerCpu,
@@ -92,6 +117,9 @@ namespace ctsTraffic
             Manual
         };
 
+        /**
+         * @brief CPU affinity policy for sharded or threaded workloads.
+         */
         enum class StatusFormatting : std::uint8_t
         {
             NoFormattingSet,

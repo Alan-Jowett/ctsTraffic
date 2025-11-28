@@ -1,15 +1,17 @@
-/*
-
-Copyright (c) Microsoft Corporation
-All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the ""License""); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
-
-See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
-
-*/
+/**
+ * @file ctMath.hpp
+ * @brief Small math helpers used across the codebase.
+ *
+ * @copyright Copyright (c) Microsoft Corporation
+ * All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY OR NON-INFRINGEMENT.
+ *
+ * See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+ */
 
 #pragma once
 
@@ -20,13 +22,27 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctl
 {
-///
-/// calculating a sampled standard deviation and mean
-///
-/// Returns a tuple of doubles recording the results:
-///   get<0> : the mean value
-///   get<1> : the standard deviation
-///
+/**
+ * @file ctMath.hpp
+ * @brief Small math helpers used across the codebase.
+ *
+ * This header provides statistical helpers such as sampled standard
+ * deviation and interquartile range computations operating on iterator
+ * ranges. Functions are templates accepting bidirectional iterators.
+ */
+
+/**
+ * @brief Calculate the sample mean and sample standard deviation for
+ * a range of numeric values.
+ * @tparam BidirectionalIterator Type of iterator (must be bidirectional).
+ * @param[in] begin Iterator to the first element in the (sorted or unsorted) range.
+ * @param[in] end Iterator one-past-the-last element in the range.
+ * @return A std::tuple<double,double> where get<0>() is the mean and
+ *         get<1>() is the sample standard deviation (N-1 in denominator).
+ *
+ * If the range is empty, both returned values are 0. If the range has a
+ * single element, the mean is that element and the standard deviation is 0.
+ */
 template <typename BidirectionalIterator>
 std::tuple<double, double> ctSampledStandardDeviation(const BidirectionalIterator& begin, const BidirectionalIterator& end)
 {
@@ -53,19 +69,18 @@ std::tuple<double, double> ctSampledStandardDeviation(const BidirectionalIterato
     return std::make_tuple(mean, stdev);
 }
 
-///
-/// calculating the interquartile range from this basic algorithm
-/// 1. split data into 2 sections evenly
-/// 2. determine the median of these 2 groups
-////   - median is either the number splitting the group evenly, or the average between the middle 2 values
-///
-/// ** Requires input to be sorted **
-///
-/// Returns a tuple of doubles recording the results:
-///   get<0> : quartile 1 (median of the lower half - at the 25% mark)
-///   get<1> : quartile 2 (the median value - at the 50% mark)
-///   get<2> : quartile 3 (median of the upper half - at the 75% mark)
-///
+/**
+ * @brief Compute the interquartile range (Q1, median, Q3) for a sorted range.
+ * @tparam BidirectionalIterator Type of iterator (must be bidirectional).
+ * @param[in] begin Iterator to the first element in the sorted range.
+ * @param[in] end Iterator one-past-the-last element in the sorted range.
+ * @return A std::tuple<double,double,double> with (Q1, median, Q3).
+ *
+ * The algorithm assumes the input is already sorted. The method splits
+ * the data set into two halves and computes medians accordingly. For very
+ * small ranges (size < 3) the returned quartiles are zeroed or derived
+ * directly from the available elements.
+ */
 template <typename BidirectionalIterator>
 std::tuple<double, double, double> ctInterquartileRange(const BidirectionalIterator& begin, const BidirectionalIterator& end)
 {

@@ -11,6 +11,17 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+#
+/**
+ * @file ctsMediaStreamServer.cpp
+ * @brief Server-side implementation for UDP media-stream handling.
+ *
+ * This translation unit implements the server-side logic for the media
+ * streaming IO pattern. It is responsible for creating listening sockets,
+ * accepting client START requests, scheduling datagram sends for connected
+ * clients, and managing the lifecycle of connected sockets.
+ */
+
 // cpp headers
 #include <memory>
 #include <vector>
