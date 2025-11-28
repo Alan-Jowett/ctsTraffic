@@ -13,12 +13,25 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #pragma once
 
+/**
+ * @file ctsIOPatternProtocolPolicy.hpp
+ * @brief Protocol policy state machine for IO patterns (TCP/UDP).
+ *
+ * This header implements a protocol-agnostic state machine used by IO patterns
+ * to determine what IO should be performed next, validate completed IO, and
+ * track protocol-level errors. Specializations for TCP client/server and UDP
+ * provide protocol-specific behaviors.
+ */
+
 // project headers
 #include "ctsIOTask.hpp"
 #include "ctsConfig.h"
 
 namespace ctsTraffic
 {
+/**
+ * @brief High-level IO actions requested by the pattern state machine.
+ */
 enum class ctsIoPatternType : std::uint8_t
 {
     NoIo,
@@ -32,6 +45,9 @@ enum class ctsIoPatternType : std::uint8_t
     RequestFin
 };
 
+/**
+ * @brief Protocol-level error categories returned by protocol checks.
+ */
 enum class ctsIoPatternError : std::uint8_t
 {
     NotProtocolError,
@@ -42,6 +58,8 @@ enum class ctsIoPatternError : std::uint8_t
     CorruptedXfer
 };
 
+/** @name Protocol status codes used to indicate specific protocol errors */
+//@{
 constexpr uint32_t c_statusUnsetErrorCode = MAXUINT; // 4294967296
 constexpr uint32_t c_statusErrorNoConnectionGuid = MAXUINT - 1;
 constexpr uint32_t c_statusErrorNoDataTransferred = MAXUINT - 2;
@@ -49,7 +67,14 @@ constexpr uint32_t c_statusErrorNotAllDataTransferred = MAXUINT - 3;
 constexpr uint32_t c_statusErrorTooMuchDataTransferred = MAXUINT - 4;
 constexpr uint32_t c_statusErrorDataDidNotMatchBitPattern = MAXUINT - 5;
 constexpr uint32_t c_statusMinimumValue = MAXUINT - 5;
+//@}
 
+/**
+ * @brief Map a protocol status code into a `ctsIoPatternError` enum.
+ *
+ * @param status [in] Protocol status code to translate.
+ * @return Corresponding `ctsIoPatternError` value.
+ */
 inline ctsIoPatternError ctsIoPatternStateCheckProtocolError(uint32_t status) noexcept
 {
     switch (status)
@@ -74,6 +99,13 @@ inline ctsIoPatternError ctsIoPatternStateCheckProtocolError(uint32_t status) no
     }
 }
 
+/**
+ * @brief Convert a protocol status code into a human-readable wide string.
+ *
+ * @param status [in] Protocol status code to translate.
+ * @return Wide string describing the protocol error. This function will
+ *         fail-fast if an unknown status code is provided.
+ */
 inline const wchar_t* ctsIoPatternBuildProtocolErrorString(uint32_t status) noexcept
 {
     switch (status)
@@ -100,6 +132,7 @@ inline const wchar_t* ctsIoPatternBuildProtocolErrorString(uint32_t status) noex
 }
 
 
+/** Tag types for protocol specializations */
 using ctsIoPatternProtocolTcpClient = struct ctsIOPatternProtocolTcpClient_t;
 using ctsIoPatternProtocolTcpServer = struct ctsIOPatternProtocolTcpServer_t;
 using ctsIoPatternProtocolUdp = struct ctsIOPatternProtocolUdp_t;
@@ -123,7 +156,7 @@ private:
         ErrorIoFailed
     };
 
-    // tracking current bytes 
+    // tracking current bytes
     uint64_t m_confirmedBytes = 0;
     // need to know when to stop
     uint64_t m_maxTransfer = 0;
@@ -142,6 +175,11 @@ public:
     {
     }
 
+    /**
+     * @brief Calculate the remaining bytes left to transfer for this pattern.
+     *
+     * @return Remaining byte count.
+     */
     uint64_t GetRemainingTransfer() const noexcept
     {
         //
@@ -182,6 +220,12 @@ public:
                m_internalState == InternalPatternState::ErrorIoFailed;
     }
 
+    /**
+     * @brief Convert and apply a `ctsIoPatternError` to the internal state.
+     *
+     * @param protocolError [in] The protocol error to apply.
+     * @return The resulting last error code after applying the protocol error.
+     */
     uint32_t UpdateProtocolError(ctsIoPatternError protocolError) noexcept
     {
         switch (protocolError)
@@ -207,6 +251,12 @@ public:
         }
     }
 
+    /**
+     * @brief Update the last error code seen by the protocol state machine.
+     *
+     * @param errorCode [in] The error code to apply.
+     * @return The resulting last error code recorded.
+     */
     uint32_t UpdateLastError(uint32_t errorCode) noexcept
     {
         if (m_lastError != c_statusUnsetErrorCode)
@@ -239,6 +289,11 @@ public:
         return GetLastError();
     }
 
+    /**
+     * @brief Get the currently recorded last error for this connection.
+     *
+     * @return `NO_ERROR` if no error recorded; otherwise the recorded error code.
+     */
     uint32_t GetLastError() const noexcept
     {
         // if still running, report no error has been seen
@@ -255,14 +310,35 @@ public:
     // NotifyNextTask() : updates the state machine with what task is about to be processed
     // CompletedTask() : updates the state machine with the result of the processed task
 
+    /**
+     * @brief Determine the next IO action the pattern should perform.
+     *
+     * @return A `ctsIoPatternType` describing the next action.
+     */
     ctsIoPatternType GetNextPatternType() const noexcept;
+
+    /**
+     * @brief Notify the policy that `nextTask` is about to be processed.
+     *
+     * @param nextTask [in] The `ctsTask` that will be posted.
+     */
     void NotifyNextTask(const ctsTask& nextTask) noexcept;
+
+    /**
+     * @brief Inform the policy of a completed task and the bytes transferred.
+     *
+     * @param completedTask [in] The completed `ctsTask`.
+     * @param completedTransferredBytes [in] Number of bytes actually transferred.
+     */
     void CompletedTask(const ctsTask& completedTask, uint32_t completedTransferredBytes) noexcept;
 
 private:
     //
     // these private methods are specialized by the Protocol specified in the class template
     //
+    /**
+     * @brief Protocol-specific implementations that are specialized per-`Protocol`.
+     */
     ctsIoPatternType GetNextPatternTypePerProtocol() const noexcept;
     void CompletedTaskPerProtocol(const ctsTask& completedTask, uint32_t completedTransferredBytes) noexcept;
     void UpdateErrorPerProtocol(DWORD errorCode) const noexcept;
