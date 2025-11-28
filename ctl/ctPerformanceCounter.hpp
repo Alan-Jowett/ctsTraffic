@@ -1334,32 +1334,47 @@ namespace ctl
 		// created with ctMakeStaticPerfCounter
 		Static,
 		// created with ctMakeInstancePerfCounter
-		Instance
-	};
+		/**
+		 * @file ctPerformanceCounter.hpp
+		 * @brief Lightweight wrapper for reading Windows performance counters.
+		 *
+		 * @copyright Copyright (c) Microsoft Corporation
+		 * All rights reserved.
+		 *
+		 * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+		 * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+		 *
+		 * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY OR NON-INFRINGEMENT.
+		 *
+		 * See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+		 */
 
-	enum class ctWmiEnumClassName : std::uint8_t
-	{
-		Uninitialized,
-		Process,
-		Processor,
-		Memory,
-		NetworkAdapter,
-		NetworkInterface,
-		TcpipDiagnostics,
-		TcpipIpv4,
-		TcpipIpv6,
-		TcpipTcpv4,
-		TcpipTcpv6,
-		TcpipUdpv4,
-		TcpipUdpv6,
-		WinsockBsp,
-		WfpFilter,
-		WfpFilterCount,
-	};
+		#pragma once
 
-	struct ctPerformanceCounterCounterProperties
-	{
-		const ctWmiEnumClassType m_classType = ctWmiEnumClassType::Uninitialized;
+		#include <string>
+		#include <wil/resource.h>
+
+		namespace ctl
+		{
+			class ctPerformanceCounter
+			{
+			public:
+				ctPerformanceCounter() = default;
+				~ctPerformanceCounter() = default;
+
+				ctPerformanceCounter(const ctPerformanceCounter&) = delete;
+				ctPerformanceCounter& operator=(const ctPerformanceCounter&) = delete;
+
+				ctPerformanceCounter(ctPerformanceCounter&&) = delete;
+				ctPerformanceCounter& operator=(ctPerformanceCounter&&) = delete;
+
+				void Open(const std::wstring& category, const std::wstring& counter, const std::wstring& instance = L"");
+				void Close();
+				long long Read() const;
+			private:
+				wil::unique_handle m_hCounter;
+			};
+		}
 		const ctWmiEnumClassName m_className = ctWmiEnumClassName::Uninitialized;
 		const wchar_t* m_providerName = nullptr;
 
