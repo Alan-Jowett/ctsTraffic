@@ -447,10 +447,10 @@ struct ctsMediaStreamMessage
     static ctsTask MakeSynTask(const ctsTask& rawTask, _In_reads_opt_(ctsStatistics::ConnectionIdLength) const char* const desiredConnectionId) noexcept;
 
     // Create a SYN-ACK control task. rawTask used as template for buffer/flags.
-    static ctsTask MakeSynAckTask(const ctsTask& rawTask, bool accept, _In_reads_(ctsStatistics::ConnectionIdLength) const char* const assignedConnectionId) noexcept;
+    static ctsTask MakeSynAckTask(const ctsTask& rawTask, bool accept, _In_reads_opt_(ctsStatistics::ConnectionIdLength) const char* const assignedConnectionId) noexcept;
 
     // Create an ACK control task.
-    static ctsTask MakeAckTask(const ctsTask& rawTask, _In_reads_(ctsStatistics::ConnectionIdLength) const char* const confirmedConnectionId) noexcept;
+    static ctsTask MakeAckTask(const ctsTask& rawTask, _In_reads_opt_(ctsStatistics::ConnectionIdLength) const char* const confirmedConnectionId) noexcept;
 
     // Parse a control frame payload (SYN / SYN-ACK / ACK). Returns true if valid and optionally copies the connection id.
     static bool ParseControlFrame(_Out_writes_opt_(ctsStatistics::ConnectionIdLength) char* connectionIdOut, const ctsTask& task, uint32_t completedBytes) noexcept;

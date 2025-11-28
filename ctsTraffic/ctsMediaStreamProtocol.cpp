@@ -6,18 +6,22 @@ using namespace ctsTraffic;
 ctsTask ctsMediaStreamMessage::MakeSynTask(const ctsTask& rawTask, const char* const desiredConnectionId) noexcept
 {
     ctsTask returnTask{ rawTask };
-    if (returnTask.m_bufferLength < c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength)
-    {
-        returnTask.m_buffer = const_cast<char*>(g_udpDatagramStartString);
-        returnTask.m_bufferLength = c_udpDatagramStartStringLength;
-        returnTask.m_bufferType = ctsTask::BufferType::Static;
-        return returnTask;
-    }
+    const uint32_t requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+    // The caller must provide a buffer large enough for the control frame.
+    // Falling back to the legacy START message is unsafe/ambiguous; fail fast so callers correct allocation.
+    FAIL_FAST_IF_MSG(
+        returnTask.m_bufferLength < requiredSize,
+        "ctsMediaStreamMessage::MakeSynTask: buffer too small for SYN control frame (required %u, provided %u). Caller must provide a buffer sized >= requiredSize",
+        requiredSize,
+        returnTask.m_bufferLength);
+
+    // Caller is expected to provide a buffer (Static or pooled Dynamic) sized for the control frame.
+    // Do not perform heap allocations here - ownership must be explicit at the call site.
 
     memcpy_s(returnTask.m_buffer, c_udpDatagramProtocolHeaderFlagLength, &c_udpDatagramFlagSyn, c_udpDatagramProtocolHeaderFlagLength);
     const uint64_t zero64 = 0;
     memcpy_s(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength, c_udpDatagramSequenceNumberLength, &zero64, c_udpDatagramSequenceNumberLength);
-    memcpy_s(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength + c_udpDatagramSequenceNumberLength, c_udpDatagramQpcLength + c_udpDatagramQpfLength, &zero64, c_udpDatagramQpcLength + c_udpDatagramQpfLength);
+    memset(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength + c_udpDatagramSequenceNumberLength, 0, c_udpDatagramQpcLength + c_udpDatagramQpfLength);
 
     const auto bodyOffset = c_udpDatagramDataHeaderLength;
     returnTask.m_buffer[bodyOffset + 0] = 1;
@@ -43,17 +47,28 @@ ctsTask ctsMediaStreamMessage::MakeSynTask(const ctsTask& rawTask, const char* c
 ctsTask ctsMediaStreamMessage::MakeSynAckTask(const ctsTask& rawTask, bool accept, const char* const assignedConnectionId) noexcept
 {
     ctsTask returnTask{ rawTask };
-    if (returnTask.m_bufferLength < c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength)
-    {
-        returnTask.m_buffer = const_cast<char*>(g_udpDatagramStartString);
-        returnTask.m_bufferLength = c_udpDatagramStartStringLength;
-        returnTask.m_bufferType = ctsTask::BufferType::Static;
-        return returnTask;
-    }
+    const uint32_t requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+    // The caller must provide a buffer large enough for the control frame.
+    // Falling back to the legacy START message is unsafe/ambiguous; fail fast so callers correct allocation.
+    FAIL_FAST_IF_MSG(
+        returnTask.m_bufferLength < requiredSize,
+        "ctsMediaStreamMessage::MakeSynAckTask: buffer too small for SYN-ACK control frame (required %u, provided %u). Caller must provide a buffer sized >= requiredSize",
+        requiredSize,
+        returnTask.m_bufferLength);
+
+    // Caller is expected to provide a buffer (Static or pooled Dynamic) sized for the control frame.
+    // Do not perform heap allocations here - ownership must be explicit at the call site.
 
     memcpy_s(returnTask.m_buffer, c_udpDatagramProtocolHeaderFlagLength, &c_udpDatagramFlagSynAck, c_udpDatagramProtocolHeaderFlagLength);
-    const uint64_t zero64 = 0;
-    memcpy_s(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength, c_udpDatagramSequenceNumberLength + c_udpDatagramQpcLength + c_udpDatagramQpfLength, &zero64, c_udpDatagramSequenceNumberLength + c_udpDatagramQpcLength + c_udpDatagramQpfLength);
+        const uint64_t zero64 = 0;
+        // Copy the sequence number (portable size_t lengths) then zero the QPC+QPF region
+        memcpy_s(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength,
+              static_cast<size_t>(c_udpDatagramSequenceNumberLength),
+              &zero64,
+              static_cast<size_t>(c_udpDatagramSequenceNumberLength));
+        memset(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength + c_udpDatagramSequenceNumberLength,
+            0,
+            static_cast<size_t>(c_udpDatagramQpcLength + c_udpDatagramQpfLength));
 
     const auto bodyOffset = c_udpDatagramDataHeaderLength;
     returnTask.m_buffer[bodyOffset + 0] = 1; // version
@@ -78,17 +93,28 @@ ctsTask ctsMediaStreamMessage::MakeSynAckTask(const ctsTask& rawTask, bool accep
 ctsTask ctsMediaStreamMessage::MakeAckTask(const ctsTask& rawTask, const char* const confirmedConnectionId) noexcept
 {
     ctsTask returnTask{ rawTask };
-    if (returnTask.m_bufferLength < c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength)
-    {
-        returnTask.m_buffer = const_cast<char*>(g_udpDatagramStartString);
-        returnTask.m_bufferLength = c_udpDatagramStartStringLength;
-        returnTask.m_bufferType = ctsTask::BufferType::Static;
-        return returnTask;
-    }
+    const uint32_t requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+    // The caller must provide a buffer large enough for the control frame.
+    // Falling back to the legacy START message is unsafe/ambiguous; fail fast so callers correct allocation.
+    FAIL_FAST_IF_MSG(
+        returnTask.m_bufferLength < requiredSize,
+        "ctsMediaStreamMessage::MakeAckTask: buffer too small for ACK control frame (required %u, provided %u). Caller must provide a buffer sized >= requiredSize",
+        requiredSize,
+        returnTask.m_bufferLength);
+
+    // Caller is expected to provide a buffer (Static or pooled Dynamic) sized for the control frame.
+    // Do not perform heap allocations here - ownership must be explicit at the call site.
 
     memcpy_s(returnTask.m_buffer, c_udpDatagramProtocolHeaderFlagLength, &c_udpDatagramFlagAck, c_udpDatagramProtocolHeaderFlagLength);
-    const uint64_t zero64 = 0;
-    memcpy_s(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength, c_udpDatagramSequenceNumberLength + c_udpDatagramQpcLength + c_udpDatagramQpfLength, &zero64, c_udpDatagramSequenceNumberLength + c_udpDatagramQpcLength + c_udpDatagramQpfLength);
+        const uint64_t zero64 = 0;
+        // Copy the sequence number then zero the QPC+QPF region to avoid leaking stack data
+        memcpy_s(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength,
+              static_cast<size_t>(c_udpDatagramSequenceNumberLength),
+              &zero64,
+              static_cast<size_t>(c_udpDatagramSequenceNumberLength));
+        memset(returnTask.m_buffer + c_udpDatagramProtocolHeaderFlagLength + c_udpDatagramSequenceNumberLength,
+            0,
+            static_cast<size_t>(c_udpDatagramQpcLength + c_udpDatagramQpfLength));
 
     const auto bodyOffset = c_udpDatagramDataHeaderLength;
     returnTask.m_buffer[bodyOffset + 0] = 1; // version

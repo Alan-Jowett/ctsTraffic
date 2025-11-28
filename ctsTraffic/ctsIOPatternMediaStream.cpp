@@ -209,19 +209,19 @@ ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(con
 
                     // construct an ACK control frame and send it immediately
                     const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
-                    ctsTask rawTask;
-                    rawTask.m_ioAction = ctsTaskAction::Send;
-                    rawTask.m_trackIo = false;
-                    rawTask.m_bufferType = ctsTask::BufferType::Dynamic;
-                    rawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
-                    rawTask.m_buffer = static_cast<char*>(malloc(requiredSize));
-                    if (rawTask.m_buffer)
-                    {
-                        auto ackTask = ctsMediaStreamMessage::MakeAckTask(rawTask, connectionId);
-                        // Send via callback path so it's queued with the other sends
+                        // Build ACK into a local buffer and send immediately (caller-owned Static buffer)
+                        std::vector<char> ackBuffer(requiredSize);
+                        ctsTask ackRawTask;
+                        ackRawTask.m_ioAction = ctsTaskAction::Send;
+                        ackRawTask.m_trackIo = false;
+                        ackRawTask.m_buffer = ackBuffer.data();
+                        ackRawTask.m_bufferOffset = 0;
+                        ackRawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                        ackRawTask.m_bufferType = ctsTask::BufferType::Static;
+
+                        auto ackTask = ctsMediaStreamMessage::MakeAckTask(ackRawTask, connectionId);
+                        ackTask.m_bufferType = ctsTask::BufferType::Static;
                         this->SendTaskToCallback(ackTask);
-                        free(rawTask.m_buffer);
-                    }
                 }
             }
         }
@@ -506,37 +506,26 @@ VOID CALLBACK ctsIoPatternMediaStreamReceiver::StartCallback(PTP_CALLBACK_INSTAN
             // allocate a temporary buffer large enough for header + control body
             const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
             // create a dynamic task and buffer
-            ctsTask rawTask;
-            rawTask.m_ioAction = ctsTaskAction::Send;
-            rawTask.m_trackIo = false;
-            rawTask.m_bufferType = ctsTask::BufferType::Dynamic;
-            rawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
-            // allocate on heap for this send; the send path will treat Dynamic as a buffer it owns
-            rawTask.m_buffer = static_cast<char*>(malloc(requiredSize));
-            if (!rawTask.m_buffer)
-            {
-                // fallback to legacy START if allocation fails
-                ctsTask fallbackTask;
-                fallbackTask.m_ioAction = ctsTaskAction::Send;
-                fallbackTask.m_trackIo = false;
-                fallbackTask.m_buffer = const_cast<char*>(c_startBuffer);
-                fallbackTask.m_bufferOffset = 0;
-                fallbackTask.m_bufferLength = sizeof(c_startBuffer) - 1;
-                fallbackTask.m_bufferType = ctsTask::BufferType::Static;
-                thisPtr->SetNextStartTimer();
-                thisPtr->SendTaskToCallback(fallbackTask);
-            }
-            else
-            {
-                const ctsTask synTaskTemplate = rawTask;
-                // construct SYN control frame (no desired connection id)
-                const auto synTask = ctsMediaStreamMessage::MakeSynTask(synTaskTemplate, nullptr);
+                // create a Dynamic template with no buffer; MakeSynTask will allocate and set ownership
+                ctsTask synTaskTemplate;
+                synTaskTemplate.m_ioAction = ctsTaskAction::Send;
+                synTaskTemplate.m_trackIo = false;
+                synTaskTemplate.m_buffer = nullptr;
+                synTaskTemplate.m_bufferType = ctsTask::BufferType::Dynamic;
+                synTaskTemplate.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                std::vector<char> tempBuffer(requiredSize);
+                ctsTask synRawTask;
+                synRawTask.m_ioAction = ctsTaskAction::Send;
+                synRawTask.m_trackIo = false;
+                synRawTask.m_buffer = tempBuffer.data();
+                synRawTask.m_bufferOffset = 0;
+                synRawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                synRawTask.m_bufferType = ctsTask::BufferType::Static;
+
+                const auto synTask = ctsMediaStreamMessage::MakeSynTask(synRawTask, nullptr);
                 thisPtr->SetNextStartTimer();
                 thisPtr->SendTaskToCallback(synTask);
-                // free temporary buffer after enqueuing
-                free(rawTask.m_buffer);
             }
-        }
         else
         {
             ctsTask resendTask;

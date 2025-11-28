@@ -31,6 +31,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <wil/resource.h>
 #include <unordered_map>
 #include <string>
+#include <mutex>
 
 namespace ctsTraffic
 {
@@ -61,6 +62,8 @@ namespace ctsTraffic
 
     // Simple in-memory handshake tracking per remote address (translation unit scope)
     static std::unordered_map<std::wstring, HandshakeInfo> g_handshakeMap;
+    // Mutex to protect g_handshakeMap across IO completion callback threads
+    static std::mutex g_handshakeMapMutex;
 
     void ctsMediaStreamReceiver(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
     {
@@ -369,21 +372,29 @@ namespace ctsTraffic
                                 // record handshake state per remote address so we can track progress
                                 const auto& remoteAddr = sharedSocket->GetRemoteSockaddr();
                                 std::wstring remoteKey = remoteAddr.writeCompleteAddress();
-                                auto& info = g_handshakeMap[remoteKey];
+                                HandshakeInfo* infoPtr = nullptr;
+                                {
+                                    std::lock_guard<std::mutex> lock(g_handshakeMapMutex);
+                                    infoPtr = &g_handshakeMap[remoteKey];
+                                }
+                                auto& info = *infoPtr;
                                 info.state = HandshakeState::SynReceived;
                                 info.lastUpdate = std::chrono::steady_clock::now();
-                                if (strlen(connectionId) > 0)
+                                // connectionId may not be null-terminated; use a bounded length check to avoid overread
+                                const size_t connIdLen = strnlen(connectionId, ctsStatistics::ConnectionIdLength);
+                                if (connIdLen > 0)
                                 {
-                                    info.assignedConnectionId = std::string(connectionId, ctsStatistics::ConnectionIdLength);
+                                    info.assignedConnectionId = std::string(connectionId, connIdLen);
                                 }
 
                                 // build a SYN-ACK response using the same buffer length
                                 const uint32_t sendBufferLength = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
-                                // allocate a temporary buffer on the stack to build the SYN-ACK
-                                std::vector<char> tempBuffer(sendBufferLength);
+                                // allocate a heap-backed buffer held by a shared_ptr so it stays alive
+                                // until the async send completion callback runs
+                                auto tempBufferPtr = std::make_shared<std::vector<char>>(sendBufferLength);
                                 ctsTask rawTask;
                                 rawTask.m_ioAction = ctsTaskAction::Send;
-                                rawTask.m_buffer = tempBuffer.data();
+                                rawTask.m_buffer = tempBufferPtr->data();
                                 rawTask.m_bufferLength = sendBufferLength;
                                 rawTask.m_bufferOffset = 0;
                                 rawTask.m_bufferType = ctsTask::BufferType::Static;
@@ -401,11 +412,18 @@ namespace ctsTraffic
 
                                 // Build a SYN-ACK including the assigned connection id
                                 auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(rawTask, true, assignedId);
-                                // MakeSynAckTask sets Dynamic bufferType; override to Static since we're using a local buffer
+                                // MakeSynAckTask sets Dynamic bufferType; keep Static since buffer is owned by tempBufferPtr
                                 synAckTask.m_bufferType = ctsTask::BufferType::Static;
 
-                                // send immediately using low-level send helper
-                                const auto response = ctsWSASendTo(sharedSocket, lockedSocket.GetSocket(), synAckTask, [](OVERLAPPED*) noexcept {});
+                                // send immediately using low-level send helper; capture tempBufferPtr
+                                // in the completion callback so the buffer remains alive while IO is pending.
+                                const auto response = ctsWSASendTo(
+                                    sharedSocket,
+                                    lockedSocket.GetSocket(),
+                                    synAckTask,
+                                    [tempBufferPtr](OVERLAPPED*) noexcept {
+                                        // capture ensures tempBufferPtr lifetime until this callback runs
+                                    });
                                 if (response.m_errorCode != 0 && response.m_errorCode != WSA_IO_PENDING)
                                 {
                                     ctsConfig::PrintErrorIfFailed("SYN-ACK send", response.m_errorCode);
