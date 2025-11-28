@@ -37,6 +37,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsThreadIocpBaseUnitTest",
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsCpuAffinityUnitTest", "MSTest\ctsCpuAffinityUnitTest\ctsCpuAffinityUnitTest.vcxproj", "{D9A3BFA1-0000-4000-8000-8F3B0C0A0001}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ctsTrafficLib", "ctsTrafficLib\ctsTrafficLib.vcxproj", "{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -63,6 +65,7 @@ Global
 		{0D761E6B-7871-4464-AC2E-B1357B6C0915}.Debug|Win32.ActiveCfg = Debug|Win32
 		{0D761E6B-7871-4464-AC2E-B1357B6C0915}.Debug|Win32.Build.0 = Debug|Win32
 		{0D761E6B-7871-4464-AC2E-B1357B6C0915}.Debug|x64.ActiveCfg = Debug|x64
+		{0D761E6B-7871-4464-AC2E-B1357B6C0915}.Debug|x64.Build.0 = Debug|x64
 		{0D761E6B-7871-4464-AC2E-B1357B6C0915}.Release|ARM64.ActiveCfg = Release|ARM64
 		{0D761E6B-7871-4464-AC2E-B1357B6C0915}.Release|Win32.ActiveCfg = Release|Win32
 		{0D761E6B-7871-4464-AC2E-B1357B6C0915}.Release|x64.ActiveCfg = Debug|Win32
@@ -184,6 +187,18 @@ Global
 		{D9A3BFA1-0000-4000-8000-8F3B0C0A0001}.Release|Win32.Build.0 = Release|Win32
 		{D9A3BFA1-0000-4000-8000-8F3B0C0A0001}.Release|x64.ActiveCfg = Release|x64
 		{D9A3BFA1-0000-4000-8000-8F3B0C0A0001}.Release|x64.Build.0 = Release|x64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Debug|ARM64.Build.0 = Debug|ARM64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Debug|Win32.Build.0 = Debug|Win32
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Debug|x64.ActiveCfg = Debug|x64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Debug|x64.Build.0 = Debug|x64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Release|ARM64.ActiveCfg = Release|ARM64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Release|ARM64.Build.0 = Release|ARM64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Release|Win32.ActiveCfg = Release|Win32
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Release|Win32.Build.0 = Release|Win32
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Release|x64.ActiveCfg = Release|x64
+		{CEC4A823-D565-43A3-91A9-9C50CE20EC9D}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

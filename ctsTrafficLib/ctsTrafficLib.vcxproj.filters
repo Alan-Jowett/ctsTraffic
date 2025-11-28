@@ -1,0 +1,262 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
+    </Filter>
+    <Filter Include="ctl">
+      <UniqueIdentifier>{cc254f44-0bca-4207-90df-1e7bfb2d2dbb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MediaStreaming">
+      <UniqueIdentifier>{6c25a8c6-cc64-45a4-a5f8-23aba61ea248}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="WinsockCallouts">
+      <UniqueIdentifier>{b3e62cb3-4bce-4b76-9db0-21b6538f2a45}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SdkChanges">
+      <UniqueIdentifier>{40fe5a12-4000-433d-afa4-7e5ac166ed06}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FutureIOPattern">
+      <UniqueIdentifier>{3fea6222-7f01-4773-b6f4-d571615fba5a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TestScripts">
+      <UniqueIdentifier>{7a26a09e-bbb3-4862-8220-a6a28a2e979d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TCPFunctions">
+      <UniqueIdentifier>{6c98383c-dafa-4647-b058-92fa7c1e4636}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\ctsTraffic\ctsConfig.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsIOPattern.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsSocket.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsSocketBroker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsSocketState.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsTraffic.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsMediaStreamSender.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsMediaStreamServerListeningSocket.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsMediaStreamReceiver.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsWinsockLayer.cpp">
+      <Filter>WinsockCallouts</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsIOPatternMediaStream.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsMediaStreamServer.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsWSASocket.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsSimpleAccept.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsSimpleConnect.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsAcceptEx.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsConnectEx.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsReadWriteIocp.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsSendRecvIocp.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsRioIocp.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ctsTraffic\ctsConnectByName.cpp">
+      <Filter>TCPFunctions</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\ctsTraffic\ctsConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsIOPattern.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsIOTask.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsLogger.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsPrintStatus.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsSocket.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsSocketBroker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsSocketState.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctNetAdapterAddresses.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctRandom.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctSocketExtensions.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctString.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctThreadIocp.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctTimer.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctSockaddr.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternState.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsStatistics.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternProtocolPolicy.hpp">
+      <Filter>FutureIOPattern</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternRateLimitPolicy.hpp">
+      <Filter>FutureIOPattern</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\resource.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternT.h">
+      <Filter>FutureIOPattern</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamProtocol.hpp">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamSender.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamServerListeningSocket.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamServer.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamReceiver.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsWinsockLayer.h">
+      <Filter>WinsockCallouts</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctMath.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiClassObject.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiEnumerate.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiInitialize.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiInstance.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiProperties.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiService.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternBufferPolicy.hpp">
+      <Filter>FutureIOPattern</Filter>
+    </ClInclude>
+    <ClInclude Include="..\SdkChanges\WbemDisp.h">
+      <Filter>SdkChanges</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctsTraffic\ctsTCPFunctions.h">
+      <Filter>TCPFunctions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiPerformance.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctWmiVariant.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctThreadpoolQueue.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctThreadIocp_base.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ctl\ctThreadIocp_shard.hpp">
+      <Filter>ctl</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\TestScripts\ctsTraffic_acceptance_test.cmd">
+      <Filter>TestScripts</Filter>
+    </None>
+    <None Include="..\TestScripts\ctsTraffic_test_max_udp_tput.cmd">
+      <Filter>TestScripts</Filter>
+    </None>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\TestScripts\streaming.txt">
+      <Filter>TestScripts</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="ctsTraffic.exe.manifest">
+      <Filter>Resource Files</Filter>
+    </Manifest>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
+  </ItemGroup>
+</Project>

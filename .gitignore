@@ -4,6 +4,15 @@
 /ctsTraffic/x64
 /ctsTraffic/ARM64
 /ctsTraffic/ctsTraffic.log
+/ctsTrafficLib/.vs
+/ctsTrafficLib/Debug
+/ctsTrafficLib/Release
+/ctsTrafficLib/x64
+/ctsTrafficLib/ARM64
+/ctsTrafficLib/ctsTraffic.log
+/**/x64
+/**/ARM64
+/**/x86
 /Debug
 /Release
 /x64
