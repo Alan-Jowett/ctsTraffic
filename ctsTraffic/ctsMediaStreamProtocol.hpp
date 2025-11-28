@@ -17,6 +17,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // cpp headers
 #include <array>
 #include <string>
+#include <chrono>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -60,6 +61,33 @@ constexpr uint32_t c_udpDatagramControlFlagsLength = 1;
 constexpr uint32_t c_udpDatagramControlReservedLength = 2;
 constexpr uint32_t c_udpDatagramControlConnectionIdLength = ctsStatistics::ConnectionIdLength; // 37
 constexpr uint32_t c_udpDatagramControlFixedBodyLength = c_udpDatagramControlVersionLength + c_udpDatagramControlFlagsLength + c_udpDatagramControlReservedLength + c_udpDatagramControlConnectionIdLength;
+
+    // Parsed control frame (SYN / SYN-ACK / ACK)
+    struct ParsedControlFrame
+    {
+        unsigned short protocolFlag{};
+        unsigned char version{};
+        unsigned char flags{};
+        unsigned short reserved{};
+        std::string connectionId;
+    };
+
+    // Basic handshake state stored per tuple/connection candidate
+    enum class HandshakeState : unsigned char
+    {
+        None = 0,
+        SynReceived,
+        SynAckSent,
+        AckReceived,
+        Established
+    };
+
+    struct HandshakeInfo
+    {
+        HandshakeState state{HandshakeState::None};
+        std::chrono::steady_clock::time_point lastUpdate{std::chrono::steady_clock::now()};
+        std::string assignedConnectionId; // optional assigned id from responder
+    };
 
 static auto* g_udpDatagramStartString = "START";
 constexpr uint32_t c_udpDatagramStartStringLength = 5;

@@ -29,6 +29,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // wil headers always included last
 #include <wil/stl.h>
 #include <wil/resource.h>
+#include <unordered_map>
+#include <string>
 
 namespace ctsTraffic
 {
@@ -56,6 +58,9 @@ namespace ctsTraffic
         const std::weak_ptr<ctsSocket>& weakSocket,
         const ctl::ctSockaddr& targetAddress
     ) noexcept;
+
+    // Simple in-memory handshake tracking per remote address (translation unit scope)
+    static std::unordered_map<std::wstring, HandshakeInfo> g_handshakeMap;
 
     void ctsMediaStreamReceiver(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
     {
@@ -355,38 +360,49 @@ namespace ctsTraffic
                 if (task.m_ioAction == ctsTaskAction::Recv && transferred >= (c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength))
                 {
                     const auto protocol = ctsMediaStreamMessage::GetProtocolHeaderFromTask(task);
-                    if (protocol == c_udpDatagramFlagSyn)
-                    {
-                        // parse and optionally extract connection id
-                        char connectionId[ctsStatistics::ConnectionIdLength]{};
-                        if (ctsMediaStreamMessage::ParseControlFrame(connectionId, task, transferred))
+                        if (protocol == c_udpDatagramFlagSyn)
                         {
-                            // build a SYN-ACK response using the same buffer length
-                            const uint32_t sendBufferLength = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
-                            // allocate a temporary buffer on the stack to build the SYN-ACK
-                            std::vector<char> tempBuffer(sendBufferLength);
-                            ctsTask rawTask;
-                            rawTask.m_ioAction = ctsTaskAction::Send;
-                            rawTask.m_buffer = tempBuffer.data();
-                            rawTask.m_bufferLength = sendBufferLength;
-                            rawTask.m_bufferOffset = 0;
-                            rawTask.m_bufferType = ctsTask::BufferType::Static;
-                            rawTask.m_trackIo = false;
-
-                            // Do not attempt to read the protected connection-id from the pattern here
-                            // Build a SYN-ACK without an assigned connection id (zeros)
-                            auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(rawTask, true, nullptr);
-                            // MakeSynAckTask sets Dynamic bufferType; override to Static since we're using a local buffer
-                            synAckTask.m_bufferType = ctsTask::BufferType::Static;
-
-                            // send immediately using low-level send helper
-                            const auto response = ctsWSASendTo(sharedSocket, lockedSocket.GetSocket(), synAckTask, [](OVERLAPPED*) noexcept {});
-                            if (response.m_errorCode != 0 && response.m_errorCode != WSA_IO_PENDING)
+                            // parse and optionally extract connection id
+                            char connectionId[ctsStatistics::ConnectionIdLength]{};
+                            if (ctsMediaStreamMessage::ParseControlFrame(connectionId, task, transferred))
                             {
-                                ctsConfig::PrintErrorIfFailed("SYN-ACK send", response.m_errorCode);
+                                // record handshake state per remote address so we can track progress
+                                const auto& remoteAddr = sharedSocket->GetRemoteSockaddr();
+                                std::wstring remoteKey = remoteAddr.writeCompleteAddress();
+                                auto& info = g_handshakeMap[remoteKey];
+                                info.state = HandshakeState::SynReceived;
+                                info.lastUpdate = std::chrono::steady_clock::now();
+                                if (strlen(connectionId) > 0)
+                                {
+                                    info.assignedConnectionId = std::string(connectionId, ctsStatistics::ConnectionIdLength);
+                                }
+
+                                // build a SYN-ACK response using the same buffer length
+                                const uint32_t sendBufferLength = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+                                // allocate a temporary buffer on the stack to build the SYN-ACK
+                                std::vector<char> tempBuffer(sendBufferLength);
+                                ctsTask rawTask;
+                                rawTask.m_ioAction = ctsTaskAction::Send;
+                                rawTask.m_buffer = tempBuffer.data();
+                                rawTask.m_bufferLength = sendBufferLength;
+                                rawTask.m_bufferOffset = 0;
+                                rawTask.m_bufferType = ctsTask::BufferType::Static;
+                                rawTask.m_trackIo = false;
+
+                                // Do not attempt to read the protected connection-id from the pattern here
+                                // Build a SYN-ACK without an assigned connection id (zeros)
+                                auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(rawTask, true, nullptr);
+                                // MakeSynAckTask sets Dynamic bufferType; override to Static since we're using a local buffer
+                                synAckTask.m_bufferType = ctsTask::BufferType::Static;
+
+                                // send immediately using low-level send helper
+                                const auto response = ctsWSASendTo(sharedSocket, lockedSocket.GetSocket(), synAckTask, [](OVERLAPPED*) noexcept {});
+                                if (response.m_errorCode != 0 && response.m_errorCode != WSA_IO_PENDING)
+                                {
+                                    ctsConfig::PrintErrorIfFailed("SYN-ACK send", response.m_errorCode);
+                                }
                             }
                         }
-                    }
                 }
 
                 IoImplStatus status;
