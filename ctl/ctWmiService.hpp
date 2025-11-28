@@ -17,7 +17,7 @@
  * @brief Lightweight WMI service wrapper and class property enumeration helpers.
  *
  * `ctWmiService` encapsulates connecting to a WMI namespace and provides
- * convenience helpers to invoke IWbemServices methods. `ctWmiEnumerateClassProperties`
+ * convenience helpers to invoke `IWbemServices` methods. `ctWmiEnumerateClassProperties`
  * exposes an iterator-based interface to enumerate class properties for a
  * given WMI class object.
  */
@@ -37,9 +37,12 @@ namespace ctl
 	public:
 		/**
 		 * @brief Construct and connect to the WMI namespace at `path`.
-		 * @param[in] path WMI namespace path (for example `ROOT\\CIMV2`).
 		 *
-		 * Note: This constructor throws on failure.
+		 * @param path [in] WMI namespace path (for example `ROOT\\CIMV2`).
+		 * @throws HRESULT on failure to connect or configure the proxy.
+		 *
+		 * Note: Callers must initialize COM (e.g. `CoInitializeEx`) prior to
+		 * constructing `ctWmiService` if COM has not already been initialized.
 		 */
 		explicit ctWmiService(_In_ PCWSTR path)
 		{
@@ -74,7 +77,8 @@ namespace ctl
 
 		/**
 		 * @brief Indirection to the underlying `IWbemServices` pointer.
-		 * @return Raw `IWbemServices*` pointer.
+		 *
+		 * @return IWbemServices* [out] Raw pointer to the underlying COM proxy.
 		 */
 		IWbemServices* operator->() noexcept
 		{
@@ -83,7 +87,8 @@ namespace ctl
 
 		/**
 		 * @brief Const indirection to the underlying `IWbemServices` pointer.
-		 * @return Raw `IWbemServices*` pointer.
+		 *
+		 * @return const IWbemServices* [out] Raw pointer to the underlying COM proxy.
 		 */
 		const IWbemServices* operator->() const noexcept
 		{
@@ -92,8 +97,9 @@ namespace ctl
 
 		/**
 		 * @brief Compare two `ctWmiService` instances for equality.
-		 * @param[in] service Other instance to compare.
-		 * @return True when both instances reference the same underlying COM objects.
+		 *
+		 * @param service [in] Other instance to compare.
+		 * @return true when both instances reference the same underlying COM objects.
 		 */
 		bool operator ==(const ctWmiService& service) const noexcept
 		{
@@ -108,7 +114,8 @@ namespace ctl
 
 		/**
 		 * @brief Retrieve the underlying `IWbemServices` pointer.
-		 * @return Raw pointer to `IWbemServices`.
+		 *
+		 * @return IWbemServices* [out] Raw pointer to `IWbemServices`.
 		 */
 		IWbemServices* get() noexcept
 		{
@@ -117,7 +124,8 @@ namespace ctl
 
 		/**
 		 * @brief Retrieve the underlying `IWbemServices` pointer (const).
-		 * @return Raw pointer to `IWbemServices`.
+		 *
+		 * @return const IWbemServices* [out] Raw pointer to `IWbemServices`.
 		 */
 		[[nodiscard]] const IWbemServices* get() const noexcept
 		{
@@ -126,10 +134,11 @@ namespace ctl
 
 		/**
 		 * @brief Delete a WMI object given its object path asynchronously.
-		 * @param[in] objPath Object path string identifying the WMI instance to delete.
-		 * @param[in] context Optional IWbemContext pointer for the call.
 		 *
-		* Performs the delete as an asynchronous `DeleteInstance` call and waits
+		 * @param objPath [in] Object path string identifying the WMI instance to delete.
+		 * @param context [in,opt] Optional `IWbemContext` for the call.
+		 *
+		 * Performs the delete as an asynchronous `DeleteInstance` call and waits
 		 * for the call result. Throws on failure.
 		 */
 		void delete_path(_In_ PCWSTR objPath, const wil::com_ptr<IWbemContext>& context) const
@@ -148,7 +157,8 @@ namespace ctl
 
 		/**
 		 * @brief Delete a WMI instance specified by object path synchronously.
-		 * @param[in] objPath Object path string identifying the WMI instance to delete.
+		 *
+		 * @param objPath [in] Object path string identifying the WMI instance to delete.
 		 */
 		void delete_path(_In_ PCWSTR objPath) const
 		{
