@@ -79,6 +79,11 @@ public:
             swap(m_current, rhs.m_current);
         }
 
+        /**
+         * @brief Dereference the iterator to access the current adapter entry.
+         * @return Reference to the current `IP_ADAPTER_ADDRESSES` entry.
+         * @throws std::out_of_range if the iterator is at `end()`.
+         */
         IP_ADAPTER_ADDRESSES& operator*() const
         {
             if (!m_current)
@@ -88,6 +93,11 @@ public:
             return *m_current;
         }
 
+        /**
+         * @brief Access members of the current adapter entry.
+         * @return Pointer to the current `IP_ADAPTER_ADDRESSES` entry.
+         * @throws std::out_of_range if the iterator is at `end()`.
+         */
         IP_ADAPTER_ADDRESSES* operator->() const
         {
             if (!m_current)
@@ -97,6 +107,11 @@ public:
             return m_current;
         }
 
+        /**
+         * @brief Compare two iterators for equality.
+         * @param[in] iter The other iterator to compare with.
+         * @return True if both iterators point to the same position.
+         */
         bool operator==(const iterator& iter) const noexcept
         {
             // for comparison of 'end' iterators, just look at current
@@ -114,6 +129,11 @@ public:
             return !(*this == iter);
         }
 
+        /**
+         * @brief Pre-increment the iterator to the next adapter entry.
+         * @return Reference to the incremented iterator.
+         * @throws std::out_of_range if incrementing past the end.
+         */
         iterator& operator++()
         {
             if (!m_current)
@@ -129,6 +149,10 @@ public:
          * @brief Advance the iterator by one and return the previous value.
          * @return Iterator state prior to increment.
          */
+        /**
+         * @brief Post-increment the iterator (advance but return prior state).
+         * @return Iterator state prior to increment.
+         */
         iterator operator++(int)
         {
             auto tempIterator(*this);
@@ -136,6 +160,12 @@ public:
             return tempIterator;
         }
 
+        /**
+         * @brief Advance the iterator by `inc` positions.
+         * @param[in] inc Number of positions to advance.
+         * @return Reference to the advanced iterator.
+         * @throws std::out_of_range if the iterator advances past the end.
+         */
         iterator& operator+=(uint32_t inc)
         {
             for (unsigned loop = 0; loop < inc && m_current != nullptr; ++loop)
