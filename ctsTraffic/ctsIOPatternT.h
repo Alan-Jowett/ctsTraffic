@@ -13,6 +13,15 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #pragma once
 
+/**
+ * @file ctsIOPatternT.h
+ * @brief Templated IO pattern helper used to implement concrete patterns.
+ *
+ * This header provides `ctsIoPatternT` which wires together statistics, a
+ * protocol policy and a rate-limit policy to produce a concrete IO pattern
+ * implementation used by the test harness.
+ */
+
 // cpp headers
 #include <functional>
 // ctl headers
@@ -31,6 +40,13 @@ enum class ctsIoStatus : std::uint8_t
     FailedIo
 };
 
+/**
+ * @brief Minimal interface representing an IO pattern used by a socket.
+ *
+ * The interface exposes `InitiateIo` for requesting the next IO and
+ * `CompleteIo` for reporting completion. Implementations are responsible
+ * for maintaining their own protocol state and statistics.
+ */
 class ctsIoPattern
 {
 public:
@@ -59,7 +75,21 @@ public:
     ///   _bytes_transferred : the number of bytes successfully transferred from the task
     ///   _status_code: the return code from the prior IO operation [assumes a Win32 error code]
     ///
+    /**
+     * @brief Request the next IO task for this pattern.
+     *
+     * @return A `ctsTask` describing the IO operation the caller should perform.
+     */
     ctsTask InitiateIo() noexcept;
+
+    /**
+     * @brief Notify the pattern that a previously returned task completed.
+     *
+     * @param task [in] The task that completed.
+     * @param currentTransfer [in] Number of bytes transferred by the IO.
+     * @param statusCode [in] Win32 status code (NO_ERROR on success).
+     * @return Pattern-level IO status after processing completion.
+     */
     virtual ctsIoStatus CompleteIo(const ctsTask& task, uint32_t currentTransfer, uint32_t statusCode) noexcept = 0;
 
     ///
