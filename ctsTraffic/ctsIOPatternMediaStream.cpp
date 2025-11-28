@@ -1,3 +1,13 @@
+/**
+ * @file ctsIOPatternMediaStream.cpp
+ * @brief Media-stream IO pattern implementation (client-side) for UDP streaming.
+ *
+ * Implements the client-side media stream pattern which receives datagrams at
+ * a configured frame rate and frame size, validates received frames, collects
+ * jitter statistics, and drives timers for rendering frames.
+ */
+
+
 /*
 
 Copyright (c) Microsoft Corporation
@@ -62,38 +72,92 @@ ctsIoPatternMediaStreamClient::ctsIoPatternMediaStreamClient() :
 
     constexpr long extraBufferDepthFactor = 2;
     // queue_size is intentionally a signed long: will catch overflows
+
+/**
+ * @brief Destroy the media stream client and clean up timers.
+ */
     const auto queueSize = extraBufferDepthFactor * m_initialBufferFrames;
     if (queueSize < extraBufferDepthFactor)
     {
+
+    /**
+     * @brief Return the next IO task for the media-stream client.
+     *
+     * @return A `ctsTask` describing the next IO operation (usually a recv).
+     */
         THROW_WIN32_MSG(
             ERROR_INVALID_DATA,
             "BufferDepth & FrameSize don't allow for enough buffered stream");
     }
 
+
+/**
+ * @brief Complete the task and return to the pattern.
+ *
+ * @param task The task to complete.
+ * @param completedBytes The number of bytes completed.
+ * @return The result of the task completion.
+ */
     PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient - queue size for this new connection is %ld\n", queueSize);
     PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient - frame rate in milliseconds per frame : %f\n", m_frameRateMsPerFrame);
 
+
+/**
+ * @brief Find the sequence number in the frame entries.
+ *
+ * @param sequenceNumber The sequence number to find.
+ * @return An iterator to the found sequence number or end if not found.
+ */
     m_frameEntries.resize(queueSize);
     m_headEntry = m_frameEntries.begin();
 
+
+/**
+ * @brief Set the next timer for the media stream client.
+ *
+ * @param initialTimer Indicates if this is the initial timer.
+ * @return True if the timer was scheduled, false otherwise.
+ */
     // pre-populate the queue of frames with the initial seq numbers
     int64_t lastUsedSequenceNumber = 1;
     for (auto& entry : m_frameEntries)
     {
+
+    /**
+     * @brief Set the next start timer for the media stream client.
+     */
         entry.m_sequenceNumber = lastUsedSequenceNumber;
         ++lastUsedSequenceNumber;
     }
 
+
+/**
+ * @brief Render the current frame.
+ *
+ * This function updates the current frame as "read" and moves the head to the next frame.
+ */
     // after creating, refer to the timers under the lock
     m_rendererTimer = CreateThreadpoolTimer(TimerCallback, this, nullptr);
     THROW_LAST_ERROR_IF(!m_rendererTimer);
 
+
+/**
+ * @brief Start callback for the media stream client.
+ *
+ * This function is called when the start timer expires.
+ */
     auto deleteTimerCallbackOnError = wil::scope_exit([&]() noexcept {
         SetThreadpoolTimer(m_rendererTimer, nullptr, 0, 0);
         WaitForThreadpoolTimerCallbacks(m_rendererTimer, FALSE);
         CloseThreadpoolTimer(m_rendererTimer);
     });
 
+
+/**
+ * @brief Timer callback for the media stream client.
+ *
+ * This function is called when the timer expires.
+ */
     m_startTimer = CreateThreadpoolTimer(StartCallback, this, nullptr);
     THROW_LAST_ERROR_IF(!m_startTimer);
     // no errors, dismiss the scope guard
