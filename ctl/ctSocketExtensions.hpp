@@ -13,6 +13,12 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #pragma once
 
+/**
+ * @file ctSocketExtensions.hpp
+ * @brief Thin wrappers for optional Winsock extension functions (AcceptEx,
+ *        ConnectEx, RIO, TransmitFile, etc.) with runtime detection.
+ */
+
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -42,6 +48,15 @@ namespace ctl { namespace Details
         // InitOnce function only to be called locally to ensure WSAStartup is held
         // for the function pointers to remain accurate
         //
+        /**
+         * @brief One-time initializer that queries and caches optional Winsock
+         *        extension function pointers. This assumes WSAStartup has been
+         *        called on the current process.
+         * @param initOnce [in] InitOnce token (unused).
+         * @param parameter [in] User parameter (unused).
+         * @param context [out] Out context (unused).
+         * @returns TRUE on success, FALSE on failure.
+         */
         static BOOL CALLBACK SocketExtensionInitFn(_In_ PINIT_ONCE, _In_ PVOID, _In_ PVOID*) noexcept
         {
             WSADATA wsadata;
@@ -165,6 +180,10 @@ namespace ctl { namespace Details
             return TRUE;
         }
 
+        /**
+         * @brief Ensure the socket extension function pointers are initialized.
+         *        Safe to call multiple times from different threads.
+         */
         static void InitSocketExtensions() noexcept
         {
             // ReSharper disable once CppZeroConstantCanBeReplacedWithNullptr
@@ -176,6 +195,10 @@ namespace ctl { namespace Details
     //
     // Dynamic check if RIO is available on this operating system
     //
+    /**
+     * @brief Query whether RIO (Registered I/O) is available on this OS.
+     * @returns true when RIO APIs are present and cached, false otherwise.
+     */
     inline bool ctSocketIsRioAvailable() noexcept
     {
         Details::InitSocketExtensions();
@@ -185,6 +208,16 @@ namespace ctl { namespace Details
     //
     // TransmitFile
     //
+    /**
+     * @brief Wrapper for TransmitFile extension function.
+     * @param hSocket [in] Socket to transmit on.
+     * @param hFile [in] File handle to read data from.
+     * @param nNumberOfBytesToWrite [in] Bytes to write (0 -> until EOF).
+     * @param nNumberOfBytesPerSend [in] Bytes per send call.
+     * @param lpOverlapped [in,out,opt] Overlapped structure for async IO.
+     * @param lpTransmitBuffers [in,opt] Optional header/trailer buffers.
+     * @param dwReserved [in] Reserved parameter (pass 0).
+     */
     inline BOOL ctTransmitFile(
         _In_ SOCKET hSocket,
         _In_ HANDLE hFile,
@@ -208,6 +241,15 @@ namespace ctl { namespace Details
     //
     // TransmitPackets
     //
+    /**
+     * @brief Wrapper for TransmitPackets extension function.
+     * @param hSocket [in] Socket to send packets on.
+     * @param lpPacketArray [in,opt] Array of packet descriptors.
+     * @param nElementCount [in] Number of elements in the array.
+     * @param nSendSize [in] Aggregate send size.
+     * @param lpOverlapped [in,out,opt] Overlapped for async IO.
+     * @param dwFlags [in] Flags for transmit behaviour.
+     */
     inline BOOL ctTransmitPackets(
         _In_ SOCKET hSocket,
         _In_opt_ LPTRANSMIT_PACKETS_ELEMENT lpPacketArray,
@@ -230,6 +272,17 @@ namespace ctl { namespace Details
     //
     // AcceptEx
     //
+    /**
+     * @brief Wrapper for AcceptEx. Mirrors the native signature and semantics.
+     * @param sListenSocket [in] Listening socket.
+     * @param sAcceptSocket [in] Accept socket returned to the caller.
+     * @param lpOutputBuffer [out] Buffer to receive address and initial data.
+     * @param dwReceiveDataLength [in] Number of bytes to receive from remote.
+     * @param dwLocalAddressLength [in] Size reserved for local sockaddr.
+     * @param dwRemoteAddressLength [in] Size reserved for remote sockaddr.
+     * @param lpdwBytesReceived [out] Receives number of bytes received.
+     * @param lpOverlapped [in,out] Overlapped for async completion.
+     */
     inline BOOL ctAcceptEx(
         _In_ SOCKET sListenSocket,
         _In_ SOCKET sAcceptSocket,
@@ -256,6 +309,18 @@ namespace ctl { namespace Details
     //
     // GetAcceptExSockaddrs
     //
+    /**
+     * @brief Wrapper for GetAcceptExSockaddrs which parses addresses from
+     *        an AcceptEx output buffer.
+     * @param lpOutputBuffer [in] Buffer returned by AcceptEx.
+     * @param dwReceiveDataLength [in] See AcceptEx.
+     * @param dwLocalAddressLength [in] See AcceptEx.
+     * @param dwRemoteAddressLength [in] See AcceptEx.
+     * @param localSockaddr [out] Receives pointer to local sockaddr in buffer.
+     * @param LocalSockaddrLength [out] Receives length of local sockaddr.
+     * @param remoteSockaddr [out] Receives pointer to remote sockaddr in buffer.
+     * @param RemoteSockaddrLength [out] Receives length of remote sockaddr.
+     */
     inline VOID ctGetAcceptExSockaddrs(
         _In_reads_bytes_(dwReceiveDataLength + dwLocalAddressLength + dwRemoteAddressLength) PVOID lpOutputBuffer,
         _In_ DWORD dwReceiveDataLength,
@@ -282,6 +347,16 @@ namespace ctl { namespace Details
     //
     // ConnectEx
     //
+    /**
+     * @brief Wrapper for ConnectEx extension function.
+     * @param s [in] Socket on which to establish a connection.
+     * @param name [in] Remote sockaddr to connect to.
+     * @param namelen [in] Length of the sockaddr provided.
+     * @param lpSendBuffer [in,opt] Optional data buffer to send as part of connect.
+     * @param dwSendDataLength [in] Size of the send buffer.
+     * @param lpdwBytesSent [out,opt] Receives number of bytes sent when buffer supplied.
+     * @param lpOverlapped [in,out] Overlapped for async completion.
+     */
     inline BOOL ctConnectEx(
         _In_ SOCKET s,
         _In_reads_bytes_(namelen) const sockaddr* name,
@@ -306,6 +381,13 @@ namespace ctl { namespace Details
     //
     // DisconnectEx
     //
+    /**
+     * @brief Wrapper for DisconnectEx.
+     * @param s [in] Socket to disconnect.
+     * @param lpOverlapped [in,out,opt] Optional overlapped for async completion.
+     * @param dwFlags [in] Flags controlling graceful/abortive behaviour.
+     * @param dwReserved [in] Reserved parameter (pass 0).
+     */
     inline BOOL ctDisconnectEx(
         _In_ SOCKET s,
         _Inout_opt_ LPOVERLAPPED lpOverlapped,
@@ -324,6 +406,14 @@ namespace ctl { namespace Details
     //
     // WSARecvMsg
     //
+    /**
+     * @brief Wrapper for WSARecvMsg. Receives a message and ancillary data.
+     * @param s [in] Socket to receive from.
+     * @param lpMsg [in,out] WSAMSG describing buffers and control data.
+     * @param lpdwNumberOfBytesRecvd [out,opt] Receives number of bytes read.
+     * @param lpOverlapped [in,out,opt] Overlapped for async completion.
+     * @param lpCompletionRoutine [in,opt] Optional completion routine.
+     */
     inline INT ctWSARecvMsg(
         _In_ SOCKET s,
         _Inout_ LPWSAMSG lpMsg,
@@ -344,6 +434,15 @@ namespace ctl { namespace Details
     //
     // WSASendMsg
     //
+    /**
+     * @brief Wrapper for WSASendMsg.
+     * @param s [in] Socket to send from.
+     * @param lpMsg [in] WSAMSG describing buffers and control data.
+     * @param dwFlags [in] Flags for send behaviour.
+     * @param lpNumberOfBytesSent [out,opt] Receives number of bytes sent.
+     * @param lpOverlapped [in,out,opt] Overlapped for async completion.
+     * @param lpCompletionRoutine [in,opt] Optional completion routine.
+     */
     inline INT ctWSASendMsg(
         _In_ SOCKET s,
         _In_ LPWSAMSG lpMsg,
