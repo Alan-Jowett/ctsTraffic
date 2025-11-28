@@ -1,5 +1,10 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+/**
+ * @file ctEtwReader.hpp
+ * @brief ETW trace session helper for starting, stopping and consuming events.
+ *
+ * @copyright Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ */
 
 #pragma once
 
@@ -28,15 +33,8 @@
 constexpr ULONG EVENT_TRACE_USE_MS_FLUSH_TIMER = 0x00000010; // FlushTimer value in milliseconds
 constexpr uint32_t SLEEP_MS_WAITING_FOR_EXPECTED_RECORDS = 50;
 
-/**
- * @file ctEtwReader.hpp
- * @brief ETW trace session helper for starting, stopping and consuming events.
- *
- * This header exposes `ctEtwReader`, a small helper to create real-time or
- * saved ETL trace sessions, enable/disable providers, flush buffers, and
- * deliver `EVENT_RECORD` events to a caller-supplied filter callback. Where
- * relevant the original inline comments have been preserved and incorporated
- * into the Doxygen blocks below.
+/*
+ * (File description retained above with copyright merged into the file-level Doxygen.)
  */
 
 namespace ctl {

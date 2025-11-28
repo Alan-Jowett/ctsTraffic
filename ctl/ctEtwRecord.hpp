@@ -1,5 +1,10 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+/**
+ * @file ctEtwRecord.hpp
+ * @brief Encapsulates and deep-copies an ETW `EVENT_RECORD` for safe access.
+ *
+ * @copyright Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ */
 
 #pragma once
 
