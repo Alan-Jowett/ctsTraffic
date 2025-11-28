@@ -13,6 +13,15 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #pragma once
 
+/**
+ * @file ctsIOTask.hpp
+ * @brief Definition of the `ctsTask` structure used to describe IO work.
+ *
+ * `ctsTask` describes the next IO operation the pattern should perform and
+ * contains buffer information, offsets, and bookkeeping fields used by the
+ * verification and rate-limit subsystems.
+ */
+
 // os headers
 // ReSharper disable once CppUnusedIncludeDirective
 #include <WinSock2.h>
@@ -25,6 +34,9 @@ namespace ctsTraffic
 {
 // The ctsIOTask struct instructs the caller on what action to perform
 // - and provides it the buffer it should use to send/recv data
+/**
+ * @brief Action requested by a `ctsTask`.
+ */
 enum class ctsTaskAction : std::uint8_t
 {
     None,
@@ -38,13 +50,46 @@ enum class ctsTaskAction : std::uint8_t
 
 struct ctsTask
 {
+    /**
+     * @brief Millisecond offset to postpone this task.
+     *
+     * [in,out] Consumers may set `m_timeOffsetMilliseconds` to delay posting
+     * the IO (used by rate-limiters). Default is 0.
+     */
     int64_t m_timeOffsetMilliseconds = 0LL;
+
+    /**
+     * @brief Registered I/O buffer identifier when using RIO.
+     */
     RIO_BUFFERID m_rioBufferid = RIO_INVALID_BUFFERID;
 
+    /**
+     * @brief Pointer to the buffer to use for the IO request.
+     *
+     * [in,out] For receive operations this buffer will be written into. For
+     * send operations it will be read from. The buffer is sized by
+     * `m_bufferLength`.
+     */
     _Field_size_full_(m_bufferLength) char* m_buffer = nullptr;
+
+    /**
+     * @brief The length in bytes of `m_buffer`.
+     */
     uint32_t m_bufferLength = 0UL;
+
+    /**
+     * @brief Offset into `m_buffer` where the IO should start.
+     */
     uint32_t m_bufferOffset = 0UL;
+
+    /**
+     * @brief Expected pattern offset used for verification.
+     */
     uint32_t m_expectedPatternOffset = 0UL;
+
+    /**
+     * @brief The I/O action requested for this task.
+     */
     ctsTaskAction m_ioAction = ctsTaskAction::None;
 
     // (internal) flag identifying the type of buffer
@@ -58,9 +103,17 @@ struct ctsTask
         Dynamic
     } m_bufferType = BufferType::Null;
 
-    // (internal) flag if this IO request is tracked and verified
+    /**
+     * @brief Whether the task should be tracked/verified by the pattern.
+     */
     bool m_trackIo = false;
 
+    /**
+     * @brief Convert an action enum to a human readable string.
+     *
+     * @param action [in] The action to stringify.
+     * @return Wide string name of the action.
+     */
     static PCWSTR PrintTaskAction(const ctsTaskAction& action) noexcept
     {
         switch (action)
