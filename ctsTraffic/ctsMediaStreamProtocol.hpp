@@ -17,6 +17,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // cpp headers
 #include <array>
 #include <string>
+#include <chrono>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -41,6 +42,10 @@ namespace ctsTraffic
 //
 constexpr uint16_t c_udpDatagramProtocolHeaderFlagData = 0x0000;
 constexpr uint16_t c_udpDatagramProtocolHeaderFlagId = 0x1000;
+// 3-way handshake control flags (SYN / SYN-ACK / ACK)
+constexpr uint16_t c_udpDatagramFlagSyn = 0x0100; // Initiator -> Responder
+constexpr uint16_t c_udpDatagramFlagSynAck = 0x0101; // Responder -> Initiator
+constexpr uint16_t c_udpDatagramFlagAck = 0x0102; // Initiator -> Responder
 
 constexpr uint32_t c_udpDatagramProtocolHeaderFlagLength = 2;
 constexpr uint32_t c_udpDatagramConnectionIdHeaderLength = c_udpDatagramProtocolHeaderFlagLength + ctsStatistics::ConnectionIdLength;
@@ -49,6 +54,41 @@ constexpr uint32_t c_udpDatagramSequenceNumberLength = 8; // 64-bit value
 constexpr uint32_t c_udpDatagramQpcLength = 8; // 64-bit value
 constexpr uint32_t c_udpDatagramQpfLength = 8; // 64-bit value
 constexpr uint32_t c_udpDatagramDataHeaderLength = c_udpDatagramProtocolHeaderFlagLength + c_udpDatagramSequenceNumberLength + c_udpDatagramQpcLength + c_udpDatagramQpfLength;
+
+// control frame fixed body lengths (Version, Flags, Reserved, ConnectionId)
+constexpr uint32_t c_udpDatagramControlVersionLength = 1;
+constexpr uint32_t c_udpDatagramControlFlagsLength = 1;
+constexpr uint32_t c_udpDatagramControlReservedLength = 2;
+constexpr uint32_t c_udpDatagramControlConnectionIdLength = ctsStatistics::ConnectionIdLength; // 37
+constexpr uint32_t c_udpDatagramControlFixedBodyLength = c_udpDatagramControlVersionLength + c_udpDatagramControlFlagsLength + c_udpDatagramControlReservedLength + c_udpDatagramControlConnectionIdLength;
+
+    // Parsed control frame (SYN / SYN-ACK / ACK)
+    struct ParsedControlFrame
+    {
+        unsigned short protocolFlag{};
+        unsigned char version{};
+        unsigned char flags{};
+        unsigned short reserved{};
+        std::string connectionId;
+    };
+
+    // Basic handshake state stored per tuple/connection candidate
+    enum class HandshakeState : unsigned char
+    {
+        None = 0,
+        SynReceived,
+        SynAckSent,
+        AckReceived,
+        Established
+    };
+
+    struct HandshakeInfo
+    {
+        HandshakeState state{HandshakeState::None};
+        std::chrono::steady_clock::time_point lastUpdate{std::chrono::steady_clock::now()};
+        std::string assignedConnectionId; // optional assigned id from responder
+        std::string requestedConnectionId; // optional desired id requested by initiator (from SYN)
+    };
 
 static auto* g_udpDatagramStartString = "START";
 constexpr uint32_t c_udpDatagramStartStringLength = 5;
@@ -402,6 +442,19 @@ struct ctsMediaStreamMessage
         returnTask.m_trackIo = false;
         return returnTask;
     }
+
+    // Create a SYN control task. Caller may then send via the usual send path.
+    // rawTask should be a Send task with a buffer large enough for header + control body.
+    static ctsTask MakeSynTask(const ctsTask& rawTask, _In_reads_opt_(ctsStatistics::ConnectionIdLength) const char* const desiredConnectionId) noexcept;
+
+    // Create a SYN-ACK control task. rawTask used as template for buffer/flags.
+    static ctsTask MakeSynAckTask(const ctsTask& rawTask, bool accept, _In_reads_opt_(ctsStatistics::ConnectionIdLength) const char* const assignedConnectionId) noexcept;
+
+    // Create an ACK control task.
+    static ctsTask MakeAckTask(const ctsTask& rawTask, _In_reads_opt_(ctsStatistics::ConnectionIdLength) const char* const confirmedConnectionId) noexcept;
+
+    // Parse a control frame payload (SYN / SYN-ACK / ACK). Returns true if valid and optionally copies the connection id.
+    static bool ParseControlFrame(_Out_writes_opt_(ctsStatistics::ConnectionIdLength) char* connectionIdOut, const ctsTask& task, uint32_t completedBytes) noexcept;
 
     static ctsTask Construct(MediaStreamAction action) noexcept
     {

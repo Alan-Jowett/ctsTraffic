@@ -407,6 +407,7 @@
     </Bscmake>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ctsMediaStreamProtocol.cpp" />
     <ClCompile Include="ctsAcceptEx.cpp" />
     <ClCompile Include="ctsConfig.cpp" />
     <ClCompile Include="ctsConnectByName.cpp" />

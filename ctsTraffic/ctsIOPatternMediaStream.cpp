@@ -181,6 +181,55 @@ ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(con
             return ctsIoPatternError::NoError;
         }
 
+        // Check for control frames (SYN-ACK) when 3-way handshake enabled
+        if (ctsConfig::IsMediaStream3WayEnabled())
+        {
+            const auto protocol = ctsMediaStreamMessage::GetProtocolHeaderFromTask(task);
+            if (protocol == c_udpDatagramFlagSynAck)
+            {
+                // extract assigned connection id
+                char connectionId[ctsStatistics::ConnectionIdLength]{};
+                if (ctsMediaStreamMessage::ParseControlFrame(connectionId, task, completedBytes))
+                {
+                    // update our local connection id
+                    memcpy_s(GetConnectionIdentifier(), ctsStatistics::ConnectionIdLength, connectionId, ctsStatistics::ConnectionIdLength);
+
+                    // Flush local dedup/reassembly caches per 3-way handshake rules
+                    // Ensure subsequent SequenceNumbers are treated as new and not deduplicated
+                    for (auto &entry : m_frameEntries)
+                    {
+                        entry.m_bytesReceived = 0;
+                        entry.m_senderQpc = 0;
+                        entry.m_senderQpf = 0;
+                        entry.m_receiverQpc = 0;
+                        entry.m_receiverQpf = 0;
+                    }
+                    // reset head to beginning so rendering logic starts fresh
+                    m_headEntry = m_frameEntries.begin();
+
+                    // construct an ACK control frame and send it immediately
+                    const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+                    // allocate a heap-shared buffer so its lifetime can be extended until the async send completes
+                    auto ackBufferPtr = std::make_shared<std::vector<char>>(requiredSize);
+                    ctsTask ackRawTask;
+                    ackRawTask.m_ioAction = ctsTaskAction::Send;
+                    ackRawTask.m_trackIo = false;
+                    ackRawTask.m_buffer = ackBufferPtr->data();
+                    ackRawTask.m_bufferOffset = 0;
+                    ackRawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                    // mark as Static since the buffer is owned by our shared_ptr container
+                    ackRawTask.m_bufferType = ctsTask::BufferType::Static;
+
+                    auto ackTask = ctsMediaStreamMessage::MakeAckTask(ackRawTask, connectionId);
+                    ackTask.m_bufferType = ctsTask::BufferType::Static;
+
+                    // Send via the registered callback so the receiver-level IO impl can perform a synchronous send
+                    // (ackBufferPtr remains alive on the stack while the callback executes)
+                    this->SendTaskToCallback(ackTask);
+                }
+            }
+        }
+
         // validate the buffer contents
         ctsTask validationTask(task);
         validationTask.m_bufferOffset = c_udpDatagramDataHeaderLength; // skip the UdpDatagramDataHeaderLength since we use them for our own stuff
@@ -455,17 +504,46 @@ VOID CALLBACK ctsIoPatternMediaStreamReceiver::StartCallback(PTP_CALLBACK_INSTAN
         // send another start message
         PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient re-requesting START\n");
 
-        ctsTask resendTask;
-        resendTask.m_ioAction = ctsTaskAction::Send;
-        resendTask.m_trackIo = false;
-        resendTask.m_buffer = const_cast<char*>(c_startBuffer);
-        resendTask.m_bufferOffset = 0;
-        // ReSharper disable once CppRedundantParentheses
-        resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
-        resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
+        // If 3-way handshake enabled, send a SYN control frame instead of legacy START
+        if (ctsConfig::IsMediaStream3WayEnabled())
+        {
+            // allocate a temporary buffer large enough for header + control body
+            const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+            // create a dynamic task and buffer
+                // create a Dynamic template with no buffer; MakeSynTask will allocate and set ownership
+                ctsTask synTaskTemplate;
+                synTaskTemplate.m_ioAction = ctsTaskAction::Send;
+                synTaskTemplate.m_trackIo = false;
+                synTaskTemplate.m_buffer = nullptr;
+                synTaskTemplate.m_bufferType = ctsTask::BufferType::Dynamic;
+                synTaskTemplate.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                std::vector<char> tempBuffer(requiredSize);
+                ctsTask synRawTask;
+                synRawTask.m_ioAction = ctsTaskAction::Send;
+                synRawTask.m_trackIo = false;
+                synRawTask.m_buffer = tempBuffer.data();
+                synRawTask.m_bufferOffset = 0;
+                synRawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                synRawTask.m_bufferType = ctsTask::BufferType::Static;
 
-        thisPtr->SetNextStartTimer();
-        thisPtr->SendTaskToCallback(resendTask);
+                const auto synTask = ctsMediaStreamMessage::MakeSynTask(synRawTask, nullptr);
+                thisPtr->SetNextStartTimer();
+                thisPtr->SendTaskToCallback(synTask);
+            }
+        else
+        {
+            ctsTask resendTask;
+            resendTask.m_ioAction = ctsTaskAction::Send;
+            resendTask.m_trackIo = false;
+            resendTask.m_buffer = const_cast<char*>(c_startBuffer);
+            resendTask.m_bufferOffset = 0;
+            // ReSharper disable once CppRedundantParentheses
+            resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
+            resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
+
+            thisPtr->SetNextStartTimer();
+            thisPtr->SendTaskToCallback(resendTask);
+        }
     }
     // else, don't schedule this timer anymore
 }

@@ -29,6 +29,9 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // wil headers always included last
 #include <wil/stl.h>
 #include <wil/resource.h>
+#include <unordered_map>
+#include <string>
+#include <mutex>
 
 namespace ctsTraffic
 {
@@ -56,6 +59,11 @@ namespace ctsTraffic
         const std::weak_ptr<ctsSocket>& weakSocket,
         const ctl::ctSockaddr& targetAddress
     ) noexcept;
+
+    // Simple in-memory handshake tracking per remote address (translation unit scope)
+    static std::unordered_map<std::wstring, HandshakeInfo> g_handshakeMap;
+    // Mutex to protect g_handshakeMap across IO completion callback threads
+    static std::mutex g_handshakeMapMutex;
 
     void ctsMediaStreamReceiver(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
     {
@@ -191,6 +199,104 @@ namespace ctsTraffic
         case ctsTaskAction::Recv:
             {
                 sharedSocket->IncrementIo();
+
+                // For small control frames (SYN / SYN-ACK / ACK) perform a synchronous send
+                // to avoid extending the lifetime of caller-local buffers for overlapped IO.
+                // Otherwise, fall back to the normal overlapped send/recv path.
+                bool handledSynchronously = false;
+                if (ctsTaskAction::Send == task.m_ioAction)
+                {
+                    // Determine whether this task is a control-frame by reading its protocol header
+                    uint16_t protocolFlag = 0;
+                    if (task.m_bufferLength >= c_udpDatagramProtocolHeaderFlagLength)
+                    {
+                        protocolFlag = ctsMediaStreamMessage::GetProtocolHeaderFromTask(task);
+                    }
+
+                    if (protocolFlag == c_udpDatagramFlagSyn ||
+                        protocolFlag == c_udpDatagramFlagSynAck ||
+                        protocolFlag == c_udpDatagramFlagAck)
+                    {
+                        // Synchronous send path
+                        const auto targetAddress = sharedSocket->GetRemoteSockaddr();
+                        const int sent = ::sendto(
+                            socket,
+                            task.m_buffer + task.m_bufferOffset,
+                            static_cast<int>(task.m_bufferLength),
+                            0,
+                            targetAddress.sockaddr(),
+                            targetAddress.length());
+
+                        if (sent == SOCKET_ERROR)
+                        {
+                            const auto gle = WSAGetLastError();
+                            switch (const auto protocolStatus = lockedPattern->CompleteIo(task, 0, gle))
+                            {
+                            case ctsIoStatus::ContinueIo:
+                                returnStatus.m_errorCode = NO_ERROR;
+                                returnStatus.m_continueIo = true;
+                                break;
+
+                            case ctsIoStatus::CompletedIo:
+                                sharedSocket->CloseSocket();
+                                returnStatus.m_errorCode = NO_ERROR;
+                                returnStatus.m_continueIo = false;
+                                break;
+
+                            case ctsIoStatus::FailedIo:
+                                ctsConfig::PrintErrorIfFailed("sendto (control)", gle);
+                                sharedSocket->CloseSocket();
+                                returnStatus.m_errorCode = static_cast<int>(lockedPattern->GetLastPatternError());
+                                returnStatus.m_continueIo = false;
+                                break;
+
+                            default:
+                                FAIL_FAST_MSG("ctsMediaStreamReceiverIoImpl: unknown ctsSocket::IOStatus - %d\n", protocolStatus);
+                            }
+                        }
+                        else
+                        {
+                            switch (const auto protocolStatus = lockedPattern->CompleteIo(task, static_cast<uint32_t>(sent), 0))
+                            {
+                            case ctsIoStatus::ContinueIo:
+                                returnStatus.m_errorCode = NO_ERROR;
+                                returnStatus.m_continueIo = true;
+                                break;
+
+                            case ctsIoStatus::CompletedIo:
+                                sharedSocket->CloseSocket();
+                                returnStatus.m_errorCode = NO_ERROR;
+                                returnStatus.m_continueIo = false;
+                                break;
+
+                            case ctsIoStatus::FailedIo:
+                                ctsConfig::PrintErrorIfFailed("sendto (control)", 0);
+                                sharedSocket->CloseSocket();
+                                returnStatus.m_errorCode = static_cast<int>(lockedPattern->GetLastPatternError());
+                                returnStatus.m_continueIo = false;
+                                break;
+
+                            default:
+                                FAIL_FAST_MSG("ctsMediaStreamReceiverIoImpl: unknown ctsSocket::IOStatus - %d\n", protocolStatus);
+                            }
+                        }
+
+                        // decrement the Io counter consistent with the async path
+                        const auto ioCount = sharedSocket->DecrementIo();
+                        FAIL_FAST_IF_MSG(
+                            0 == ioCount,
+                            "ctsMediaStreamReceiver : ctsSocket::io_count fell to zero while the Impl function was called (dt %p ctsTraffic::ctsSocket)",
+                            sharedSocket.get());
+
+                        handledSynchronously = true;
+                    }
+                }
+
+                if (handledSynchronously)
+                {
+                    break;
+                }
+
                 auto callback = [weak_reference = std::weak_ptr(sharedSocket), task](OVERLAPPED* ov) noexcept
                 {
                     ctsMediaStreamReceiverIoCompletionCallback(ov, weak_reference, task);
@@ -200,8 +306,40 @@ namespace ctsTraffic
                 wsIOResult result;
                 if (ctsTaskAction::Send == task.m_ioAction)
                 {
-                    functionName = "WSASendTo";
-                    result = ctsWSASendTo(sharedSocket, socket, task, std::move(callback));
+                    // Attempt synchronous send for small control frames to avoid requiring buffer lifetime beyond scope
+                    bool didSyncSend = false;
+                    const uint32_t controlFrameThreshold = 2048; // reasonable upper bound for control frames
+                    if (task.m_bufferLength > 0 && task.m_bufferLength <= controlFrameThreshold)
+                    {
+                        // Check protocol flag in the first two bytes if present
+                        if (task.m_bufferLength >= 2)
+                        {
+                            const uint16_t proto = *reinterpret_cast<uint16_t*>(task.m_buffer + task.m_bufferOffset);
+                            // Control flags are in the 0x0100..0x0102 range (SYN/SYN-ACK/ACK)
+                            if (proto == c_udpDatagramFlagSyn || proto == c_udpDatagramFlagSynAck || proto == c_udpDatagramFlagAck)
+                            {
+                                const auto targetAddress = sharedSocket->GetRemoteSockaddr();
+                                const int sent = ::sendto(socket, task.m_buffer + task.m_bufferOffset, static_cast<int>(task.m_bufferLength), 0, targetAddress.sockaddr(), targetAddress.length());
+                                if (sent == SOCKET_ERROR)
+                                {
+                                    result.m_errorCode = WSAGetLastError();
+                                    result.m_bytesTransferred = 0;
+                                }
+                                else
+                                {
+                                    result.m_errorCode = 0;
+                                    result.m_bytesTransferred = static_cast<uint32_t>(sent);
+                                }
+                                didSyncSend = true;
+                            }
+                        }
+                    }
+
+                    if (!didSyncSend)
+                    {
+                        functionName = "WSASendTo";
+                        result = ctsWSASendTo(sharedSocket, socket, task, std::move(callback));
+                    }
                 }
                 else if (ctsTaskAction::Recv == task.m_ioAction)
                 {
@@ -351,6 +489,89 @@ namespace ctsTraffic
         {
         case ctsIoStatus::ContinueIo:
             {
+                // If this completion was a receive, check for control frames (SYN/SYN-ACK/ACK)
+                if (task.m_ioAction == ctsTaskAction::Recv && transferred >= (c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength))
+                {
+                    const auto protocol = ctsMediaStreamMessage::GetProtocolHeaderFromTask(task);
+                        if (protocol == c_udpDatagramFlagSyn)
+                        {
+                            // parse and optionally extract connection id
+                            char connectionId[ctsStatistics::ConnectionIdLength]{};
+                            if (ctsMediaStreamMessage::ParseControlFrame(connectionId, task, transferred))
+                            {
+                                // record handshake state per remote address so we can track progress
+                                const auto& remoteAddr = sharedSocket->GetRemoteSockaddr();
+                                std::wstring remoteKey = remoteAddr.writeCompleteAddress();
+
+                                // connectionId may not be null-terminated; use a bounded length check to avoid overread
+                                const size_t connIdLen = strnlen(connectionId, ctsStatistics::ConnectionIdLength);
+                                std::string parsedConnectionId;
+                                if (connIdLen > 0)
+                                {
+                                    parsedConnectionId.assign(connectionId, connIdLen);
+                                }
+
+                                // Generate a responder-assigned connection id
+                                char assignedId[ctsStatistics::ConnectionIdLength]{};
+                                // Use the existing statistics helper to generate a UUID string
+                                {
+                                    ctsUdpStatistics tmpStats;
+                                    ctsStatistics::GenerateConnectionId(tmpStats);
+                                    memcpy_s(assignedId, ctsStatistics::ConnectionIdLength, tmpStats.m_connectionIdentifier, ctsStatistics::ConnectionIdLength);
+                                }
+
+                                // Acquire the handshake map entry and perform all modifications under the mutex
+                                HandshakeInfo* infoPtr = nullptr;
+                                {
+                                    std::lock_guard<std::mutex> lock(g_handshakeMapMutex);
+                                    infoPtr = &g_handshakeMap[remoteKey];
+                                    auto& info = *infoPtr;
+                                    info.state = HandshakeState::SynReceived;
+                                    info.lastUpdate = std::chrono::steady_clock::now();
+                                    // If the initiator provided a desired connection id in the SYN, record it
+                                    if (!parsedConnectionId.empty())
+                                    {
+                                        info.requestedConnectionId = parsedConnectionId;
+                                    }
+                                    // Always record the responder-assigned id
+                                    info.assignedConnectionId = std::string(assignedId, ctsStatistics::ConnectionIdLength);
+                                }
+
+                                // build a SYN-ACK response using the same buffer length
+                                const uint32_t sendBufferLength = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+                                // allocate a heap-backed buffer held by a shared_ptr so it stays alive
+                                // until the async send completion callback runs
+                                auto tempBufferPtr = std::make_shared<std::vector<char>>(sendBufferLength);
+                                ctsTask rawTask;
+                                rawTask.m_ioAction = ctsTaskAction::Send;
+                                rawTask.m_buffer = tempBufferPtr->data();
+                                rawTask.m_bufferLength = sendBufferLength;
+                                rawTask.m_bufferOffset = 0;
+                                rawTask.m_bufferType = ctsTask::BufferType::Static;
+                                rawTask.m_trackIo = false;
+
+                                // Build a SYN-ACK including the assigned connection id
+                                auto synAckTask = ctsMediaStreamMessage::MakeSynAckTask(rawTask, true, assignedId);
+                                // MakeSynAckTask sets Dynamic bufferType; keep Static since buffer is owned by tempBufferPtr
+                                synAckTask.m_bufferType = ctsTask::BufferType::Static;
+
+                                // send immediately using low-level send helper; capture tempBufferPtr
+                                // in the completion callback so the buffer remains alive while IO is pending.
+                                const auto response = ctsWSASendTo(
+                                    sharedSocket,
+                                    lockedSocket.GetSocket(),
+                                    synAckTask,
+                                    [tempBufferPtr](OVERLAPPED*) noexcept {
+                                        // capture ensures tempBufferPtr lifetime until this callback runs
+                                    });
+                                if (response.m_errorCode != 0 && response.m_errorCode != WSA_IO_PENDING)
+                                {
+                                    ctsConfig::PrintErrorIfFailed("SYN-ACK send", response.m_errorCode);
+                                }
+                            }
+                        }
+                }
+
                 IoImplStatus status;
                 do
                 {

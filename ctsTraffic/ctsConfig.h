@@ -364,6 +364,7 @@ namespace ctsTraffic
         };
 
         const MediaStreamSettings& GetMediaStream() noexcept;
+        bool IsMediaStream3WayEnabled() noexcept;
 
         struct ctsConfigSettings
         {
@@ -440,6 +441,9 @@ namespace ctsTraffic
             std::optional<uint32_t> CpuGroupId;
 
             uint32_t OutgoingIfIndex = 0;
+
+            // Enable the new 3-way handshake for MediaStream (disabled by default)
+            bool EnableMediaStream3WayHandshake = false;
 
             uint16_t LocalPortLow = 0;
             uint16_t LocalPortHigh = 0;

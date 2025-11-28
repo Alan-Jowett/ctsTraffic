@@ -1,0 +1,502 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{cec4a823-d565-43a3-91a9-9c50ce20ec9d}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <OutputPath>bin\Debug\arm64</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <OutputPath>bin\Release\arm64</OutputPath>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <LinkIncremental>true</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>true</RunCodeAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <LinkIncremental>false</LinkIncremental>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_MSVC_STL_HARDENING=1;_MSVC_STL_DESTRUCTOR_TOMBSTONES=1;_WINDOWS;UNICODE;_UNICODE;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SmallerTypeCheck>false</SmallerTypeCheck>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <PrecompiledHeaderFile />
+      <PrecompiledHeaderOutputFile />
+      <AdditionalIncludeDirectories>..\ctl;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <AdditionalOptions>/D "_MSVC_STL_HARDENING=1" /D "_MSVC_STL_DESTRUCTOR_TOMBSTONES=1" /D "_WIN32_WINNT=_WIN32_WINNT_WIN10" /D "_WINSOCK_DEPRECATED_NO_WARNINGS" /D "NOMINMAX" /permissive-</AdditionalOptions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <CallingConvention>StdCall</CallingConvention>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatSpecificWarningsAsErrors>%(TreatSpecificWarningsAsErrors)</TreatSpecificWarningsAsErrors>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>ntdll.lib;ws2_32.lib;iphlpapi.lib;rpcrt4.lib;wbemuuid.lib;Winmm.lib;Qwave.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <AdditionalOptions>
+      </AdditionalOptions>
+      <OptimizeReferences>false</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <ImageHasSafeExceptionHandlers>true</ImageHasSafeExceptionHandlers>
+      <DelayLoadDLLs>Iphlpapi.dll;Winmm.dll;Qwave.dll</DelayLoadDLLs>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_MSVC_STL_HARDENING=1;_MSVC_STL_DESTRUCTOR_TOMBSTONES=1;_WINDOWS;UNICODE;_UNICODE;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SmallerTypeCheck>false</SmallerTypeCheck>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <AdditionalIncludeDirectories>..\ctl;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <AdditionalOptions>/D "_MSVC_STL_HARDENING=1" /D "_MSVC_STL_DESTRUCTOR_TOMBSTONES=1" /D "_WIN32_WINNT=_WIN32_WINNT_WIN10" /D "_WINSOCK_DEPRECATED_NO_WARNINGS" /D "NOMINMAX" /permissive-</AdditionalOptions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <CallingConvention>StdCall</CallingConvention>
+      <OmitFramePointers>false</OmitFramePointers>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatSpecificWarningsAsErrors>%(TreatSpecificWarningsAsErrors)</TreatSpecificWarningsAsErrors>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>ntdll.lib;ws2_32.lib;iphlpapi.lib;rpcrt4.lib;wbemuuid.lib;Winmm.lib;Qwave.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <AdditionalOptions>
+      </AdditionalOptions>
+      <OptimizeReferences>false</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <DelayLoadDLLs>Iphlpapi.dll;Winmm.dll;Qwave.dll</DelayLoadDLLs>
+      <TargetMachine>Machinex64</TargetMachine>
+      <SetChecksum>true</SetChecksum>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_MSVC_STL_HARDENING=1;_MSVC_STL_DESTRUCTOR_TOMBSTONES=1;_WINDOWS;UNICODE;_UNICODE;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization>Disabled</Optimization>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SmallerTypeCheck>false</SmallerTypeCheck>
+      <RuntimeTypeInfo>true</RuntimeTypeInfo>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <AdditionalIncludeDirectories>..\ctl;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <AdditionalOptions>/D "_MSVC_STL_HARDENING=1" /D "_MSVC_STL_DESTRUCTOR_TOMBSTONES=1" /D "_WIN32_WINNT=_WIN32_WINNT_WIN10" /D "_WINSOCK_DEPRECATED_NO_WARNINGS" /D "NOMINMAX" /permissive-</AdditionalOptions>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <OmitFramePointers>false</OmitFramePointers>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatSpecificWarningsAsErrors>%(TreatSpecificWarningsAsErrors)</TreatSpecificWarningsAsErrors>
+      <CallingConvention>StdCall</CallingConvention>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>ntdll.lib;ws2_32.lib;iphlpapi.lib;rpcrt4.lib;wbemuuid.lib;Winmm.lib;Qwave.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <AdditionalOptions>
+      </AdditionalOptions>
+      <OptimizeReferences>false</OptimizeReferences>
+      <EnableCOMDATFolding>false</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <DelayLoadDLLs>Iphlpapi.dll;Winmm.dll;Qwave.dll</DelayLoadDLLs>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_MSVC_STL_HARDENING=1;_MSVC_STL_DESTRUCTOR_TOMBSTONES=1;UNICODE;_UNICODE;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>..\ctl;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <PrecompiledHeaderFile />
+      <PrecompiledHeaderOutputFile />
+      <AdditionalOptions>/D "_MSVC_STL_HARDENING=1" /D "_MSVC_STL_DESTRUCTOR_TOMBSTONES=1" /D "_WIN32_WINNT=_WIN32_WINNT_WIN10" /D "_WINSOCK_DEPRECATED_NO_WARNINGS" /D "NOMINMAX" /Qvec-report:2 /Zc:strictStrings /Gw /permissive-</AdditionalOptions>
+      <StringPooling>true</StringPooling>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <CallingConvention>StdCall</CallingConvention>
+      <EnablePREfast>true</EnablePREfast>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <BrowseInformation>true</BrowseInformation>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatSpecificWarningsAsErrors>%(TreatSpecificWarningsAsErrors)</TreatSpecificWarningsAsErrors>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <TargetMachine>MachineX86</TargetMachine>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>ntdll.lib;ws2_32.lib;iphlpapi.lib;rpcrt4.lib;wbemuuid.lib;Winmm.lib;Qwave.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <SetChecksum>true</SetChecksum>
+      <AdditionalOptions>/debugtype:cv,fixup</AdditionalOptions>
+      <DelayLoadDLLs>Iphlpapi.dll;Winmm.dll;Qwave.dll</DelayLoadDLLs>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_MSVC_STL_HARDENING=1;_MSVC_STL_DESTRUCTOR_TOMBSTONES=1;UNICODE;_UNICODE;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>..\ctl;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalOptions>/D "_MSVC_STL_HARDENING=1" /D "_MSVC_STL_DESTRUCTOR_TOMBSTONES=1" /D "_WIN32_WINNT=_WIN32_WINNT_WIN10" /D "_WINSOCK_DEPRECATED_NO_WARNINGS" /D "NOMINMAX" /Zc:strictStrings /Gw /permissive- /Qfast_transcendentals /volatile:iso</AdditionalOptions>
+      <StringPooling>true</StringPooling>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <BrowseInformation>true</BrowseInformation>
+      <CallingConvention>StdCall</CallingConvention>
+      <EnablePREfast>false</EnablePREfast>
+      <OmitFramePointers>true</OmitFramePointers>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatSpecificWarningsAsErrors>%(TreatSpecificWarningsAsErrors)</TreatSpecificWarningsAsErrors>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>ntdll.lib;ws2_32.lib;iphlpapi.lib;rpcrt4.lib;wbemuuid.lib;Winmm.lib;Qwave.lib;Ole32.lib;OleAut32.lib</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <SetChecksum>true</SetChecksum>
+      <AdditionalOptions>/debugtype:cv,fixup</AdditionalOptions>
+      <DelayLoadDLLs>Iphlpapi.dll;Winmm.dll;Qwave.dll</DelayLoadDLLs>
+      <TargetMachine>MachineX64</TargetMachine>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+      <StackCommitSize>32768</StackCommitSize>
+      <StackReserveSize>1048576</StackReserveSize>
+    </Link>
+    <Bscmake>
+      <PreserveSbr>true</PreserveSbr>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;WIN32_LEAN_AND_MEAN;_MSVC_STL_HARDENING=1;_MSVC_STL_DESTRUCTOR_TOMBSTONES=1;UNICODE;_UNICODE;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <WarningLevel>Level4</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalIncludeDirectories>..\ctl;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <SDLCheck>true</SDLCheck>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <AdditionalOptions>/D "_MSVC_STL_HARDENING=1" /D "_MSVC_STL_DESTRUCTOR_TOMBSTONES=1" /D "_WIN32_WINNT=_WIN32_WINNT_WIN10" /D "_WINSOCK_DEPRECATED_NO_WARNINGS" /D "NOMINMAX" /Zc:strictStrings  /Gw /permissive- /Qfast_transcendentals /volatile:iso</AdditionalOptions>
+      <StringPooling>true</StringPooling>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <BrowseInformation>true</BrowseInformation>
+      <EnablePREfast>false</EnablePREfast>
+      <OmitFramePointers>true</OmitFramePointers>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <TreatSpecificWarningsAsErrors>%(TreatSpecificWarningsAsErrors)</TreatSpecificWarningsAsErrors>
+      <CallingConvention>StdCall</CallingConvention>
+      <LanguageStandard_C>stdclatest</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>ntdll.lib;ws2_32.lib;iphlpapi.lib;rpcrt4.lib;wbemuuid.lib;Winmm.lib;Qwave.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <SetChecksum>true</SetChecksum>
+      <AdditionalOptions>/debugtype:cv,fixup</AdditionalOptions>
+      <DelayLoadDLLs>Iphlpapi.dll;Winmm.dll;Qwave.dll</DelayLoadDLLs>
+      <TreatLinkerWarningAsErrors>true</TreatLinkerWarningAsErrors>
+    </Link>
+    <Bscmake>
+      <PreserveSbr>true</PreserveSbr>
+    </Bscmake>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\ctstraffic\ctsAcceptEx.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsConfig.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsConnectByName.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsConnectEx.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsIOPattern.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsIOPatternMediaStream.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsMediaStreamServer.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsReadWriteIocp.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsRioIocp.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsSendRecvIocp.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsSimpleAccept.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsSimpleConnect.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsSocket.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsSocketBroker.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsSocketState.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsTraffic.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsMediaStreamServerListeningSocket.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsMediaStreamSender.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsMediaStreamReceiver.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsMediaStreamProtocol.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsWinsockLayer.cpp" />
+    <ClCompile Include="..\ctstraffic\ctsWSASocket.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\ctsTraffic\Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\ctl\ctMath.hpp" />
+    <ClInclude Include="..\ctl\ctNetAdapterAddresses.hpp" />
+    <ClInclude Include="..\ctl\ctThreadIocp_base.hpp" />
+    <ClInclude Include="..\ctl\ctThreadIocp_shard.hpp" />
+    <ClInclude Include="..\ctl\ctThreadpoolQueue.hpp" />
+    <ClInclude Include="..\ctl\ctRandom.hpp" />
+    <ClInclude Include="..\ctl\ctSockaddr.hpp" />
+    <ClInclude Include="..\ctl\ctSocketExtensions.hpp" />
+    <ClInclude Include="..\ctl\ctString.hpp" />
+    <ClInclude Include="..\ctl\ctThreadIocp.hpp" />
+    <ClInclude Include="..\ctl\ctTimer.hpp" />
+    <ClInclude Include="..\ctl\ctWmiClassObject.hpp" />
+    <ClInclude Include="..\ctl\ctWmiEnumerate.hpp" />
+    <ClInclude Include="..\ctl\ctWmiInitialize.hpp" />
+    <ClInclude Include="..\ctl\ctWmiInstance.hpp" />
+    <ClInclude Include="..\ctl\ctWmiPerformance.hpp" />
+    <ClInclude Include="..\ctl\ctWmiProperties.hpp" />
+    <ClInclude Include="..\ctl\ctWmiService.hpp" />
+    <ClInclude Include="..\ctl\ctWmiVariant.hpp" />
+    <ClInclude Include="..\SdkChanges\WbemDisp.h" />
+    <ClInclude Include="..\ctsTraffic\ctsConfig.h" />
+    <ClInclude Include="..\ctsTraffic\ctsIOPattern.h" />
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternBufferPolicy.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternProtocolPolicy.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternRateLimitPolicy.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternState.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsIOPatternT.h" />
+    <ClInclude Include="..\ctsTraffic\ctsIOTask.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsLogger.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsPrintStatus.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsSocket.h" />
+    <ClInclude Include="..\ctsTraffic\ctsSocketBroker.h" />
+    <ClInclude Include="..\ctsTraffic\ctsTCPFunctions.h" />
+    <ClInclude Include="..\ctsTraffic\ctsSocketState.h" />
+    <ClInclude Include="..\ctsTraffic\ctsStatistics.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsWinsockLayer.h" />
+    <ClInclude Include="..\ctsTraffic\resource.h" />
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamServerListeningSocket.h" />
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamProtocol.hpp" />
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamServer.h" />
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamSender.h" />
+    <ClInclude Include="..\ctsTraffic\ctsMediaStreamReceiver.h" />
+    <ClInclude Include="..\ctsTraffic\targetver.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\TestScripts\ctsTraffic_acceptance_test.cmd" />
+    <None Include="..\TestScripts\ctsTraffic_test_max_udp_tput.cmd" />
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\TestScripts\streaming.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="..\ctsTraffic\ctsTraffic.exe.manifest" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\Microsoft.Windows.ImplementationLibrary.1.0.250325.1\build\native\Microsoft.Windows.ImplementationLibrary.targets" Condition="Exists('..\packages\Microsoft.Windows.ImplementationLibrary.1.0.250325.1\build\native\Microsoft.Windows.ImplementationLibrary.targets')" />
+  </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Microsoft.Windows.ImplementationLibrary.1.0.250325.1\build\native\Microsoft.Windows.ImplementationLibrary.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Microsoft.Windows.ImplementationLibrary.1.0.250325.1\build\native\Microsoft.Windows.ImplementationLibrary.targets'))" />
+  </Target>
+</Project>
