@@ -1,5 +1,16 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+/**
+ * @file ctWmiVariant.hpp
+ * @brief Helpers to create and read VARIANTs for use with WMI.
+ *
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * The `ctWmiMakeVariant` and `ctWmiReadFromVariant` family of functions
+ * provide type-safe construction and extraction helpers for `VARIANT` values
+ * passed to and received from WMI APIs. These helpers apply the WMI marshalling
+ * conventions (for example representing 64-bit integers as BSTRs) and perform
+ * validation to ensure correct VARIANT types are used.
+ */
 
 #pragma once
 
@@ -12,17 +23,6 @@
 #include <wil/stl.h>
 #include <wil/com.h>
 #include <wil/resource.h>
-
-/**
- * @file ctWmiVariant.hpp
- * @brief Helpers to create and read VARIANTs for use with WMI.
- *
- * The `ctWmiMakeVariant` and `ctWmiReadFromVariant` family of functions
- * provide type-safe construction and extraction helpers for `VARIANT` values
- * passed to and received from WMI APIs. These helpers apply the WMI marshalling
- * conventions (for example representing 64-bit integers as BSTRs) and perform
- * validation to ensure correct VARIANT types are used.
- */
 
 // ctWmiMakeVariant(const ) functions are specializations designed to help callers
 // who want a way to construct a VARIANT that is safe for passing into WMI
