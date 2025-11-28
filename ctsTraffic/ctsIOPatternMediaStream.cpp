@@ -455,17 +455,57 @@ VOID CALLBACK ctsIoPatternMediaStreamReceiver::StartCallback(PTP_CALLBACK_INSTAN
         // send another start message
         PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient re-requesting START\n");
 
-        ctsTask resendTask;
-        resendTask.m_ioAction = ctsTaskAction::Send;
-        resendTask.m_trackIo = false;
-        resendTask.m_buffer = const_cast<char*>(c_startBuffer);
-        resendTask.m_bufferOffset = 0;
-        // ReSharper disable once CppRedundantParentheses
-        resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
-        resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
+        // If 3-way handshake enabled, send a SYN control frame instead of legacy START
+        if (ctsConfig::IsMediaStream3WayEnabled())
+        {
+            // allocate a temporary buffer large enough for header + control body
+            const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
+            // create a dynamic task and buffer
+            ctsTask rawTask;
+            rawTask.m_ioAction = ctsTaskAction::Send;
+            rawTask.m_trackIo = false;
+            rawTask.m_bufferType = ctsTask::BufferType::Dynamic;
+            rawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
+            // allocate on heap for this send; the send path will treat Dynamic as a buffer it owns
+            rawTask.m_buffer = static_cast<char*>(malloc(requiredSize));
+            if (!rawTask.m_buffer)
+            {
+                // fallback to legacy START if allocation fails
+                ctsTask fallbackTask;
+                fallbackTask.m_ioAction = ctsTaskAction::Send;
+                fallbackTask.m_trackIo = false;
+                fallbackTask.m_buffer = const_cast<char*>(c_startBuffer);
+                fallbackTask.m_bufferOffset = 0;
+                fallbackTask.m_bufferLength = sizeof(c_startBuffer) - 1;
+                fallbackTask.m_bufferType = ctsTask::BufferType::Static;
+                thisPtr->SetNextStartTimer();
+                thisPtr->SendTaskToCallback(fallbackTask);
+            }
+            else
+            {
+                const ctsTask synTaskTemplate = rawTask;
+                // construct SYN control frame (no desired connection id)
+                const auto synTask = ctsMediaStreamMessage::MakeSynTask(synTaskTemplate, nullptr);
+                thisPtr->SetNextStartTimer();
+                thisPtr->SendTaskToCallback(synTask);
+                // free temporary buffer after enqueuing
+                free(rawTask.m_buffer);
+            }
+        }
+        else
+        {
+            ctsTask resendTask;
+            resendTask.m_ioAction = ctsTaskAction::Send;
+            resendTask.m_trackIo = false;
+            resendTask.m_buffer = const_cast<char*>(c_startBuffer);
+            resendTask.m_bufferOffset = 0;
+            // ReSharper disable once CppRedundantParentheses
+            resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
+            resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
 
-        thisPtr->SetNextStartTimer();
-        thisPtr->SendTaskToCallback(resendTask);
+            thisPtr->SetNextStartTimer();
+            thisPtr->SendTaskToCallback(resendTask);
+        }
     }
     // else, don't schedule this timer anymore
 }

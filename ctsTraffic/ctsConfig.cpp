@@ -142,6 +142,9 @@ namespace ctsTraffic::ctsConfig
 		g_configSettings->ShouldVerifyBuffers = true;
 		g_configSettings->UseSharedBuffer = false;
 
+		// feature gate: default to disabled
+		g_configSettings->EnableMediaStream3WayHandshake = false;
+
 		// sharded receive defaults
 		g_configSettings->EnableRecvSharding = false;
 		// default shard count to number of logical processors when 0
@@ -152,6 +155,15 @@ namespace ctsTraffic::ctsConfig
 		g_previousPrintTimeslice = 0LL;
 		g_printTimesliceCount = 0LL;
 		return TRUE;
+	}
+
+	// forward declare ctsConfigInitOnce used by accessors below
+	static void ctsConfigInitOnce() noexcept;
+
+	bool IsMediaStream3WayEnabled() noexcept
+	{
+		ctsConfigInitOnce();
+		return g_configSettings->EnableMediaStream3WayHandshake;
 	}
 	static void ctsConfigInitOnce() noexcept
 	{

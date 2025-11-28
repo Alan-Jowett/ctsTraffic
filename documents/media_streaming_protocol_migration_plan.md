@@ -4,9 +4,11 @@ Goal
 
 Migrate the implementation from the legacy discovery model that used a 5-byte `START` discovery token to the new, integrated 3‑way handshake (SYN / SYN-ACK / ACK) defined in `media_streaming_protocol_spec_3way.md`.
 
+Important: do NOT replace the existing behavior by default. The new 3‑way handshake must be added as an optional, additive behavior controlled at runtime via a command-line or configuration option (for example `-enable3way` or `-HandshakeMode:3way`). Unless the option is explicitly provided, the current START-based discovery behavior must remain unchanged.
+
 Summary of required changes
 
-- Replace all places that send the legacy `START` payload with logic to send a headered `SYN` control frame.
+- Add an option to send a headered `SYN` control frame when the new 3‑way handshake is enabled; do not change existing START sends when the option is not enabled.
 - Add encoder/decoder helpers for the SYN / SYN-ACK / ACK control frames and integrate them into the existing headered datagram parsing flow.
 - Update receiver parsing to recognize the new control flags (`0x0100`, `0x0101`, `0x0102`) and to perform handshake state transitions (allocate/assign ConnectionId, flush dedup caches, etc.).
 - Ensure connection-id datagram (`0x1000`) remains supported and add guidance for the responder to send its connection-id immediately after `SYN-ACK` if it begins sending media prior to receiving `ACK`.
@@ -28,14 +30,14 @@ High-level migration steps (recommended order)
      - Implement `MakeSynTask`/`MakeSynAckTask`/`MakeAckTask` to populate a `ctsTask` that will be queued on the socket sending path. These should set the ProtocolFlag in the first 2 bytes and follow the 26-byte header layout for headered datagrams. For control frames SequenceNumber/QPC/QPF SHOULD be zero.
      - Implement `ParseControlFrame` to run during receive parsing when ProtocolFlag is a control value.
 
-3. Update send-side code to use SYN instead of legacy START
+3. Update send-side code to use SYN when enabled; otherwise preserve START behavior
    - Files: `ctsIOPatternMediaStream.cpp`, potentially other IO pattern or client-init code that sends `START`.
    - Locations:
      - `ctsIOPatternMediaStream.cpp` — replace `c_startBuffer[] = "START"` and its `resendTask` / Send logic with calls to produce a `SYN` control task (using `MakeSynTask`).
      - Any other call-sites that construct a task with `g_udpDatagramStartString` or `MediaStreamAction::START` (see `ctsMediaStreamProtocol.hpp`) should be updated to build a SYN headered frame instead.
    - Actions:
-     - Replace send of the 5-byte payload with an enqueued headered `SYN` task.
-     - Ensure retransmission/backoff logic is preserved but operates on the SYN task.
+     - When the 3‑way handshake mode is enabled (via CLI/config), replace send of the 5-byte payload with an enqueued headered `SYN` task. When disabled, preserve the existing `START` send logic.
+     - Ensure retransmission/backoff logic is preserved and applies to whichever discovery mechanism is active (legacy START or 3‑way SYN).
 
 4. Update receive-side parsing and handshake state machine
    - Files: `ctsMediaStreamProtocol.hpp`, `ctsIOPatternMediaStream.cpp`, `ctsIOPattern.cpp`, `ctsSocketBroker.cpp`/`ctsSocket.cpp` (where inbound datagrams are parsed/handled).
@@ -50,10 +52,12 @@ High-level migration steps (recommended order)
      - Ensure reassembly/deduplication caches are flushed when connection-id changes or handshake completes per new rules.
      - Add handling to accept connection-id datagrams and map them to tuple state.
 
-5. Maintain or add backward-compatible START support behind a flag
-   - Files: `ctsConfig.h` / `ctsConfig.cpp` (or wherever runtime flags/config live). Add a boolean like `g_configSettings->AllowLegacyStart` default `false`.
+5. Expose handshake mode and legacy START handling via CLI/config
+   - Files: `ctsConfig.h` / `ctsConfig.cpp` (or wherever runtime flags/config live). Add a command-line/config option such as `-enable3way` (default: `false`) or a mode switch `-HandshakeMode={legacy|3way}`.
    - Actions:
-     - If `AllowLegacyStart` is true, keep the old 5-byte special-case logic that checks for the exact-length START payload prior to headered datagram parsing. Otherwise remove it.
+     - If `-enable3way` (or `-HandshakeMode=3way`) is provided, enable the 3‑way handshake behavior and treat SYN/SYN-ACK/ACK control frames as described here.
+     - If the option is not provided (default), retain the legacy START-based discovery behavior unchanged.
+     - Optionally provide `AllowLegacyStart` as a separate flag when running in 3‑way mode to accept legacy START from peers for migration interoperability.
 
 6. Update send-path when responder accepts SYN
    - Files: `ctsIOPatternMediaStream.cpp`, `ctsIOPattern.cpp` (task creation/send path)
@@ -140,8 +144,9 @@ Testing checklist
 
 Rollout / compatibility guidance
 
-- Add the new handshake behavior behind a feature gate if you cannot update all peers simultaneously. Recommended default is to enable the handshake on both Initiator and Responder in new deployments and allow legacy START only when `AllowLegacyStart` is explicitly enabled for migration.
-- Document the change in release notes and in `README.md` with instructions to enable `AllowLegacyStart` temporarily during migration.
+- Add the new handshake behavior behind a feature gate (command-line/config option). The default behavior must preserve the legacy START-based discovery to avoid surprising existing deployments.
+- Recommended migration approach: enable the 3‑way handshake via the CLI option on a controlled set of hosts (canaries) and verify interoperability. Use an `AllowLegacyStart` compatibility option while rolling out so mixed deployments can interoperate during transition.
+- Document the change in release notes and in `README.md` with clear instructions for the CLI option to enable 3‑way mode and for the compatibility flag to accept legacy START during migration.
 
 Estimated effort
 
@@ -150,7 +155,24 @@ Estimated effort
 - Larger (4+ days): if you want to embed connection-id TLVs directly into media datagrams (requires header extensions), or if the codebase requires refactoring to centralize parsing, expect more time.
 
 If you want, I can:
-- Produce a targeted patch (PR) that implements the constants, helper functions, and replaces the `START` sends in `ctsIOPatternMediaStream.cpp` with `SYN` sends as a minimal-first-change.
-- Add unit tests that verify frame encoding/decoding and simple handshake flow.
+- Produce a targeted patch (PR) that implements the constants, helper functions, and wires the 3‑way behavior to a CLI/config option so sends are switched only when enabled.
+- Add unit tests that verify frame encoding/decoding and simple handshake flow, including tests that confirm legacy START remains active by default and that 3‑way mode is opt-in.
 
-Tell me whether you prefer a minimal incremental patch (change sends only, add decoder stubs) or a complete implementation (helpers + handshake state + tests) and I will implement it next.
+Tell me whether you prefer a minimal incremental patch (add flags + change sends only when enabled, add decoder stubs) or a complete implementation (helpers + handshake state + tests) and I will implement it next.
+
+Instructions for Copilot:
+1) Make small, incremental, minimal changes to implement the changes documented here.
+2) Make the changes backwards compatible, keeping the existing behavior while adding new behavior under a runtime flag.
+3) Some parts of this have already been implemented, so always check if the proposed functionality is present before implementing it.
+4) Ensure that the existing behavior continues to work after each step.
+5) build and check that the build succeeds.
+6) run the test (run the one with -listen: in the background)
+Server:
+```
+x64\Debug\ctsTraffic.exe -listen:* -protocol:udp -bitspersecond:1000000 -FrameRate:1000 -StreamLength:5 -ConsoleVerbosity:1 -verify:connection -serverexitlimit:50
+```
+Client:
+```
+x64\Debug\ctsTraffic.exe -target:localhost -protocol:udp -bitspersecond:1000000 -FrameRate:1000 -StreamLength:5 -ConsoleVerbosity:1 -verify:connection -connections:50 -iterations:1
+```
+1) After all the changes pass tests, stop and let me review.
