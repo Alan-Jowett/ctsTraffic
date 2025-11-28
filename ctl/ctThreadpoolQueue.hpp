@@ -1,7 +1,17 @@
+#pragma once
+/**
+ * @file
+ * @brief A small thread-pool backed queue helper that can schedule work and
+ *        provide waitable results for call sites that need a result.
+ *
+ * This header exposes `ctThreadpoolQueue` which wraps a Windows thread pool
+ * and provides an ordered queue of work items. Work items can be simple
+ * fire-and-forget `std::function<void()>` objects or `ctThreadpoolQueueWaitableResult`
+ * objects that allow the submitter to wait for completion and read a result.
+ */
+
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-
-#pragma once
 #include <deque>
 #include <functional>
 #include <memory>
@@ -12,7 +22,14 @@
 
 namespace ctl
 {
-	// forward-declare classes that can instantiate a ctThreadpoolQueueWaitableResult object
+	/**
+	 * @brief Policy that controls how the queue submits work to the threadpool.
+	 *
+	 * - `Growable`: always submit work to the threadpool (the pool may create
+	 *   threads to handle load).
+	 * - `Flat`: only submit to the threadpool when the queue transitions from
+	 *   empty to non-empty (keeps work on the single worker thread when possible).
+	 */
 	enum class ctThreadpoolGrowthPolicy : std::uint8_t
 	{
 		Growable,
@@ -22,6 +39,13 @@ namespace ctl
 	template <ctThreadpoolGrowthPolicy GrowthPolicy>
 	class ctThreadpoolQueue;
 
+	/**
+	 * @brief Abstract base used for waitable work items.
+	 *
+	 * Implementations expose `run()` which will be called on the threadpool
+	 * worker when the work is scheduled, and `abort()` which is invoked when
+	 * the queue is being canceled and the work will not be executed.
+	 */
 	class ctThreadpoolQueueWaitableResultInterface
 	{
 	public:
@@ -38,20 +62,36 @@ namespace ctl
 		template <ctThreadpoolGrowthPolicy GrowthPolicy>
 		friend class ctThreadpoolQueue;
 
+		/**
+		 * @brief Execute the encapsulated work. Called by the managed threadpool thread.
+		 */
 		virtual void run() noexcept = 0;
+
+		/**
+		 * @brief Cancel the pending work and wake any waiters.
+		 */
 		virtual void abort() noexcept = 0;
 	};
 
+	/**
+	 * @brief A waitable wrapper around a functor that produces a result.
+	 *
+	 * The submitter receives a `std::shared_ptr<ctThreadpoolQueueWaitableResult<TReturn>>`
+	 * which can be used to wait for completion and read the resulting value.
+	 */
 	template <typename TReturn>
 	class ctThreadpoolQueueWaitableResult final : public ctThreadpoolQueueWaitableResultInterface
 	{
 	public:
-		// throws a wil exception on failure
+		/**
+		 * @brief Construct wrapper from a callable that returns `TReturn`.
+		 *
+		 * @tparam FunctorType Callable type.
+		 * @param functor [in] Callable to invoke on the TP thread.
+		 * @throws wil::ResultException or `std::bad_alloc` if allocation fails.
+		 */
 		template <typename FunctorType>
-		explicit ctThreadpoolQueueWaitableResult(FunctorType&& functor) :
-			m_function(std::forward<FunctorType>(functor))
-		{
-		}
+		explicit ctThreadpoolQueueWaitableResult(FunctorType&& functor) : m_function(std::forward<FunctorType>(functor)) {}
 
 		~ctThreadpoolQueueWaitableResult() override = default;
 
@@ -60,6 +100,12 @@ namespace ctl
 		// - this can be called multiple times if needing to probe
 		// any other error code resulted from attempting to run the callback
 		// - meaning it did *not* run to completion
+		/**
+		 * @brief Wait for the work to complete.
+		 *
+		 * @param timeout [in] Timeout in milliseconds.
+		 * @return DWORD Win32 error code. `ERROR_SUCCESS` on success, `ERROR_TIMEOUT` if timed out.
+		 */
 		DWORD wait(DWORD timeout) const noexcept
 		{
 			if (!m_completionSignal.wait(timeout))
@@ -73,17 +119,32 @@ namespace ctl
 		}
 
 		// waitable event handle, signaled when the callback has run to completion (or failed)
+		/**
+		 * @brief Get the event handle that will be signaled when the work completes.
+		 *
+		 * @return HANDLE Waitable event.
+		 */
 		HANDLE notification_event() const noexcept
 		{
 			return m_completionSignal.get();
 		}
 
+		/**
+		 * @brief Read the result of the callable after successful completion.
+		 *
+		 * @return const TReturn& Reference to the stored result.
+		 */
 		const TReturn& read_result() const noexcept
 		{
 			return m_result;
 		}
 
 		// move the result out of the object for move-only types
+		/**
+		 * @brief Move the result out for move-only result types.
+		 *
+		 * @return TReturn Moved result.
+		 */
 		TReturn move_result() noexcept
 		{
 			TReturn moveOut(std::move(m_result));
@@ -157,17 +218,38 @@ namespace ctl
 	};
 
 
+	/**
+	 * @brief A simple ordered work queue backed by a Windows threadpool.
+	 *
+	 * @tparam GrowthPolicy Controls whether the queue is `Growable` or `Flat`.
+	 * - Growable: submits each work item to the TP immediately.
+	 * - Flat: attempts to keep work on a single TP thread and only submits when
+	 *   the queue transitions from empty to non-empty.
+	 */
 	template <ctThreadpoolGrowthPolicy GrowthPolicy>
 	class ctThreadpoolQueue
 	{
 	public:
-		explicit ctThreadpoolQueue() :
-			m_tpEnvironment(0, 1)
+		/**
+		 * @brief Construct a `ctThreadpoolQueue`.
+		 *
+		 * Creates an internal threadpool environment and a single worker.
+		 */
+		explicit ctThreadpoolQueue() : m_tpEnvironment(0, 1)
 		{
 			// create a single-threaded threadpool
 			m_tpHandle = m_tpEnvironment.create_tp(WorkCallback, this);
 		}
 
+		/**
+		 * @brief Submit a callable to the queue and receive a waitable result.
+		 *
+		 * @tparam TReturn Result type returned by the callable.
+		 * @tparam FunctorType Callable type.
+		 * @param functor [in] Callable to schedule.
+		 * @return std::shared_ptr<ctThreadpoolQueueWaitableResult<TReturn>> Shared pointer
+		 *         to a waitable result wrapper; `nullptr` if submission failed.
+		 */
 		template <typename TReturn, typename FunctorType>
 		std::shared_ptr<ctThreadpoolQueueWaitableResult<TReturn>> submit_with_results(FunctorType&& functor) noexcept try
 		{
@@ -195,6 +277,12 @@ namespace ctl
 			return nullptr;
 		}
 
+		/**
+		 * @brief Submit a fire-and-forget callable to the queue.
+		 *
+		 * @tparam FunctorType Callable type convertible to `std::function<void()>`.
+		 * @param functor [in] Callable to schedule.
+		 */
 		template <typename FunctorType>
 		void submit(FunctorType&& functor) noexcept try
 		{
@@ -217,8 +305,16 @@ namespace ctl
 		CATCH_LOG()
 
 			// functors must return type HRESULT
+			/**
+			 * @brief Submit a callable and wait for it to complete. Callable must
+			 *        return an `HRESULT`.
+			 *
+			 * @tparam FunctorType Callable type.
+			 * @param functor [in] Callable to run synchronously on the TP worker.
+			 * @return HRESULT Result of the callable or an error code.
+			 */
 			template <typename FunctorType>
-		HRESULT submit_and_wait(FunctorType&& functor) noexcept try
+			HRESULT submit_and_wait(FunctorType&& functor) noexcept try
 		{
 			if constexpr (GrowthPolicy == ctThreadpoolGrowthPolicy::Growable)
 			{
@@ -240,6 +336,12 @@ namespace ctl
 		CATCH_RETURN()
 
 			// cancels anything queued to the TP - this ctThreadpoolQueue instance can no longer be used
+			/**
+			 * @brief Cancel all queued work and shutdown the internal threadpool.
+			 *
+			 * After calling `cancel()` the `ctThreadpoolQueue` instance may no
+			 * longer be used.
+			 */
 			void cancel() noexcept try
 		{
 			if (m_tpHandle)
@@ -267,12 +369,20 @@ namespace ctl
 		}
 		CATCH_LOG()
 
+			/**
+			 * @brief Determine if the current thread is the internal threadpool worker.
+			 *
+			 * @return bool `true` if running on the queue worker thread.
+			 */
 			bool IsRunningInQueue() const noexcept
 		{
 			const auto currentThreadId = GetThreadId(GetCurrentThread());
 			return currentThreadId == static_cast<DWORD>(InterlockedCompareExchange64(&m_threadpoolThreadId, 0ll, 0ll));
 		}
 
+		/**
+		 * @brief Destructor: cancels queued work and releases the threadpool.
+		 */
 		~ctThreadpoolQueue() noexcept
 		{
 			cancel();
