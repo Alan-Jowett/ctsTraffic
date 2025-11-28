@@ -196,8 +196,8 @@ namespace ctl
 	 * requested mapping cannot be produced (for example `shardCount == 0` or
 	 * the platform reports zero processors) the function returns `std::nullopt`.
 	 *
-	* @param[in] shardCount Number of shards to map.
-	* @param[in] policy The affinity policy to apply when computing mappings.
+	 * @param[in] shardCount Number of shards to map.
+	 * @param[in] policy The affinity policy to apply when computing mappings.
 	 * @return Optional vector with `shardCount` entries on success, or `std::nullopt` on failure.
 	 */
 	inline std::optional<std::vector<GroupAffinity>> ComputeShardAffinities(uint32_t shardCount, CpuAffinityPolicy policy)
@@ -290,7 +290,7 @@ namespace ctl
 	 * `std::nullopt` for empty or unrecognized names, and also for the
 	 * canonical "NONE" value which indicates no policy.
 	 *
-	* @param[in] name Input policy string (wide string).
+	 * @param[in] name Input policy string (wide string).
 	 * @return Optional `CpuAffinityPolicy` when recognized, otherwise `std::nullopt`.
 	 */
 	inline std::optional<CpuAffinityPolicy> ParsePolicyName(const std::wstring& name) noexcept
@@ -322,7 +322,7 @@ namespace ctl
 	 * The returned string contains the processor group index and the
 	 * affinity mask formatted in hexadecimal.
 	 *
-	* @param[in] g The `GroupAffinity` to format.
+	 * @param[in] g The `GroupAffinity` to format.
 	 * @return A wide string describing the group and mask.
 	 */
 	inline std::wstring FormatGroupAffinity(const GroupAffinity& g)
