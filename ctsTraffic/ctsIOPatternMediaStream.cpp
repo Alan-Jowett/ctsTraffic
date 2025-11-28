@@ -209,19 +209,23 @@ ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(con
 
                     // construct an ACK control frame and send it immediately
                     const auto requiredSize = c_udpDatagramDataHeaderLength + c_udpDatagramControlFixedBodyLength;
-                        // Build ACK into a local buffer and send immediately (caller-owned Static buffer)
-                        std::vector<char> ackBuffer(requiredSize);
-                        ctsTask ackRawTask;
-                        ackRawTask.m_ioAction = ctsTaskAction::Send;
-                        ackRawTask.m_trackIo = false;
-                        ackRawTask.m_buffer = ackBuffer.data();
-                        ackRawTask.m_bufferOffset = 0;
-                        ackRawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
-                        ackRawTask.m_bufferType = ctsTask::BufferType::Static;
+                    // allocate a heap-shared buffer so its lifetime can be extended until the async send completes
+                    auto ackBufferPtr = std::make_shared<std::vector<char>>(requiredSize);
+                    ctsTask ackRawTask;
+                    ackRawTask.m_ioAction = ctsTaskAction::Send;
+                    ackRawTask.m_trackIo = false;
+                    ackRawTask.m_buffer = ackBufferPtr->data();
+                    ackRawTask.m_bufferOffset = 0;
+                    ackRawTask.m_bufferLength = static_cast<uint32_t>(requiredSize);
+                    // mark as Static since the buffer is owned by our shared_ptr container
+                    ackRawTask.m_bufferType = ctsTask::BufferType::Static;
 
-                        auto ackTask = ctsMediaStreamMessage::MakeAckTask(ackRawTask, connectionId);
-                        ackTask.m_bufferType = ctsTask::BufferType::Static;
-                        this->SendTaskToCallback(ackTask);
+                    auto ackTask = ctsMediaStreamMessage::MakeAckTask(ackRawTask, connectionId);
+                    ackTask.m_bufferType = ctsTask::BufferType::Static;
+
+                    // Send via the registered callback so the receiver-level IO impl can perform a synchronous send
+                    // (ackBufferPtr remains alive on the stack while the callback executes)
+                    this->SendTaskToCallback(ackTask);
                 }
             }
         }
