@@ -528,10 +528,12 @@ namespace ctsTraffic
                                     auto& info = *infoPtr;
                                     info.state = HandshakeState::SynReceived;
                                     info.lastUpdate = std::chrono::steady_clock::now();
+                                    // If the initiator provided a desired connection id in the SYN, record it
                                     if (!parsedConnectionId.empty())
                                     {
-                                        info.assignedConnectionId = parsedConnectionId;
+                                        info.requestedConnectionId = parsedConnectionId;
                                     }
+                                    // Always record the responder-assigned id
                                     info.assignedConnectionId = std::string(assignedId, ctsStatistics::ConnectionIdLength);
                                 }
 

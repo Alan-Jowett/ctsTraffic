@@ -87,6 +87,7 @@ constexpr uint32_t c_udpDatagramControlFixedBodyLength = c_udpDatagramControlVer
         HandshakeState state{HandshakeState::None};
         std::chrono::steady_clock::time_point lastUpdate{std::chrono::steady_clock::now()};
         std::string assignedConnectionId; // optional assigned id from responder
+        std::string requestedConnectionId; // optional desired id requested by initiator (from SYN)
     };
 
 static auto* g_udpDatagramStartString = "START";
