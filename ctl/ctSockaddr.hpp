@@ -12,6 +12,16 @@ See the Apache Version 2.0 License for specific language governing permissions a
 */
 
 // ReSharper disable CppInconsistentNaming
+/**
+ * @file ctSockaddr.hpp
+ * @brief Lightweight wrapper around SOCKADDR/SOCKADDR_INET providing helpers
+ *        for construction, conversion, and textual formatting of IP addresses.
+ *
+ * This header provides the `ctl::ctSockaddr` class which encapsulates
+ * both IPv4 and IPv6 sockaddr representations and offers convenience
+ * methods for parsing, formatting, and manipulating address/port/scope
+ * information.
+ */
 #pragma once
 
 // cpp headers
@@ -35,17 +45,36 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctl
 {
+/**
+ * @enum ByteOrder
+ * @brief Specifies the byte order used when setting or getting port numbers.
+ */
 enum class ByteOrder : std::uint8_t
 {
     HostOrder,
     NetworkOrder
 };
 
+/**
+ * @class ctSockaddr
+ * @brief A small value-type wrapper around `SOCKADDR_INET`.
+ *
+ * The class stores an address in a `SOCKADDR_INET` union and provides
+ * constructors for a variety of input forms, comparison operators, and
+ * helpers to read/write addresses as text. Methods that accept buffers
+ * or pointers annotate the parameter direction in the Doxygen comments.
+ */
 class ctSockaddr final
 {
 public:
     static constexpr DWORD FixedStringLength = INET6_ADDRSTRLEN;
     
+    /**
+     * @brief Resolve a host name to a list of addresses.
+     * @param name [in] Null-terminated wide string host name to resolve.
+     * @returns Vector of resolved `ctSockaddr` entries for the host.
+     * @throws on failure to resolve (Win32 error via THROW_WIN32_MSG).
+     */
     static std::vector<ctSockaddr> ResolveName(_In_ PCWSTR name)
     {
         ADDRINFOW* addrResult = nullptr;
@@ -74,6 +103,11 @@ public:
 
     // for dual-mode sockets, when needing to explicitly connect to the target v4 address,
     // - one must map the v4 address to its mapped v6 address
+    /**
+     * @brief Map an IPv4 `ctSockaddr` into its IPv6-mapped address form.
+     * @param inV4 [in] IPv4 address to map to IPv6-mapped representation.
+     * @returns IPv6-mapped `ctSockaddr` with the same port as `inV4`.
+     */
     static ctSockaddr MapDualMode4To6(const ctSockaddr& inV4) noexcept
     {
         constexpr IN6_ADDR v4MappedPrefix{{IN6ADDR_V4MAPPEDPREFIX_INIT}};
@@ -96,14 +130,54 @@ public:
         Any
     };
 
+    /**
+     * @brief Construct an empty/initialized ctSockaddr.
+     * @param family [in] Optional address family (AF_INET/AF_INET6/AF_UNSPEC).
+     * @param type [in] AddressType suggesting Any or Loopback initialization.
+     */
     explicit ctSockaddr(ADDRESS_FAMILY family = AF_UNSPEC, AddressType type = AddressType::Any) noexcept;
+
+    /**
+     * @brief Construct from a raw `SOCKADDR` pointer.
+     * @param inAddr [in] Pointer to `SOCKADDR` data.
+     * @param inLength [in] Number of bytes available at `inAddr`.
+     */
     explicit ctSockaddr(_In_reads_bytes_(inLength) const SOCKADDR* inAddr, int inLength) noexcept;
     explicit ctSockaddr(_In_reads_bytes_(inLength) const SOCKADDR* inAddr, size_t inLength) noexcept;
+
+    /**
+     * @brief Construct from specific socket structures.
+     * @param inAddr [in] Pointer to a `SOCKADDR_IN` (IPv4).
+     */
     explicit ctSockaddr(const SOCKADDR_IN*) noexcept;
+    /**
+     * @brief Construct from specific socket structures.
+     * @param inAddr [in] Pointer to a `SOCKADDR_IN6` (IPv6).
+     */
     explicit ctSockaddr(const SOCKADDR_IN6*) noexcept;
+    /**
+     * @brief Construct from specific socket structures.
+     * @param inAddr [in] Pointer to a `SOCKADDR_INET` (generic).
+     */
     explicit ctSockaddr(const SOCKADDR_INET*) noexcept;
+    /**
+     * @brief Construct from a `SOCKET_ADDRESS` pair.
+     * @param inAddr [in] Pointer to a `SOCKET_ADDRESS` describing address and length.
+     */
     explicit ctSockaddr(const SOCKET_ADDRESS*) noexcept;
+    /**
+     * @brief Construct from an IPv4 address + port.
+     * @param inAddr [in] Pointer to an `IN_ADDR` structure.
+     * @param port [in] Port number; default 0.
+     * @param order [in] Byte order for the supplied port.
+     */
     explicit ctSockaddr(const IN_ADDR*, uint16_t port = 0, ByteOrder order = ByteOrder::HostOrder) noexcept;
+    /**
+     * @brief Construct from an IPv6 address + port.
+     * @param inAddr [in] Pointer to an `IN6_ADDR` structure.
+     * @param port [in] Port number; default 0.
+     * @param order [in] Byte order for the supplied port.
+     */
     explicit ctSockaddr(const IN6_ADDR*, uint16_t port = 0, ByteOrder order = ByteOrder::HostOrder) noexcept;
 
     ~ctSockaddr() = default;
@@ -118,10 +192,28 @@ public:
     bool operator<(const ctSockaddr&) const noexcept;
     bool operator>(const ctSockaddr&) const noexcept;
 
+    /**
+     * @brief Reset the stored sockaddr to the specified family.
+     * @param family [in] Address family to set (AF_UNSPEC clears the structure).
+     */
     void reset(ADDRESS_FAMILY family = AF_UNSPEC) noexcept;
+    /**
+     * @brief Reset the stored sockaddr and optionally set to loopback.
+     * @param family [in] Address family to set.
+     * @param type [in] AddressType to indicate loopback or any.
+     */
     void reset(ADDRESS_FAMILY, AddressType) noexcept;
+    /**
+     * @brief Swap contents with another ctSockaddr.
+     * @param other [in,out] Other socket address to swap with.
+     */
     void swap(_Inout_ ctSockaddr&) noexcept;
 
+    /**
+     * @brief Replace the stored sockaddr from a raw pointer.
+     * @param inAddr [in] Pointer to source `SOCKADDR` data.
+     * @param inLength [in] Number of bytes available at `inAddr`.
+     */
     void setSockaddr(_In_reads_bytes_(inLength) const SOCKADDR* inAddr, int inLength) noexcept;
     void setSockaddr(_In_reads_bytes_(inLength) const SOCKADDR* inAddr, size_t inLength) noexcept;
     void setSockaddr(const SOCKADDR_IN*) noexcept;
@@ -130,14 +222,39 @@ public:
     void setSockaddr(const SOCKET_ADDRESS*) noexcept;
 
     // setting by string returns a bool if was able to convert to an address
+    /**
+     * @brief Parse and set the IP address from a string.
+     * @param wszAddr [in] Wide-character address string (numeric host representation).
+     * @returns true if parse succeeded, false otherwise.
+     */
     bool setAddress(_In_ PCWSTR) noexcept;
+#ifdef _WINSOCK_DEPRECATED_NO_WARNINGS
+    /**
+     * @brief Parse and set the IP address from an ANSI string.
+     * @param szAddr [in] Narrow-character address string (numeric host representation).
+     * @returns true if parse succeeded, false otherwise.
+     */
     bool setAddress(_In_ PCSTR) noexcept;
+#endif
     void setAddress(const IN_ADDR*) noexcept;
     void setAddress(const IN6_ADDR*) noexcept;
     [[nodiscard]] bool setAddress(SOCKET) noexcept;
 
+    /**
+     * @brief Set the port for the stored address.
+     * @param port [in] Port number to set.
+     * @param order [in] Byte order of the provided port value.
+     */
     void setPort(uint16_t, ByteOrder = ByteOrder::HostOrder) noexcept;
+    /**
+     * @brief Set the IPv6 scope id.
+     * @param scopeid [in] Scope id to set for IPv6 addresses.
+     */
     void setScopeId(uint32_t) noexcept;
+    /**
+     * @brief Set the IPv6 flow information.
+     * @param flowinfo [in] Flow information value for IPv6.
+     */
     void setFlowInfo(uint32_t) noexcept;
 
     [[nodiscard]] bool isAddressLinkLocal() const noexcept;
@@ -149,21 +266,43 @@ public:
     [[nodiscard]] bool isAddressLoopback() const noexcept;
 
     // writeAddress prints the IP address portion, not the scope id or port
+    /**
+     * @brief Return the textual IP address (no port/scope) as a wstring.
+     * @returns Address string representation.
+     */
     [[nodiscard]] std::wstring writeAddress() const;
+    /**
+     * @brief Write the textual IP address into a wide char buffer.
+     * @param address [out] Buffer to receive the null-terminated address string.
+     * @returns true on success, false on failure.
+     */
     bool writeAddress(WCHAR (&address)[FixedStringLength]) const noexcept;
+    /**
+     * @brief Write the textual IP address into a narrow char buffer.
+     * @param address [out] Buffer to receive the null-terminated address string.
+     * @returns true on success, false on failure.
+     */
     bool writeAddress(CHAR (&address)[FixedStringLength]) const noexcept;
 
     // writeCompleteAddress prints the IP address, scope id, and port
+    /**
+     * @brief Return a textual representation including port and scope (if any).
+     * @param trimScope [in] When true, remove scope portion of IPv6 textual form.
+     * @returns Address string including port and optional scope info.
+     */
     [[nodiscard]] std::wstring writeCompleteAddress(bool trimScope = false) const;
     bool writeCompleteAddress(WCHAR (&address)[FixedStringLength], bool trimScope = false) const noexcept;
     bool writeCompleteAddress(CHAR (&address)[FixedStringLength], bool trimScope = false) const noexcept;
 
     // Accessors
+    /** @name Accessors */
+    /**@{*/
     [[nodiscard]] int length() const noexcept;
     [[nodiscard]] uint16_t port() const noexcept;
     [[nodiscard]] ADDRESS_FAMILY family() const noexcept;
     [[nodiscard]] uint32_t flowinfo() const noexcept;
     [[nodiscard]] uint32_t scope_id() const noexcept;
+    /**@}*/
 
     [[nodiscard]] SOCKADDR* sockaddr() noexcept;
     [[nodiscard]] SOCKADDR_IN* sockaddr_in() noexcept;
