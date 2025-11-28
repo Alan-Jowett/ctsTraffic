@@ -1,67 +1,5 @@
-/*
-
-Copyright (c) Microsoft Corporation
-All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
-
-See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
-
-*/
-
-// ReSharper disable CppInconsistentNaming
-#pragma once
-
-// cpp headers
-#include <utility>
-#include <functional>
-// os headers
-#include <excpt.h>
-#include <Windows.h>
-#include <WinSock2.h>
-// wil headers
-#include <wil/resource.h>
-
-
-#include "ctThreadIocp_base.hpp"
-
 /**
- * @file
- * @brief Thread-pool based OVERLAPPED I/O helper using the Windows Threadpool APIs.
- *
- * This header defines `ctThreadIocp`, a helper that creates a thread-pool IO
- * object and provides a safe, callback-based pattern for using `OVERLAPPED*`
-/*
-Copyright (c) Microsoft Corporation
-All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
-
-See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
-*/
-
-// ReSharper disable CppInconsistentNaming
-#pragma once
-
-// cpp headers
-#include <utility>
-#include <functional>
-// os headers
-#include <excpt.h>
-#include <Windows.h>
-#include <WinSock2.h>
-// wil headers
-#include <wil/resource.h>
-
-
-#include "ctThreadIocp_base.hpp"
-
-/**
- * @file
+ * @file ctThreadIocp.hpp
  * @brief Thread-pool based OVERLAPPED I/O helper using the Windows Threadpool APIs.
  *
  * This header defines `ctThreadIocp`, a helper that creates a thread-pool IO
@@ -69,7 +7,29 @@ See the Apache Version 2.0 License for specific language governing permissions a
  * with Win32 asynchronous APIs. It also provides the small helper
  * `ctThreadIocpCallbackInfo` which pairs an `OVERLAPPED` with its completion
  * callback.
+ *
+ * @copyright Copyright (c) Microsoft Corporation
+ * All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY OR NON-INFRINGEMENT.
+ *
+ * See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
  */
+
+#pragma once
+
+// cpp headers
+#include <utility>
+#include <functional>
+#include <excpt.h>
+#include <Windows.h>
+#include <WinSock2.h>
+#include <wil/resource.h>
+
+#include "ctThreadIocp_base.hpp"
 
 namespace ctl
 {

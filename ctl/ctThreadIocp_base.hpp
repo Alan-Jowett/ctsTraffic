@@ -1,27 +1,5 @@
-/*
-
-Copyright (c) Microsoft Corporation
-All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
-
-See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
-
-  ctThreadIocp_base.hpp
-
-  Abstract interface describing the contract between ctThreadIocp-like
-  objects and their callers.
-
-*/
-#pragma once
-
-#include <functional>
-#include <Windows.h>
-
 /**
- * @file
+ * @file ctThreadIocp_base.hpp
  * @brief Minimal abstract interface used by ctThreadIocp-like objects.
  *
  * This header declares `ctl::ctThreadIocp_base`, an abstract base class that
@@ -31,7 +9,22 @@ See the Apache Version 2.0 License for specific language governing permissions a
  * Existing implementation details and the original explanatory comments are
  * preserved below; the method parameter annotations mark ownership and intent
  * using [in]/[out]/[in,out] where appropriate.
+ *
+ * @copyright Copyright (c) Microsoft Corporation
+ * All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY OR NON-INFRINGEMENT.
+ *
+ * See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
  */
+
+#pragma once
+
+#include <functional>
+#include <Windows.h>
 
 namespace ctl
 {
