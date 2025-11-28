@@ -11,6 +11,13 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+#/**
+ * @file ctsConnectEx.cpp
+ * @brief ConnectEx-based connection helper which issues overlapped ConnectEx calls.
+ *
+ * Implements a helper that posts ConnectEx on sockets and completes the
+ * associated ctsSocket objects when the operation completes (inline or via IOCP).
+ */
 // cpp headers
 #include <memory>
 // os headers
@@ -25,6 +32,17 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
+/**
+ * @brief Completion callback for ConnectEx operations.
+ *
+ * Handles both inline completions (overlapped == nullptr) and IOCP-driven
+ * completions by updating socket context, applying post-connect options and
+ * completing the associated `ctsSocket` state.
+ *
+ * @param overlapped [in] OVERLAPPED pointer supplied to ConnectEx, or nullptr for inline completion.
+ * @param weakSocket [in] Weak reference to the `ctsSocket` requesting the connect.
+ * @param targetAddress [in] Remote address that was being connected to.
+ */
 static void ctsConnectExIoCompletionCallback(
     OVERLAPPED* overlapped,
     const std::weak_ptr<ctsSocket>& weakSocket,
@@ -93,6 +111,11 @@ static void ctsConnectExIoCompletionCallback(
     }
 }
 
+/**
+ * @brief Initiate a ConnectEx on the provided socket.
+ *
+ * @param weakSocket [in] Weak reference to the `ctsSocket` that owns the socket to connect.
+ */
 void ctsConnectEx(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
 {
     const auto sharedSocket(weakSocket.lock());
