@@ -52,6 +52,18 @@ namespace ctl {
  *  - Process events via the callback provided at construction.
  *  - Call `StopSession` to stop and clean up.
  */
+/**
+ * @brief Helper class that manages ETW trace sessions and event delivery.
+ *
+ * `ctEtwReader` manages a trace session created via `StartSession` or opened
+ * from a saved ETL via `OpenSavedSession`. It spawns a worker thread to call
+ * `ProcessTrace` and invokes a caller-provided filter callback for each
+ * `EVENT_RECORD` consumed. Typical usage:
+ *  - Call `StartSession` or `OpenSavedSession`.
+ *  - Optionally call `EnableProviders` to enable providers for the session.
+ *  - Process events via the callback provided at construction.
+ *  - Call `StopSession` to stop and clean up.
+ */
 class ctEtwReader
 {
   public:
@@ -222,7 +234,13 @@ class ctEtwReader
     void
     OpenTraceImpl(EVENT_TRACE_LOGFILE& eventLogfile);
 
-    /** Callback invoked for each consumed `EVENT_RECORD`. */
+    /**
+     * @brief Callback invoked for each consumed `EVENT_RECORD`.
+     *
+     * The callback is provided by the consumer of `ctEtwReader` and is invoked
+     * for each `EVENT_RECORD` delivered by the ETW runtime. The `EVENT_RECORD`
+     * pointer is valid only for the duration of the callback.
+     */
     std::function<void(const EVENT_RECORD* pRecord)> m_eventFilter{};
     /** Trace session handle returned by `StartTrace`. */
     TRACEHANDLE m_sessionHandle{NULL};
