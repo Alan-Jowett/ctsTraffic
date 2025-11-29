@@ -76,19 +76,53 @@ void ctsMediaStreamServerConnectedSocket::QueueTask(const ctsTask& task) noexcep
 
 void ctsMediaStreamServerConnectedSocket::Start() noexcept
 {
-    const auto lock = m_objectGuard.lock();
-    _Analysis_assume_lock_acquired_(m_objectGuard);
-    if (m_nextTask.m_timeOffsetMilliseconds < 2)
-    {
-        // immediate
-        MediaStreamTimerCallback(nullptr, this, nullptr);
-    }
-    else
-    {
-        FILETIME ftDueTime{ctTimer::convert_ms_to_relative_filetime(m_nextTask.m_timeOffsetMilliseconds)};
-        SetThreadpoolTimer(m_taskTimer.get(), &ftDueTime, 0, 0);
-    }
-    _Analysis_assume_lock_released_(m_objectGuard);
+        const auto sharedSocket(m_weakSocket.lock());
+        if (!sharedSocket)
+        {
+            return;
+        }
+
+        // hold a reference on the socket
+        const auto lockedSocket = sharedSocket->AcquireSocketLock();
+        const auto lockedPattern = lockedSocket.GetPattern();
+        if (!lockedPattern)
+        {
+            return;
+        }
+        auto sharedSocketLocal = m_weakSocket.lock();
+        if (!sharedSocketLocal)
+        {
+            THROW_WIN32_MSG(WSAECONNABORTED, "ctsSocket already freed");
+        }
+
+        ctsTask nextTask;
+        try
+        {
+            do
+            {
+                nextTask = lockedPattern->InitiateIo();
+                if (nextTask.m_ioAction != ctsTaskAction::None)
+                {
+                    // Inline scheduling logic (previously in ctsMediaStreamServerImpl::ScheduleIo)
+
+                    // Call into connected socket without holding the global lock
+                    QueueTask(nextTask);
+                }
+            } while (nextTask.m_ioAction != ctsTaskAction::None);
+        }
+        catch (...)
+        {
+            const auto error = ctsConfig::PrintThrownException();
+            if (nextTask.m_ioAction != ctsTaskAction::None)
+            {
+                // must complete any IO that was requested but not scheduled
+                lockedPattern->CompleteIo(nextTask, 0, error);
+                if (0 == sharedSocket->GetPendedIoCount())
+                {
+                    sharedSocket->CompleteState(error);
+                }
+            }
+        }
 }
 
 void ctsMediaStreamServerConnectedSocket::CompleteState(uint32_t errorCode) const noexcept

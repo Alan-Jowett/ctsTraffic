@@ -11,15 +11,12 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
-/**
- * @file ctCpuAffinity.hpp
- * @brief Helpers for detecting CPU affinity capabilities and mapping shards to CPU affinity.
- *
- * This header provides a small, testable interface used by the sharded receive
- * implementation to detect kernel capabilities (for example SIO_CPU_AFFINITY)
- * and to compute per-shard affinity mappings. Implementations may be
- * platform-optimized in a corresponding .cpp file.
- */
+/* ctCpuAffinity - helper to detect CPU affinity facilities and map shard -> affinity
+	This header provides a small, testable interface for the sharded receive
+	implementation to detect kernel capabilities (SIO_CPU_AFFINITY) and compute
+	per-shard affinity mappings. Implementations can be platform-optimized in
+	a corresponding .cpp file.
+*/
 
 #pragma once
 
@@ -37,21 +34,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctl
 {
-	/**
-	 * @internal
-	 * @brief Internal helper utilities for CPU group/processor calculations.
-	 *
-	 * These helpers are implementation details and are not intended to be
-	 * used directly by external components.
-	 */
 	namespace details {
-		/**
-		 * @brief Retrieve the active logical processor counts for each processor group.
-		 *
-		 * @return A vector where each element is the number of active logical
-		 * processors in the corresponding processor group. The vector length is
-		 * equal to the active processor group count.
-		 */
+		// Helper: get per-group processor counts
 		inline std::vector<uint32_t> GetProcessorCountsPerGroup() noexcept
 		{
 			std::vector<uint32_t> counts;
@@ -66,16 +50,7 @@ namespace ctl
 			return counts;
 		}
 
-		/**
-		 * @brief Convert a global logical CPU index to a processor group and local index.
-		 *
-		 * @param[in] globalIndex Global (0-based) logical processor index across all groups.
-		 * @param[in] perGroupCounts Vector of per-group processor counts (as returned by GetProcessorCountsPerGroup).
-		 * @param[out] outGroup Receives the processor group containing the requested logical processor.
-		 * @param[out] outIndex Receives the local index within the returned processor group.
-		 *
-		 * The function will clamp to a valid group/index if the provided index is out of range.
-		 */
+		// Convert a global cpu index to group and local index
 		inline void GlobalCpuIndexToGroupAndIndex(uint32_t globalIndex, const std::vector<uint32_t>& perGroupCounts, _Out_ WORD* outGroup, _Out_ uint32_t* outIndex) noexcept
 		{
 			uint32_t acc = 0;
@@ -104,43 +79,22 @@ namespace ctl
 		}
 	}
 
-	/**
-	 * @brief Policies for computing shard -> CPU affinity mappings.
-	 */
 	enum class CpuAffinityPolicy : uint8_t
 	{
-		/** Assign each shard to a single logical CPU. */
 		PerCpu,
-		/** Assign each shard to an entire processor group (all CPUs in the group). */
 		PerGroup,
-		/** Align shards in a manner suitable for RSS (distribution across CPUs). */
 		RssAligned,
-		/** Manual mapping - requires external configuration. */
 		Manual
 	};
 
-	/**
-	 * @brief Runtime information about CPU affinity support on the host.
-	 */
 	struct CpuAffinityInfo
 	{
-		/** Total logical processors available across all groups. */
-		uint32_t LogicalProcessorCount = 1;
-		/** Number of processor groups reported by the OS. */
-		uint32_t ProcessorGroupCount = 1;
-		/** True if `WSAIoctl` with `SIO_CPU_AFFINITY` is supported. */
-		bool SupportsCpuAffinityIoctl = false;
+		uint32_t LogicalProcessorCount = 1;    // total logical processors
+		uint32_t ProcessorGroupCount = 1;     // number of processor groups
+		bool SupportsCpuAffinityIoctl = false; // WSAIoctl(SIO_CPU_AFFINITY) support
 	};
 
-	/**
-	 * @brief Query runtime support and capabilities for CPU affinity.
-	 *
-	 * This function queries the OS for processor group information and probes
-	 * whether `SIO_CPU_AFFINITY` is supported by creating a short-lived UDP socket
-	 * and issuing a `WSAIoctl` probe. The function is non-throwing.
-	 *
-	 * @return A `CpuAffinityInfo` populated with detected capabilities.
-	 */
+	// Query runtime support for CPU affinity features. Non-throwing.
 	inline CpuAffinityInfo QueryCpuAffinitySupport() noexcept
 	{
 		CpuAffinityInfo info{};
@@ -177,29 +131,15 @@ namespace ctl
 		return info;
 	}
 
-	/**
-	 * @brief A processor group and affinity mask pair used for setting thread/socket affinity.
-	 */
+	// Represents a group + affinity mask for thread/socket affinity operations.
 	struct GroupAffinity
 	{
-		/** Processor group index. */
 		WORD Group = 0;
-		/** Affinity mask within the group (KAFFINITY). */
 		KAFFINITY Mask = 0;
 	};
 
-	/**
-	 * @brief Compute a per-shard CPU affinity mapping.
-	 *
-	 * Given a shard count and a `CpuAffinityPolicy`, compute a vector of
-	 * `GroupAffinity` entries assigning each shard to a group/mask. If the
-	 * requested mapping cannot be produced (for example `shardCount == 0` or
-	 * the platform reports zero processors) the function returns `std::nullopt`.
-	 *
-	* @param[in] shardCount Number of shards to map.
-	* @param[in] policy The affinity policy to apply when computing mappings.
-	 * @return Optional vector with `shardCount` entries on success, or `std::nullopt` on failure.
-	 */
+	// Compute per-shard affinity mapping given a shard count and policy.
+	// Returns an optional vector of length == shardCount when mapping is possible.
 	inline std::optional<std::vector<GroupAffinity>> ComputeShardAffinities(uint32_t shardCount, CpuAffinityPolicy policy)
 	{
 		if (shardCount == 0)
@@ -282,17 +222,7 @@ namespace ctl
 		}
 	}
 
-	/**
-	 * @brief Parse a human-readable policy name into a `CpuAffinityPolicy`.
-	 *
-	 * The comparison is case-insensitive and accepts a small set of aliases
-	 * (for example `PER_CPU` and `PERCPU`). The function returns
-	 * `std::nullopt` for empty or unrecognized names, and also for the
-	 * canonical "NONE" value which indicates no policy.
-	 *
-	* @param[in] name Input policy string (wide string).
-	 * @return Optional `CpuAffinityPolicy` when recognized, otherwise `std::nullopt`.
-	 */
+	// Parse a policy name (case-insensitive) to CpuAffinityPolicy.
 	inline std::optional<CpuAffinityPolicy> ParsePolicyName(const std::wstring& name) noexcept
 	{
 		if (name.empty())
@@ -316,15 +246,7 @@ namespace ctl
 		return std::nullopt;
 	}
 
-	/**
-	 * @brief Format a `GroupAffinity` as a human-readable string for logging.
-	 *
-	 * The returned string contains the processor group index and the
-	 * affinity mask formatted in hexadecimal.
-	 *
-	* @param[in] g The `GroupAffinity` to format.
-	 * @return A wide string describing the group and mask.
-	 */
+	// Human-readable formatting helper for logging.
 	inline std::wstring FormatGroupAffinity(const GroupAffinity& g)
 	{
 		wchar_t buf[128]{};

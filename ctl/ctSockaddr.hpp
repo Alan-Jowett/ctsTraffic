@@ -18,7 +18,6 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <algorithm>
 #include <string>
 #include <vector>
-#include <functional>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -825,37 +824,3 @@ inline const IN6_ADDR* ctSockaddr::in6_addr() const noexcept
 } // namespace ctl
 
 #pragma prefast(pop)
-
-// Provide a std::hash specialization for ctl::ctSockaddr so it can be used
-// as a key in unordered containers without requiring callers to implement
-// their own hash functors.
-namespace std
-{
-    template<>
-    struct hash<::ctl::ctSockaddr>
-    {
-        size_t operator()(const ::ctl::ctSockaddr& addr) const noexcept
-        {
-            const auto fam = addr.family();
-            const auto p = reinterpret_cast<const uint8_t*>(addr.sockaddr());
-            size_t len = sizeof(SOCKADDR_INET);
-            if (fam == AF_INET)
-            {
-                len = sizeof(SOCKADDR_IN);
-            }
-            else if (fam == AF_INET6)
-            {
-                len = sizeof(SOCKADDR_IN6);
-            }
-
-            // FNV-1a 64-bit
-            uint64_t h = 14695981039346656037ULL;
-            for (size_t i = 0; i < len; ++i)
-            {
-                h ^= static_cast<uint64_t>(p[i]);
-                h *= 1099511628211ULL;
-            }
-            return static_cast<size_t>(h);
-        }
-    };
-}

@@ -85,6 +85,11 @@ private:
 
     void CompleteState(uint32_t errorCode) const noexcept;
 
+    // Enqueue a task produced by the IO pattern for this connection.
+    // This sets the next task and either posts an immediate send or schedules
+    // the threadpool timer as appropriate.
+    void QueueTask(const ctsTask& task) noexcept;
+
 public:
     ctsMediaStreamServerConnectedSocket(
         std::weak_ptr<ctsSocket> weakSocket,
@@ -93,14 +98,11 @@ public:
 
     ~ctsMediaStreamServerConnectedSocket() noexcept;
 
-    // Enqueue a task produced by the IO pattern for this connection.
-    // This sets the next task and either posts an immediate send or schedules
-    // the threadpool timer as appropriate.
-    void QueueTask(const ctsTask& task) noexcept;
 
-    // Start processing the currently queued task (no parameters).
-    // Useful when the connected socket already has m_nextTask set and the
-    // server wants the connected socket to perform scheduling itself.
+    // Called by the server to let the connected socket acquire the socket lock,
+    // call the IO pattern's InitiateIo repeatedly, and enqueue any resulting
+    // tasks. This moves InitiateIo into the connected socket to decouple the
+    // server from protocol internals.
     void Start() noexcept;
 
     // non-copyable

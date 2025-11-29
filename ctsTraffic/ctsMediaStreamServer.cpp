@@ -67,58 +67,18 @@ namespace ctsTraffic
             return;
         }
 
-        // hold a reference on the socket
-        const auto lockedSocket = sharedSocket->AcquireSocketLock();
-        const auto lockedPattern = lockedSocket.GetPattern();
-        if (!lockedPattern)
+        const auto sharedConnectedSocket = ctsMediaStreamServerImpl::FindConnectedSocket(sharedSocket->GetRemoteSockaddr());
+        if (!sharedConnectedSocket)
         {
-            return;
+            ctsConfig::PrintErrorInfo(
+                L"ctsMediaStreamServer - failed to find the socket with remote address %ws in our connected socket list to continue sending datagrams",
+                sharedSocket->GetRemoteSockaddr().writeCompleteAddress().c_str());
+            THROW_WIN32_MSG(ERROR_INVALID_DATA, "ctsSocket was not found in the connected sockets to continue sending datagrams");
         }
 
-        ctsTask nextTask;
-        try
-        {
-            ctsMediaStreamServerImpl::InitOnce();
+        sharedConnectedSocket->Start();
 
-            do
-            {
-                nextTask = lockedPattern->InitiateIo();
-                if (nextTask.m_ioAction != ctsTaskAction::None)
-                {
-                    // Inline scheduling logic (previously in ctsMediaStreamServerImpl::ScheduleIo)
-                    auto sharedSocketLocal = weakSocket.lock();
-                    if (!sharedSocketLocal)
-                    {
-                        THROW_WIN32_MSG(WSAECONNABORTED, "ctsSocket already freed");
-                    }
-
-                    const auto sharedConnectedSocket = ctsMediaStreamServerImpl::FindConnectedSocket(sharedSocketLocal->GetRemoteSockaddr());
-                    if (!sharedConnectedSocket)
-                    {
-                        ctsConfig::PrintErrorInfo(
-                            L"ctsMediaStreamServer - failed to find the socket with remote address %ws in our connected socket list to continue sending datagrams",
-                            sharedSocketLocal->GetRemoteSockaddr().writeCompleteAddress().c_str());
-                        THROW_WIN32_MSG(ERROR_INVALID_DATA, "ctsSocket was not found in the connected sockets to continue sending datagrams");
-                    }
-
-                    // Call into connected socket without holding the global lock
-                    sharedConnectedSocket->QueueTask(nextTask);
-                }
-            } while (nextTask.m_ioAction != ctsTaskAction::None);
-        }
-        catch (...)
-        {
-            const auto error = ctsConfig::PrintThrownException();
-            if (nextTask.m_ioAction != ctsTaskAction::None)
-            {
-                // must complete any IO that was requested but not scheduled
-                lockedPattern->CompleteIo(nextTask, 0, error);
-                if (0 == sharedSocket->GetPendedIoCount())
-                {
-                    sharedSocket->CompleteState(error);
-                }
-            }
-        }
+        ctsMediaStreamServerImpl::InitOnce();
     }
 
     // Called to remove that socket from the tracked vector of connected sockets
