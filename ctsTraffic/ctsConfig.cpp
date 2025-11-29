@@ -594,7 +594,7 @@ namespace ctsTraffic::ctsConfig
 		}
 		else
 		{
-			if (g_configSettings->IoPattern != IoPatternType::MediaStream)
+			if (g_configSettings->IoPattern != IoPatternType::MediaStreamPull)
 			{
 				g_configSettings->ConnectFunction = ctsConnectEx;
 				g_connectFunctionName = L"ConnectEx";
@@ -606,7 +606,7 @@ namespace ctsTraffic::ctsConfig
 			}
 		}
 
-		if (IoPatternType::MediaStream == g_configSettings->IoPattern && connectSpecified)
+		if (IoPatternType::MediaStreamPull == g_configSettings->IoPattern && connectSpecified)
 		{
 			throw invalid_argument("-conn (MediaStream has its own internal connection handler)");
 		}
@@ -654,7 +654,7 @@ namespace ctsTraffic::ctsConfig
 		}
 		else if (!g_configSettings->ListenAddresses.empty())
 		{
-			if (IoPatternType::MediaStream != g_configSettings->IoPattern)
+			if (IoPatternType::MediaStreamPull != g_configSettings->IoPattern)
 			{
 				// only default an Accept function if listening
 				g_configSettings->AcceptFunction = ctsAcceptEx;
@@ -1030,7 +1030,7 @@ namespace ctsTraffic::ctsConfig
 		{
 			if (g_configSettings->Protocol == ProtocolType::UDP)
 			{
-				g_configSettings->IoPattern = IoPatternType::MediaStream;
+				g_configSettings->IoPattern = IoPatternType::MediaStreamPull;
 			}
 			else
 			{
@@ -3254,12 +3254,12 @@ namespace ctsTraffic::ctsConfig
 		ParseForThreadpool(args);
 		// validate protocol & pattern combinations
 		if (ProtocolType::UDP == g_configSettings->Protocol &&
-			IoPatternType::MediaStream != g_configSettings->IoPattern)
+			IoPatternType::MediaStreamPull != g_configSettings->IoPattern)
 		{
 			throw invalid_argument("UDP only supports the MediaStream IO Pattern");
 		}
 		if (ProtocolType::TCP == g_configSettings->Protocol &&
-			IoPatternType::MediaStream == g_configSettings->IoPattern)
+			IoPatternType::MediaStreamPull == g_configSettings->IoPattern)
 		{
 			throw invalid_argument("TCP does not support the MediaStream IO Pattern");
 		}
@@ -5290,7 +5290,7 @@ namespace ctsTraffic::ctsConfig
 		case IoPatternType::Duplex:
 			settingString.append(L"Duplex <TCP client/server both sending and receiving>\n");
 			break;
-		case IoPatternType::MediaStream:
+		case IoPatternType::MediaStreamPull:
 			settingString.append(L"MediaStream <UDP controlled stream from server to client>\n");
 			break;
 
