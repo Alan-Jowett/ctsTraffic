@@ -81,7 +81,8 @@ namespace ctsTraffic
             Pull,
             PushPull,
             Duplex,
-            MediaStreamPull
+            MediaStreamPull,
+            MediaStreamPush,
         };
 
         enum class AffinityPolicy : std::uint8_t
@@ -460,5 +461,8 @@ namespace ctsTraffic
         SOCKET CreateSocket(int af, int type, int protocol, DWORD dwFlags);
         bool ShutdownCalled() noexcept;
         uint32_t ConsoleVerbosity() noexcept;
+        
+        // Helper: returns true if the IoPatternType is either MediaStreamPull or MediaStreamPush
+        bool IsMediaStreamPattern(IoPatternType pattern) noexcept;
     } // namespace ctsConfig
 } // namespace ctsTraffic

@@ -594,19 +594,19 @@ namespace ctsTraffic::ctsConfig
 		}
 		else
 		{
-			if (g_configSettings->IoPattern != IoPatternType::MediaStreamPull)
+			if (g_configSettings->IoPattern == IoPatternType::MediaStreamPull)
 			{
 				g_configSettings->ConnectFunction = ctsMediaStreamReceiverConnect;
 				g_connectFunctionName = L"MediaStream Receiver Connect";
 			}
-			else
+			else if (g_configSettings->IoPattern == IoPatternType::MediaStreamPush)
 			{
-				g_configSettings->ConnectFunction = ctsMediaStreamReceiverConnect;
-				g_connectFunctionName = L"MediaStream Receiver Connect";
+				g_configSettings->ConnectFunction = ctsMediaStreamSenderClientStart;
+				g_connectFunctionName = L"MediaStream Sender Connect";
 			}
 		}
 
-		if (IoPatternType::MediaStreamPull == g_configSettings->IoPattern && connectSpecified)
+		if (IsMediaStreamPattern(g_configSettings->IoPattern) && connectSpecified)
 		{
 			throw invalid_argument("-conn (MediaStream has its own internal connection handler)");
 		}
@@ -654,17 +654,23 @@ namespace ctsTraffic::ctsConfig
 		}
 		else if (!g_configSettings->ListenAddresses.empty())
 		{
-			if (IoPatternType::MediaStreamPull != g_configSettings->IoPattern)
+			if (IsMediaStreamPattern(g_configSettings->IoPattern) == false)
 			{
 				// only default an Accept function if listening
 				g_configSettings->AcceptFunction = ctsAcceptEx;
 				g_acceptFunctionName = L"AcceptEx";
 			}
-			else
+			else if (g_configSettings->IoPattern == IoPatternType::MediaStreamPull)
 			{
 				g_configSettings->AcceptFunction = ctsMediaStreamSenderListener;
 				g_acceptFunctionName = L"MediaStream Server Listener";
+			} else if (g_configSettings->IoPattern == IoPatternType::MediaStreamPush)
+			{
+				// TODO: MediaStreamPull ctsMediaStreamReceiverAccept has wrong signature.
+				//g_configSettings->AcceptFunction = ctsMediaStreamReceiverAccept;
+				g_acceptFunctionName = L"MediaStream Receiver Listener";
 			}
+			
 		}
 	}
 
@@ -995,26 +1001,45 @@ namespace ctsTraffic::ctsConfig
 			});
 		if (foundArgument != end(args))
 		{
-			if (g_configSettings->Protocol != ProtocolType::TCP)
-			{
-				throw invalid_argument("-pattern (only applicable to TCP)");
-			}
 
 			const auto* const value = ParseArgument(*foundArgument, L"-pattern");
 			if (ctString::iordinal_equals(L"push", value))
 			{
-				g_configSettings->IoPattern = IoPatternType::Push;
+				if (g_configSettings->Protocol == ProtocolType::TCP)
+				{
+					g_configSettings->IoPattern = IoPatternType::Push;
+				}
+				else 
+				{
+					g_configSettings->IoPattern = IoPatternType::MediaStreamPush;
+				}
+
 			}
 			else if (ctString::iordinal_equals(L"pull", value))
 			{
-				g_configSettings->IoPattern = IoPatternType::Pull;
+				if (g_configSettings->Protocol == ProtocolType::TCP)
+				{
+					g_configSettings->IoPattern = IoPatternType::Pull;
+				}
+				else
+				{
+					g_configSettings->IoPattern = IoPatternType::MediaStreamPull;
+				}
 			}
 			else if (ctString::iordinal_equals(L"pushpull", value))
 			{
+				if (g_configSettings->Protocol != ProtocolType::TCP)
+				{
+					throw invalid_argument("-pattern (only applicable to TCP)");
+				}
 				g_configSettings->IoPattern = IoPatternType::PushPull;
 			}
 			else if (ctString::iordinal_equals(L"flood", value) || ctString::iordinal_equals(L"duplex", value))
 			{
+				if (g_configSettings->Protocol != ProtocolType::TCP)
+				{
+					throw invalid_argument("-pattern (only applicable to TCP)");
+				}
 				// the old name for this was 'flood'
 				g_configSettings->IoPattern = IoPatternType::Duplex;
 			}
@@ -3254,12 +3279,12 @@ namespace ctsTraffic::ctsConfig
 		ParseForThreadpool(args);
 		// validate protocol & pattern combinations
 		if (ProtocolType::UDP == g_configSettings->Protocol &&
-			IoPatternType::MediaStreamPull != g_configSettings->IoPattern)
+			!IsMediaStreamPattern(g_configSettings->IoPattern))
 		{
 			throw invalid_argument("UDP only supports the MediaStream IO Pattern");
 		}
 		if (ProtocolType::TCP == g_configSettings->Protocol &&
-			IoPatternType::MediaStreamPull == g_configSettings->IoPattern)
+			IsMediaStreamPattern(g_configSettings->IoPattern))
 		{
 			throw invalid_argument("TCP does not support the MediaStream IO Pattern");
 		}
@@ -5640,4 +5665,11 @@ namespace ctsTraffic::ctsConfig
 	{
 		return g_consoleVerbosity;
 	}
+
+	// Helper: returns true if the IoPatternType is either MediaStreamPull or MediaStreamPush
+	bool IsMediaStreamPattern(IoPatternType pattern) noexcept
+	{
+		return pattern == IoPatternType::MediaStreamPull || pattern == IoPatternType::MediaStreamPush;
+	}
+
 } // namespace ctsTraffic

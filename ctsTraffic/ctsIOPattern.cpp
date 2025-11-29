@@ -115,7 +115,12 @@ namespace ctsTraffic
                 return make_shared<ctsIoPatternMediaStreamSender>();
             }
             return make_shared<ctsIoPatternMediaStreamReceiver>();
-
+        case ctsConfig::IoPatternType::MediaStreamPush:
+            if (ctsConfig::IsListening())
+            {
+                return make_shared<ctsIoPatternMediaStreamReceiver>();
+            }
+            return make_shared<ctsIoPatternMediaStreamSender>();
         case ctsConfig::IoPatternType::NoIoSet: // fall through
         default: // NOLINT(clang-diagnostic-covered-switch-default)
             FAIL_FAST_MSG("ctsIOPattern::MakeIOPattern - Unknown IoPattern specified (%d)", ctsConfig::g_configSettings->IoPattern);
