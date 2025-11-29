@@ -15,11 +15,17 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 // cpp headers
 #include <memory>
+#include <variant>
 // ctl headers
 #include <ctSockaddr.hpp>
 // project headers
 #include "ctsSocket.h"
 #include "ctsIOTask.hpp"
+
+// Forward declarations
+namespace ctsTraffic { class ctsMediaStreamSender; class ctsMediaStreamReceiver; }
+
+using mediaStreamerPtr = std::variant<std::shared_ptr<ctsTraffic::ctsMediaStreamSender>, std::shared_ptr<ctsTraffic::ctsMediaStreamReceiver>>;
 
 // We register both of these functions with ctsConfig:
 // - ctsMediaStreamServerListener is the "Accepting" function
@@ -34,18 +40,17 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
     {
         void InitOnce();
 
-        // Schedule the first IO on the specified ctsSocket
-        void ScheduleIo(const std::weak_ptr<ctsSocket>& weakSocket, const ctsTask& task);
+        // Scheduling is performed inline in `ctsMediaStreamServerIo`.
 
         // Process a new ctsSocket from the ctsSocketBroker
         // - accept_socket takes the ctsSocket to create a new entry
-        //   which will create a corresponding ctsMediaStreamServerConnectedSocket in the process
+        //   which will create a corresponding ctsMediaStreamSender in the process
         void AcceptSocket(const std::weak_ptr<ctsSocket>& weakSocket);
 
         // Process the removal of a connected socket once it is completed
         // - remove_socket takes the remote address to find the socket
-        // - cannot be called from a TP callback from ctsMediaStreamServerConnectedSocket
-        //   as remove_socket will deadlock as it tries to delete the ctsMediaStreamServerConnectedSocket instance
+        // - cannot be called from a TP callback from ctsMediaStreamSender
+        //   as remove_socket will deadlock as it tries to delete the ctsMediaStreamSender instance
         //   (which will wait for all TP threads to complete in the destructor)
         void RemoveSocket(const ctl::ctSockaddr& targetAddr);
 
@@ -53,6 +58,12 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
         // - if we have a waiting ctsSocket to accept it, will add it to connected_sockets
         // - else we'll queue it to awaiting_endpoints
         void Start(SOCKET socket, const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& targetAddr);
+
+        // Notified by listening sockets when any datagram is received.
+        // The server implementation is responsible for parsing the packet contents
+        // and taking appropriate action (for example, calling `Start` when a START
+        // message is received).
+        void OnPacketReceived(SOCKET socket, const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& remoteAddr, const char* buffer, uint32_t bufferLength);
 
         // Information about a listening socket (used for final reporting)
         struct ListenerInfo
@@ -64,6 +75,9 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
 
         // Return detailed listener info including address and shard index for reporting
         std::vector<ListenerInfo> GetListenerInfos() noexcept;
+
+        // Lookup a connected socket by remote address. Returns nullptr if not found.
+        mediaStreamerPtr FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
     }
 
     // Called to 'accept' incoming connections

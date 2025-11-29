@@ -26,7 +26,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsSocketState.h"
 
 #include "ctsMediaStreamServer.h"
-#include "ctsMediaStreamServerConnectedSocket.h"
+#include "ctsMediaStreamSender.h"
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
@@ -313,11 +313,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -335,7 +335,7 @@ public:
         test_task.m_ioAction = ctsTaskAction::Send;
         // directly scheduling the first task
         g_IOPended = 1;
-        test_connected_socket.ScheduleTask(test_task);
+        test_connected_socket.QueueTask(test_task);
         // not 'done' yet, just stopped sending for the time-being
         Assert::AreEqual(static_cast<DWORD>(WAIT_TIMEOUT), WaitForSingleObject(g_RemovedSocketEvent, 0));
         const uint32_t ExpectedCallbacks = 1;
@@ -359,11 +359,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -381,7 +381,7 @@ public:
         test_task.m_ioAction = ctsTaskAction::Send;
         // directly scheduling the first task
         g_IOPended = 1;
-        test_connected_socket.ScheduleTask(test_task);
+        test_connected_socket.QueueTask(test_task);
         // not 'done' yet, just stopped sending for the time-being
         Assert::AreEqual(static_cast<DWORD>(WAIT_TIMEOUT), WaitForSingleObject(g_RemovedSocketEvent, 0));
         const uint32_t ExpectedCallbacks = 10;
@@ -405,11 +405,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -431,7 +431,7 @@ public:
         test_task.m_ioAction = ctsTaskAction::Send;
         // directly scheduling the first task
         g_IOPended = 1;
-        test_connected_socket.ScheduleTask(test_task);
+        test_connected_socket.QueueTask(test_task);
         // should complete within 1 second (a few ms after 900ms)
         Assert::AreEqual(WAIT_OBJECT_0, WaitForSingleObject(g_RemovedSocketEvent, 1250));
         const uint32_t ExpectedCallbacks = 10;
@@ -455,11 +455,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -477,7 +477,7 @@ public:
         test_task.m_ioAction = ctsTaskAction::Send;
         // directly scheduling the first task
         g_IOPended = 1;
-        test_connected_socket.ScheduleTask(test_task);
+        test_connected_socket.QueueTask(test_task);
         // 'done' since it failed
         Assert::AreEqual(WAIT_OBJECT_0, WaitForSingleObject(g_RemovedSocketEvent, 0));
         const uint32_t ExpectedCallbacks = 1;
@@ -502,11 +502,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -528,7 +528,7 @@ public:
         test_task.m_ioAction = ctsTaskAction::Send;
         // directly scheduling the first task
         g_IOPended = 1;
-        test_connected_socket.ScheduleTask(test_task);
+        test_connected_socket.QueueTask(test_task);
         // should complete within 500ms - failing after 5 IO
         Assert::AreEqual(WAIT_OBJECT_0, WaitForSingleObject(g_RemovedSocketEvent, 500));
         const uint32_t ExpectedCallbacks = 5;

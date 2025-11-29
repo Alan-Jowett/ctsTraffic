@@ -34,27 +34,28 @@ using std::vector;
 
 namespace ctsTraffic
 {
-// - ctsIOPatternMediaStream (Client) Pattern
+// - ctsIOPatternMediaStream Pattern
 //    -- UDP-only
-//    -- The server sends data at a specified rate
-//    -- The client receives data continuously
+//    -- The sender sends data at a specified rate
+//    -- The receiver receives data continuously
 //       After a 'buffer period' of data has been received,
-//       The client starts as timer to 'process' a time-slice of data
+//       The receiver starts as timer to 'process' a time-slice of data
 //    -- e.g. FrameRate = 60 frames/sec
 //            FrameSize = 4096 byte frames
 //            BufferDepth = 81920 bytes (2 seconds)
 ///
-//   -- The client must maintain a vector of up to ExtraBufferDepthFactor * the buffer depth requested
+//   -- The receiver must maintain a vector of up to ExtraBufferDepthFactor * the buffer depth requested
 //      - after the initial BufferDepth is received, 
 //        it will start its timer to access the next frame's data
 ///
-//   -- The client is only using untracked_task requests from the base
+//   -- The receiver is only using untracked_task requests from the base
 //      since the correctness and lifetime of the session is only known from this instance
 
-ctsIoPatternMediaStreamClient::ctsIoPatternMediaStreamClient() :
+ctsIoPatternMediaStreamReceiver::ctsIoPatternMediaStreamReceiver(bool sendStart) :
     ctsIoPatternStatistics(ctsConfig::g_configSettings->PrePostRecvs),
     m_frameRateMsPerFrame(1000.0 / static_cast<uint32_t>(ctsConfig::GetMediaStream().FramesPerSecond)),
-    m_maxDatagramSize(ctsConfig::GetMediaStream().DatagramMaxSize)
+    m_maxDatagramSize(ctsConfig::GetMediaStream().DatagramMaxSize),
+    m_sendStart(sendStart)
 {
     // if the entire session fits in the initial buffer, update accordingly
     m_initialBufferFrames = std::min(m_finalFrame, m_initialBufferFrames);
@@ -100,7 +101,7 @@ ctsIoPatternMediaStreamClient::ctsIoPatternMediaStreamClient() :
     deleteTimerCallbackOnError.release();
 }
 
-ctsIoPatternMediaStreamClient::~ctsIoPatternMediaStreamClient() noexcept
+ctsIoPatternMediaStreamReceiver::~ctsIoPatternMediaStreamReceiver() noexcept
 {
     // stop both timers
     SetThreadpoolTimer(m_startTimer, nullptr, 0, 0);
@@ -112,7 +113,7 @@ ctsIoPatternMediaStreamClient::~ctsIoPatternMediaStreamClient() noexcept
     CloseThreadpoolTimer(m_rendererTimer);
 }
 
-ctsTask ctsIoPatternMediaStreamClient::GetNextTaskFromPattern() noexcept
+ctsTask ctsIoPatternMediaStreamReceiver::GetNextTaskFromPattern() noexcept
 {
     if (0 == m_baseTimeMilliseconds)
     {
@@ -137,7 +138,7 @@ ctsTask ctsIoPatternMediaStreamClient::GetNextTaskFromPattern() noexcept
     return returnTask;
 }
 
-ctsIoPatternError ctsIoPatternMediaStreamClient::CompleteTaskBackToPattern(const ctsTask& task, uint32_t completedBytes) noexcept
+ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(const ctsTask& task, uint32_t completedBytes) noexcept
 {
     LARGE_INTEGER qpc;
     QueryPerformanceCounter(&qpc);
@@ -166,9 +167,23 @@ ctsIoPatternError ctsIoPatternMediaStreamClient::CompleteTaskBackToPattern(const
             return ctsIoPatternError::TooFewBytes;
         }
 
+        // Accept the literal START control message before the normal protocol header parsing
+        if (completedBytes == c_udpDatagramStartStringLength &&
+            0 == memcmp(task.m_buffer + task.m_bufferOffset, g_udpDatagramStartString, c_udpDatagramStartStringLength))
+        {
+            // reply with our connection id using a recv buffer sized for a connection-id response
+            const auto returnTask = ctsMediaStreamMessage::MakeConnectionIdTask(
+                CreateUntrackedTask(ctsTaskAction::Recv, c_udpDatagramConnectionIdHeaderLength),
+                GetConnectionIdentifier());
+            SendTaskToCallback(returnTask);
+            // since we responded, ensure we still request another recv
+            ++m_recvNeeded;
+            return ctsIoPatternError::NoError;
+        }
+
         if (!ctsMediaStreamMessage::ValidateBufferLengthFromTask(task, completedBytes))
         {
-            ctsConfig::PrintErrorInfo(L"ctsIoPatternMediaStreamClient received an invalid datagram trying to parse the protocol header");
+            ctsConfig::PrintErrorInfo(L"ctsIoPatternMediaStreamReceiver received an invalid datagram trying to parse the protocol header");
             return ctsIoPatternError::TooFewBytes;
         }
 
@@ -276,7 +291,7 @@ ctsIoPatternError ctsIoPatternMediaStreamClient::CompleteTaskBackToPattern(const
 // If the sequence number was not found, will return end(frame_entries)
 //
 // _Requires_lock_held_(m_lock)
-vector<ctsConfig::JitterFrameEntry>::iterator ctsIoPatternMediaStreamClient::FindSequenceNumber(int64_t sequenceNumber) noexcept
+vector<ctsConfig::JitterFrameEntry>::iterator ctsIoPatternMediaStreamReceiver::FindSequenceNumber(int64_t sequenceNumber) noexcept
 {
     const auto headSequenceNumber = m_headEntry->m_sequenceNumber;
     const auto tailSequenceNumber = headSequenceNumber + static_cast<int64_t>(m_frameEntries.size()) - 1;
@@ -301,7 +316,7 @@ vector<ctsConfig::JitterFrameEntry>::iterator ctsIoPatternMediaStreamClient::Fin
 }
 
 // _Requires_lock_held_(m_lock)
-bool ctsIoPatternMediaStreamClient::ReceivedBufferedFrames() noexcept
+bool ctsIoPatternMediaStreamReceiver::ReceivedBufferedFrames() noexcept
 {
     if (m_frameEntries[0].m_sequenceNumber > 1)
     {
@@ -318,7 +333,7 @@ bool ctsIoPatternMediaStreamClient::ReceivedBufferedFrames() noexcept
 }
 
 // _Requires_lock_held_(m_lock)
-bool ctsIoPatternMediaStreamClient::SetNextTimer(bool initialTimer) const noexcept
+bool ctsIoPatternMediaStreamReceiver::SetNextTimer(bool initialTimer) const noexcept
 {
     auto timerScheduled = false;
     // only schedule the next timer instance if the destructor hasn't indicated it's wanting to exit
@@ -348,7 +363,7 @@ bool ctsIoPatternMediaStreamClient::SetNextTimer(bool initialTimer) const noexce
 }
 
 // _Requires_lock_held_(m_lock)
-void ctsIoPatternMediaStreamClient::SetNextStartTimer() const noexcept
+void ctsIoPatternMediaStreamReceiver::SetNextStartTimer() const noexcept
 {
     if (m_startTimer != nullptr)
     {
@@ -360,10 +375,21 @@ void ctsIoPatternMediaStreamClient::SetNextStartTimer() const noexcept
     }
 }
 
+// Sender side: schedule the next START send attempt (if configured)
+void ctsIoPatternMediaStreamSender::SetNextStartTimer() const noexcept
+{
+    if (m_startTimer != nullptr)
+    {
+        // schedule a retry in 500ms + one frame interval to give receiver time to buffer
+        FILETIME relativeFileTime(ctTimer::convert_ms_to_relative_filetime(static_cast<int64_t>(1000UL / (m_frameRateFps ? m_frameRateFps : 1)) + 500LL));
+        SetThreadpoolTimer(m_startTimer, &relativeFileTime, 0, 0);
+    }
+}
+
 // "render the current frame"
 // - update the current frame as "read" and move the head to the next frame
 // _Requires_lock_held_(m_lock)
-void ctsIoPatternMediaStreamClient::RenderFrame() noexcept
+void ctsIoPatternMediaStreamReceiver::RenderFrame() noexcept
 {
     // estimating time in flight for this frame by determining how much time since the first send was just 'waiting' to send this frame
     // and subtracting that from how much time since the first receive - since time between receives should at least be time between sends
@@ -437,11 +463,11 @@ void ctsIoPatternMediaStreamClient::RenderFrame() noexcept
     }
 }
 
-VOID CALLBACK ctsIoPatternMediaStreamClient::StartCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept
+VOID CALLBACK ctsIoPatternMediaStreamReceiver::StartCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept
 {
     static constexpr char c_startBuffer[] = "START";
 
-    auto* thisPtr = static_cast<ctsIoPatternMediaStreamClient*>(pContext);
+    auto* thisPtr = static_cast<ctsIoPatternMediaStreamReceiver*>(pContext);
     // take the base lock before touching any internal members
     const auto lock = thisPtr->AcquireIoPatternLock();
 
@@ -452,27 +478,36 @@ VOID CALLBACK ctsIoPatternMediaStreamClient::StartCallback(PTP_CALLBACK_INSTANCE
 
     if (!thisPtr->ReceivedBufferedFrames())
     {
-        // send another start message
-        PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient re-requesting START\n");
+        if (thisPtr->m_sendStart && !thisPtr->m_sentStartAlready)
+        {
+            // send START only if configured to send it
+            PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient sending START\n");
 
-        ctsTask resendTask;
-        resendTask.m_ioAction = ctsTaskAction::Send;
-        resendTask.m_trackIo = false;
-        resendTask.m_buffer = const_cast<char*>(c_startBuffer);
-        resendTask.m_bufferOffset = 0;
-        // ReSharper disable once CppRedundantParentheses
-        resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
-        resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
+            ctsTask resendTask;
+            resendTask.m_ioAction = ctsTaskAction::Send;
+            resendTask.m_trackIo = false;
+            resendTask.m_buffer = const_cast<char*>(c_startBuffer);
+            resendTask.m_bufferOffset = 0;
+            // ReSharper disable once CppRedundantParentheses
+            resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
+            resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
 
-        thisPtr->SetNextStartTimer();
-        thisPtr->SendTaskToCallback(resendTask);
+            thisPtr->m_sentStartAlready = true;
+            thisPtr->SetNextStartTimer();
+            thisPtr->SendTaskToCallback(resendTask);
+        }
+        else
+        {
+            // keep scheduling the start-check timer until configured sender has started or buffering completes
+            thisPtr->SetNextStartTimer();
+        }
     }
     // else, don't schedule this timer anymore
 }
 
-VOID CALLBACK ctsIoPatternMediaStreamClient::TimerCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept
+VOID CALLBACK ctsIoPatternMediaStreamReceiver::TimerCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept
 {
-    auto* thisPtr = static_cast<ctsIoPatternMediaStreamClient*>(pContext);
+    auto* thisPtr = static_cast<ctsIoPatternMediaStreamReceiver*>(pContext);
 
     // process frames until the timer is scheduled in the future to process more frames
     auto timerScheduled = false;
@@ -492,10 +527,10 @@ VOID CALLBACK ctsIoPatternMediaStreamClient::TimerCallback(PTP_CALLBACK_INSTANCE
         if (thisPtr->m_timerWheelOffsetFrames >= thisPtr->m_initialBufferFrames &&
             thisPtr->m_headEntry->m_sequenceNumber <= thisPtr->m_finalFrame)
         {
-            // if we haven't yet received *anything* from the server, abort this connection
+            // if we haven't yet received *anything* from the sender, abort this connection
             if (!thisPtr->ReceivedBufferedFrames())
             {
-                ctsConfig::PrintErrorInfo(L"ctsIOPatternMediaStreamClient - issuing a FATALABORT to close the connection - have received nothing from the server");
+                ctsConfig::PrintErrorInfo(L"ctsIOPatternMediaStreamClient - issuing a FATALABORT to close the connection - have received nothing from the sender");
 
                 // indicate all frames were dropped
                 ctsConfig::g_configSettings->UdpStatusDetails.m_droppedFrames.Add(thisPtr->m_finalFrame);
@@ -532,4 +567,144 @@ VOID CALLBACK ctsIoPatternMediaStreamClient::TimerCallback(PTP_CALLBACK_INSTANCE
         }
     }
 }
+
+//
+// ctsIoPatternMediaStreamSender
+// - ctsIOPatternMediaStream (Server) Pattern
+//   - UDP-only
+//   - The sender sends data at a specified rate
+//   - The receiver receives data continuously
+//     After a 'buffer period' of data has been received,
+//     The receiver starts as timer to 'process' a time-slice of data
+//
+ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender(bool sendStart) :
+    ctsIoPatternStatistics(1), // the pattern will use the recv writeable-buffer for sending a connection ID
+    m_frameSizeBytes(ctsConfig::GetMediaStream().FrameSizeBytes),
+    m_frameRateFps(ctsConfig::GetMediaStream().FramesPerSecond),
+    m_sendStart(sendStart)
+{
+    PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamServer - frame rate in milliseconds per frame : %lld\n", static_cast<int64_t>(1000UL / m_frameRateFps));
+
+    // create the start timer if this sender may initiate the START handshake
+    if (m_sendStart)
+    {
+        m_startTimer = CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE, PVOID pContext, PTP_TIMER) noexcept {
+            auto* thisPtr = static_cast<ctsIoPatternMediaStreamSender*>(pContext);
+            // Acquire the base lock before touching internals
+            const auto lock = thisPtr->AcquireIoPatternLock();
+            if (thisPtr->m_sentStartAlready || thisPtr->m_state != ServerState::NotStarted)
+            {
+                // if already started or not in a state to send START, don't send
+                return;
+            }
+
+            static constexpr char c_startBuffer[] = "START";
+
+            ctsTask startTask;
+            startTask.m_ioAction = ctsTaskAction::Send;
+            startTask.m_trackIo = false;
+            startTask.m_buffer = const_cast<char*>(c_startBuffer);
+            startTask.m_bufferOffset = 0;
+            startTask.m_bufferLength = sizeof(c_startBuffer) - 1;
+            startTask.m_bufferType = ctsTask::BufferType::Static;
+
+            thisPtr->m_sentStartAlready = true;
+            // schedule next timer just in case
+            thisPtr->SetNextStartTimer();
+            thisPtr->SendTaskToCallback(startTask);
+        }, this, nullptr);
+        THROW_LAST_ERROR_IF(!m_startTimer);
+    }
 }
+
+ctsIoPatternMediaStreamSender::~ctsIoPatternMediaStreamSender() noexcept
+{
+    if (m_startTimer != nullptr)
+    {
+        SetThreadpoolTimer(m_startTimer, nullptr, 0, 0);
+        WaitForThreadpoolTimerCallbacks(m_startTimer, FALSE);
+        CloseThreadpoolTimer(m_startTimer);
+        m_startTimer = nullptr;
+    }
+}
+
+    // required virtual functions
+    ctsTask ctsIoPatternMediaStreamSender::GetNextTaskFromPattern() noexcept
+    {
+        ctsTask returnTask;
+        switch (m_state)
+        {
+        case ServerState::NotStarted:
+            // get a writable buffer (i.e. Recv), then update the fields in the task for the connection_id
+            returnTask = ctsMediaStreamMessage::MakeConnectionIdTask(
+                CreateUntrackedTask(ctsTaskAction::Recv, c_udpDatagramConnectionIdHeaderLength),
+                GetConnectionIdentifier());
+            m_state = ServerState::IdSent;
+            break;
+
+        case ServerState::IdSent:
+            m_baseTimeMilliseconds = ctTimer::snap_qpc_as_msec();
+            m_state = ServerState::IoStarted;
+            // once IO starts, it's appropriate to cancel any START retry timer
+            if (m_startTimer != nullptr)
+            {
+                SetThreadpoolTimer(m_startTimer, nullptr, 0, 0);
+                WaitForThreadpoolTimerCallbacks(m_startTimer, FALSE);
+                CloseThreadpoolTimer(m_startTimer);
+                m_startTimer = nullptr;
+            }
+            [[fallthrough]];
+        case ServerState::IoStarted:
+            if (m_currentFrameRequested < m_frameSizeBytes)
+            {
+                returnTask = CreateTrackedTask(ctsTaskAction::Send, m_frameSizeBytes);
+                // calculate the future time to initiate the IO
+                // - then subtract the start time to give the difference
+                // ReSharper disable CppRedundantParentheses
+                returnTask.m_timeOffsetMilliseconds =
+                    m_baseTimeMilliseconds
+                    + (m_currentFrame * 1000LL / m_frameRateFps)
+                    - ctTimer::snap_qpc_as_msec();
+                // ReSharper restore CppRedundantParentheses
+
+                m_currentFrameRequested += returnTask.m_bufferLength;
+            }
+            break;
+        }
+        return returnTask;
+    }
+
+    ctsIoPatternError ctsIoPatternMediaStreamSender::CompleteTaskBackToPattern(const ctsTask& task, uint32_t currentTransfer) noexcept
+    {
+            // If we received the literal START control message, reply with our connection id
+            if (task.m_ioAction == ctsTaskAction::Recv &&
+                currentTransfer == c_udpDatagramStartStringLength &&
+                0 == memcmp(task.m_buffer + task.m_bufferOffset, g_udpDatagramStartString, c_udpDatagramStartStringLength))
+            {
+                const auto returnTask = ctsMediaStreamMessage::MakeConnectionIdTask(
+                    CreateUntrackedTask(ctsTaskAction::Recv, c_udpDatagramConnectionIdHeaderLength),
+                    GetConnectionIdentifier());
+                SendTaskToCallback(returnTask);
+                return ctsIoPatternError::NoError;
+            }
+
+            if (task.m_bufferType != ctsTask::BufferType::UdpConnectionId)
+            {
+            const int64_t currentTransferBits = static_cast<int64_t>(currentTransfer) * 8LL;
+
+            ctsConfig::g_configSettings->UdpStatusDetails.m_bitsReceived.Add(currentTransferBits);
+            m_statistics.m_bitsReceived.Add(currentTransferBits);
+
+            m_currentFrameCompleted += currentTransfer;
+            if (m_currentFrameCompleted == m_frameSizeBytes)
+            {
+                ++m_currentFrame;
+                m_currentFrameRequested = 0UL;
+                m_currentFrameCompleted = 0UL;
+            }
+        }
+        return ctsIoPatternError::NoError;
+    }
+
+} // namespace ctsTraffic
+

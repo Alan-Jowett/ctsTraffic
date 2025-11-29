@@ -81,7 +81,8 @@ namespace ctsTraffic
             Pull,
             PushPull,
             Duplex,
-            MediaStream
+            MediaStreamPull,
+            MediaStreamPush
         };
 
         enum class AffinityPolicy : std::uint8_t

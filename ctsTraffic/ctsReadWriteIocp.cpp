@@ -178,7 +178,7 @@ void ctsReadWriteIocp(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
             // add-ref the IO about to start
             ioCount = sharedSocket->IncrementIo();
 
-            std::shared_ptr<ctl::ctThreadIocp> ioThreadPool;
+            std::shared_ptr<ctl::ctThreadIocp_base> ioThreadPool;
             OVERLAPPED* pOverlapped = nullptr;
             try
             {
