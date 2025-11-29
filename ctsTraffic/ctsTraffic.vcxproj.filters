@@ -54,7 +54,7 @@
     <ClCompile Include="ctsTraffic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ctsMediaStreamServerConnectedSocket.cpp">
+    <ClCompile Include="ctsMediaStreamSender.cpp">
       <Filter>MediaStreaming</Filter>
     </ClCompile>
     <ClCompile Include="ctsMediaStreamServerListeningSocket.cpp">
@@ -175,7 +175,7 @@
     <ClInclude Include="ctsMediaStreamProtocol.hpp">
       <Filter>MediaStreaming</Filter>
     </ClInclude>
-    <ClInclude Include="ctsMediaStreamServerConnectedSocket.h">
+    <ClInclude Include="ctsMediaStreamSender.h">
       <Filter>MediaStreaming</Filter>
     </ClInclude>
     <ClInclude Include="ctsMediaStreamServerListeningSocket.h">

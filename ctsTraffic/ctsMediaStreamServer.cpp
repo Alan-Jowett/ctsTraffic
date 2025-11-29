@@ -32,7 +32,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsIOTask.hpp"
 #include "ctsWinsockLayer.h"
 #include "ctsMediaStreamServer.h"
-#include "ctsMediaStreamServerConnectedSocket.h"
+#include "ctsMediaStreamSender.h"
 #include "ctsMediaStreamServerListeningSocket.h"
 #include "ctsMediaStreamProtocol.hpp"
 // wil headers always included last
@@ -98,13 +98,13 @@ namespace ctsTraffic
 
     namespace ctsMediaStreamServerImpl
     {
-        // The actual send logic was moved into ctsMediaStreamServerConnectedSocket::PerformIo()
+        // The actual send logic was moved into ctsMediaStreamSender::PerformIo()
 
         static std::vector<std::unique_ptr<ctsMediaStreamServerListeningSocket>> g_listeningSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         static wil::critical_section g_socketVectorGuard{ ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock }; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
 
-        _Guarded_by_(g_socketVectorGuard) static std::unordered_map<ctl::ctSockaddr, std::shared_ptr<ctsMediaStreamServerConnectedSocket>> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
+        _Guarded_by_(g_socketVectorGuard) static std::unordered_map<ctl::ctSockaddr, std::shared_ptr<ctsMediaStreamSender>> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         // weak_ptr<> to ctsSocket objects ready to accept a connection
         _Guarded_by_(g_socketVectorGuard) static std::vector<std::weak_ptr<ctsSocket>> g_acceptingSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
@@ -302,7 +302,7 @@ namespace ctsTraffic
             return infos;
         }
 
-        std::shared_ptr<ctsMediaStreamServerConnectedSocket> FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept
+        std::shared_ptr<ctsMediaStreamSender> FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept
         {
             const auto lockConnectedObject = g_socketVectorGuard.lock();
             const auto foundSocket = g_connectedSockets.find(remoteAddr);
@@ -317,7 +317,7 @@ namespace ctsTraffic
 
         // Process a new ctsSocket from the ctsSocketBroker
         // - accept_socket takes the ctsSocket to create a new entry
-        //   which will create a corresponding ctsMediaStreamServerConnectedSocket in the process
+        //   which will create a corresponding ctsMediaStreamSender in the process
         void AcceptSocket(const std::weak_ptr<ctsSocket>& weakSocket)
         {
             if (const auto sharedSocket = weakSocket.lock())
@@ -349,7 +349,7 @@ namespace ctsTraffic
 
                     g_connectedSockets.emplace(
                         waitingKey,
-                        std::make_shared<ctsMediaStreamServerConnectedSocket>(
+                        std::make_shared<ctsMediaStreamSender>(
                             weakSocket,
                             waitingEndpoint->first,
                             waitingEndpoint->second));
@@ -460,7 +460,7 @@ namespace ctsTraffic
                     // 'move' the accepting socket to connected
                     g_connectedSockets.emplace(
                         targetKey,
-                        std::make_shared<ctsMediaStreamServerConnectedSocket>(weakInstance, socket, targetAddr));
+                        std::make_shared<ctsMediaStreamSender>(weakInstance, socket, targetAddr));
 
                     PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::start - socket with remote address %ws added to connected_sockets",
                         targetAddr.writeCompleteAddress().c_str());
@@ -492,6 +492,6 @@ namespace ctsTraffic
             }
         }
 
-        // ConnectedSocketIo has been moved into ctsMediaStreamServerConnectedSocket::PerformIo()
+        // ConnectedSocketIo has been moved into ctsMediaStreamSender::PerformIo()
     }
 }

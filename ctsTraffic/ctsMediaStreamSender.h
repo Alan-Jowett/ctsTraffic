@@ -29,9 +29,9 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-class ctsMediaStreamServerConnectedSocket;
+class ctsMediaStreamSender;
 
-class ctsMediaStreamServerConnectedSocket
+class ctsMediaStreamSender
 {
 private:
     // the CS is mutable, so we can take a lock / release a lock in const methods
@@ -91,12 +91,12 @@ private:
     void QueueTask(const ctsTask& task) noexcept;
 
 public:
-    ctsMediaStreamServerConnectedSocket(
+    ctsMediaStreamSender(
         std::weak_ptr<ctsSocket> weakSocket,
         SOCKET sendingSocket,
         ctl::ctSockaddr remoteAddr);
 
-    ~ctsMediaStreamServerConnectedSocket() noexcept;
+    ~ctsMediaStreamSender() noexcept;
 
 
     // Called by the server to let the connected socket acquire the socket lock,
@@ -106,10 +106,10 @@ public:
     void Start() noexcept;
 
     // non-copyable
-    ctsMediaStreamServerConnectedSocket(const ctsMediaStreamServerConnectedSocket&) = delete;
-    ctsMediaStreamServerConnectedSocket& operator=(const ctsMediaStreamServerConnectedSocket&) = delete;
-    ctsMediaStreamServerConnectedSocket(ctsMediaStreamServerConnectedSocket&&) = delete;
-    ctsMediaStreamServerConnectedSocket& operator=(ctsMediaStreamServerConnectedSocket&&) = delete;
+    ctsMediaStreamSender(const ctsMediaStreamSender&) = delete;
+    ctsMediaStreamSender& operator=(const ctsMediaStreamSender&) = delete;
+    ctsMediaStreamSender(ctsMediaStreamSender&&) = delete;
+    ctsMediaStreamSender& operator=(ctsMediaStreamSender&&) = delete;
 
 private:
     static VOID CALLBACK MediaStreamTimerCallback(PTP_CALLBACK_INSTANCE, PVOID context, PTP_TIMER) noexcept;

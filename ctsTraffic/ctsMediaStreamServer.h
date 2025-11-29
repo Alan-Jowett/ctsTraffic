@@ -22,7 +22,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsIOTask.hpp"
 
 // Forward declarations
-namespace ctsTraffic { class ctsMediaStreamServerConnectedSocket; }
+namespace ctsTraffic { class ctsMediaStreamSender; }
 
 // We register both of these functions with ctsConfig:
 // - ctsMediaStreamServerListener is the "Accepting" function
@@ -41,13 +41,13 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
 
         // Process a new ctsSocket from the ctsSocketBroker
         // - accept_socket takes the ctsSocket to create a new entry
-        //   which will create a corresponding ctsMediaStreamServerConnectedSocket in the process
+        //   which will create a corresponding ctsMediaStreamSender in the process
         void AcceptSocket(const std::weak_ptr<ctsSocket>& weakSocket);
 
         // Process the removal of a connected socket once it is completed
         // - remove_socket takes the remote address to find the socket
-        // - cannot be called from a TP callback from ctsMediaStreamServerConnectedSocket
-        //   as remove_socket will deadlock as it tries to delete the ctsMediaStreamServerConnectedSocket instance
+        // - cannot be called from a TP callback from ctsMediaStreamSender
+        //   as remove_socket will deadlock as it tries to delete the ctsMediaStreamSender instance
         //   (which will wait for all TP threads to complete in the destructor)
         void RemoveSocket(const ctl::ctSockaddr& targetAddr);
 
@@ -74,7 +74,7 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
         std::vector<ListenerInfo> GetListenerInfos() noexcept;
 
         // Lookup a connected socket by remote address. Returns nullptr if not found.
-        std::shared_ptr<ctsMediaStreamServerConnectedSocket> FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
+        std::shared_ptr<ctsMediaStreamSender> FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
     }
 
     // Called to 'accept' incoming connections

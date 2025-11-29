@@ -2,7 +2,7 @@
 
 This file shows a sequence diagram (Mermaid) for the interactions between
 `ctsMediaStreamServerListeningSocket`, `ctsMediaStreamServerImpl` and
-`ctsMediaStreamServerConnectedSocket`. The goal is to understand these
+`ctsMediaStreamSender`. The goal is to understand these
 interactions so we can reduce coupling between them.
 
 ```mermaid
@@ -11,7 +11,7 @@ sequenceDiagram
     participant Listener as ctsMediaStreamServerListeningSocket
     participant IOCP as ctThreadIocp
     participant Server as ctsMediaStreamServerImpl
-    participant Connected as ctsMediaStreamServerConnectedSocket
+    participant Connected as ctsMediaStreamSender
     participant ctsSocket as ctsSocket
     participant Pattern as IO Pattern (ctsIoPattern)
 
@@ -34,7 +34,7 @@ sequenceDiagram
     end
 
     alt Accepting ctsSocket already waiting
-      Server->>Connected: new ctsMediaStreamServerConnectedSocket(weakSocket, socket, remoteAddr)
+      Server->>Connected: new ctsMediaStreamSender(weakSocket, socket, remoteAddr)
         Server->>ctsSocket: SetLocalSockaddr / SetRemoteSockaddr
         Server->>ctsSocket: CompleteState(NO_ERROR)  %% completes the pending ctsSocket Create
         Server-->>Listener: remove awaiting endpoint
@@ -45,7 +45,7 @@ sequenceDiagram
     %% ctsSocket actively asks to accept later
     ctsSocket->>Server: ctsMediaStreamServerListener(weakSocket) -> AcceptSocket(weakSocket)
     alt awaiting endpoint exists
-      Server->>Connected: create ctsMediaStreamServerConnectedSocket(weakSocket, socket, remoteAddr)
+      Server->>Connected: create ctsMediaStreamSender(weakSocket, socket, remoteAddr)
         Server->>ctsSocket: CompleteState(NO_ERROR)
     else no awaiting endpoint
         Server->>Server: push weakSocket to g_acceptingSockets
@@ -89,13 +89,13 @@ sequenceDiagram
       `OnPacketReceived(...)` which parses packets and invokes `Start(...)` for START messages.
     - `g_connectedSockets` is now an `std::unordered_map` keyed by `ctl::ctSockaddr` for O(1)
       lookups instead of a vector scan.
-  - `ctsMediaStreamServerConnectedSocket` owns per-connection timers and scheduling.
+  - `ctsMediaStreamSender` owns per-connection timers and scheduling.
 
 **Direct coupling points (after refactor / remaining):**
 - The listening socket is protocol-agnostic and forwards raw datagrams via an injected
   callback (`m_packetCallback`) — parsing and decision logic now live in `Server::OnPacketReceived`.
 - The connected socket no longer depends on a server-supplied `ConnectedSocketIo` functor —
-  its send logic is self-contained in `ctsMediaStreamServerConnectedSocket::PerformIo()`.
+  its send logic is self-contained in `ctsMediaStreamSender::PerformIo()`.
 - `ServerImpl` still holds and mutates the global connection containers (now including an
   unordered_map for `g_connectedSockets`) protected by a single lock, making the server
   the central coordinator and potential contention hotspot.
@@ -116,4 +116,4 @@ sequenceDiagram
   which decouples timing and allows easier sharding/testing.
 
 References: the diagram was produced from reading `ctsMediaStreamServerListeningSocket.cpp`,
-`ctsMediaStreamServer.cpp` and `ctsMediaStreamServerConnectedSocket.cpp` in this repository.
+`ctsMediaStreamServer.cpp` and `ctsMediaStreamSender.cpp` in this repository.

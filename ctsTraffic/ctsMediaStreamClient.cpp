@@ -21,7 +21,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // project headers
 #include "ctsMediaStreamProtocol.hpp"
 #include "ctsMediaStreamClient.h"
-#include "ctsMediaStreamClientConnectedSocket.h"
+#include "ctsMediaStreamReceiver.h"
 #include "ctsWinsockLayer.h"
 #include "ctsIOTask.hpp"
 #include "ctsIOPattern.h"
@@ -40,14 +40,14 @@ namespace ctsTraffic
     void ctsMediaStreamClientIo(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
     {
         // This client only initiates the connect (START) flow. Receiving/parsing is handled
-        // by `ctsMediaStreamClientConnectedSocket` after the START handshake completes.
+        // by `ctsMediaStreamReceiver` after the START handshake completes.
         const auto sharedSocket(weakSocket.lock());
         if (!sharedSocket)
         {
             return;
         }
         // Start the connected-socket handler to manage receiving/parsing
-        const auto connectedSocket = std::make_shared<ctsMediaStreamClientConnectedSocket>(sharedSocket);
+        const auto connectedSocket = std::make_shared<ctsMediaStreamReceiver>(sharedSocket);
         connectedSocket->Start();
     }
 
@@ -124,7 +124,7 @@ namespace ctsTraffic
         }
     }
 
-    // The receive/IO logic was moved to `ctsMediaStreamClientConnectedSocket`.
+    // The receive/IO logic was moved to `ctsMediaStreamReceiver`.
 
     // connect completion handled synchronously via WSASendTo in this refactor
 } // namespace

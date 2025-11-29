@@ -1,8 +1,8 @@
 /*
-Implementation of ctsMediaStreamClientConnectedSocket
+Implementation of ctsMediaStreamReceiver
 */
 
-#include "ctsMediaStreamClientConnectedSocket.h"
+#include "ctsMediaStreamReceiver.h"
 
 // cpp headers
 #include <memory>
@@ -23,12 +23,12 @@ Implementation of ctsMediaStreamClientConnectedSocket
 
 namespace ctsTraffic
 {
-    ctsMediaStreamClientConnectedSocket::ctsMediaStreamClientConnectedSocket(const std::shared_ptr<ctsSocket>& socket) noexcept
+    ctsMediaStreamReceiver::ctsMediaStreamReceiver(const std::shared_ptr<ctsSocket>& socket) noexcept
         : m_socket(socket)
     {
     }
 
-    void ctsMediaStreamClientConnectedSocket::Start() noexcept
+    void ctsMediaStreamReceiver::Start() noexcept
     {
         const auto sharedSocket = m_socket;
         if (!sharedSocket)
@@ -95,7 +95,7 @@ namespace ctsTraffic
         }
     }
 
-    ctsMediaStreamClientConnectedSocket::IoImplStatus ctsMediaStreamClientConnectedSocket::IoImpl(
+    ctsMediaStreamReceiver::IoImplStatus ctsMediaStreamReceiver::IoImpl(
         const std::shared_ptr<ctsSocket>& sharedSocket,
         SOCKET socket,
         const std::shared_ptr<ctsIoPattern>& lockedPattern,
@@ -130,7 +130,7 @@ namespace ctsTraffic
                 else
                 {
                     FAIL_FAST_MSG(
-                        "ctsMediaStreamClientConnectedSocket::IoImpl: received an unexpected IOStatus in the ctsIOTask (%p)", &task);
+                        "ctsMediaStreamReceiver::IoImpl: received an unexpected IOStatus in the ctsIOTask (%p)", &task);
                 }
 
                 if (WSA_IO_PENDING == result.m_errorCode)
@@ -142,7 +142,7 @@ namespace ctsTraffic
                 {
                     if (result.m_errorCode != 0)
                     {
-                        PRINT_DEBUG_INFO(L"\t\tIO Failed: %hs (%u) [ctsMediaStreamClientConnectedSocket]\n",
+                        PRINT_DEBUG_INFO(L"\t\tIO Failed: %hs (%u) [ctsMediaStreamReceiver]\n",
                                          functionName,
                                          result.m_errorCode);
                     }
@@ -169,13 +169,13 @@ namespace ctsTraffic
                         break;
 
                     default:
-                        FAIL_FAST_MSG("ctsMediaStreamClientConnectedSocket::IoImpl: unknown ctsSocket::IOStatus - %d\n", protocolStatus);
+                        FAIL_FAST_MSG("ctsMediaStreamReceiver::IoImpl: unknown ctsSocket::IOStatus - %d\n", protocolStatus);
                     }
 
                     const auto ioCount = sharedSocket->DecrementIo();
                     FAIL_FAST_IF_MSG(
                         0 == ioCount,
-                        "ctsMediaStreamClientConnectedSocket : ctsSocket::io_count fell to zero while the Impl function was called (dt %p ctsTraffic::ctsSocket)",
+                        "ctsMediaStreamReceiver : ctsSocket::io_count fell to zero while the Impl function was called (dt %p ctsTraffic::ctsSocket)",
                         sharedSocket.get());
                 }
 
@@ -218,7 +218,7 @@ namespace ctsTraffic
         return returnStatus;
     }
 
-    void ctsMediaStreamClientConnectedSocket::IoCompletionCallback(
+    void ctsMediaStreamReceiver::IoCompletionCallback(
         _In_ OVERLAPPED* pOverlapped,
         const std::weak_ptr<ctsSocket>& weakSocket,
         const ctsTask& task) noexcept
@@ -310,7 +310,7 @@ namespace ctsTraffic
 
         default:
             FAIL_FAST_MSG(
-                "ctsMediaStreamClientConnectedSocket::IoCompletionCallback: unknown ctsSocket::IOStatus - %d\n",
+                "ctsMediaStreamReceiver::IoCompletionCallback: unknown ctsSocket::IOStatus - %d\n",
                 protocolStatus);
         }
 

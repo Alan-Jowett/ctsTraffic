@@ -1,5 +1,5 @@
 /*
-   ctsMediaStreamClientConnectedSocket: handle receiving/parsing media stream
+   ctsMediaStreamReceiver: handle receiving/parsing media stream
 */
 #pragma once
 
@@ -8,20 +8,20 @@
 
 namespace ctsTraffic
 {
-class ctsMediaStreamClientConnectedSocket
+class ctsMediaStreamReceiver
 {
 public:
-    explicit ctsMediaStreamClientConnectedSocket(const std::shared_ptr<ctsSocket>& socket) noexcept;
-    ~ctsMediaStreamClientConnectedSocket() noexcept = default;
+    explicit ctsMediaStreamReceiver(const std::shared_ptr<ctsSocket>& socket) noexcept;
+    ~ctsMediaStreamReceiver() noexcept = default;
 
     // Start processing IO on the connected socket using IOCP
     void Start() noexcept;
 
     // non-copyable
-    ctsMediaStreamClientConnectedSocket(const ctsMediaStreamClientConnectedSocket&) = delete;
-    ctsMediaStreamClientConnectedSocket& operator=(const ctsMediaStreamClientConnectedSocket&) = delete;
-    ctsMediaStreamClientConnectedSocket(ctsMediaStreamClientConnectedSocket&&) = delete;
-    ctsMediaStreamClientConnectedSocket& operator=(ctsMediaStreamClientConnectedSocket&&) = delete;
+    ctsMediaStreamReceiver(const ctsMediaStreamReceiver&) = delete;
+    ctsMediaStreamReceiver& operator=(const ctsMediaStreamReceiver&) = delete;
+    ctsMediaStreamReceiver(ctsMediaStreamReceiver&&) = delete;
+    ctsMediaStreamReceiver& operator=(ctsMediaStreamReceiver&&) = delete;
 private:
     std::shared_ptr<ctsSocket> m_socket;
 

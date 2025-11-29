@@ -26,7 +26,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsSocketState.h"
 
 #include "ctsMediaStreamServer.h"
-#include "ctsMediaStreamServerConnectedSocket.h"
+#include "ctsMediaStreamSender.h"
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
@@ -313,11 +313,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -359,11 +359,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -405,11 +405,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -455,11 +455,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
@@ -502,11 +502,11 @@ public:
         test_socket->SetSocket(INVALID_SOCKET);
 
         uint32_t callback_invoked = 0;
-        ctsMediaStreamServerConnectedSocket test_connected_socket(
+        ctsMediaStreamSender test_connected_socket(
             std::weak_ptr(test_socket),
             INVALID_SOCKET,
             test_addr[0],
-            [&](ctsMediaStreamServerConnectedSocket* _socket_object) -> wsIOResult {
+            [&](ctsMediaStreamSender* _socket_object) -> wsIOResult {
                 ++callback_invoked;
 
                 const auto socket_guard(test_socket->AcquireSocketLock());
