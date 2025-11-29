@@ -228,7 +228,13 @@ namespace ctsTraffic
                             static_cast<size_t>(ctsConfig::g_configSettings->IocpBatchSize));
 
                         g_listeningSockets.emplace_back(
-                            std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));
+                            std::make_unique<ctsMediaStreamServerListeningSocket>(
+                                std::move(listening),
+                                addr,
+                                threadIocp,
+                                [](SOCKET socket, const ctl::ctSockaddr& local, const ctl::ctSockaddr& remote, const char* buf, uint32_t len) {
+                                    ctsMediaStreamServerImpl::OnPacketReceived(socket, local, remote, buf, len);
+                                }));
 
                         PRINT_DEBUG_INFO(
                             L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (shard %d, %Iu)\n",
@@ -262,7 +268,13 @@ namespace ctsTraffic
                     const auto threadIocp = std::make_shared<ctl::ctThreadIocp>(listening.get(), ctsConfig::g_configSettings->pTpEnvironment);
 
                     g_listeningSockets.emplace_back(
-                        std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));
+                        std::make_unique<ctsMediaStreamServerListeningSocket>(
+                            std::move(listening),
+                            addr,
+                            threadIocp,
+                            [](SOCKET socket, const ctl::ctSockaddr& local, const ctl::ctSockaddr& remote, const char* buf, uint32_t len) {
+                                ctsMediaStreamServerImpl::OnPacketReceived(socket, local, remote, buf, len);
+                            }));
 
                     PRINT_DEBUG_INFO(
                         L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (%Iu)\n",
@@ -279,7 +291,7 @@ namespace ctsTraffic
             // initiate the recv's in the 'listening' sockets
             for (const auto& listener : g_listeningSockets)
             {
-                listener->InitiateRecv();
+                listener->Start();
             }
 
             return TRUE;

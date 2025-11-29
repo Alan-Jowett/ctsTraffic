@@ -24,8 +24,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <ctSockaddr.hpp>
 // project headers
 #include "ctsMediaStreamServerListeningSocket.h"
-#include "ctsMediaStreamServer.h"
 #include "ctsMediaStreamProtocol.hpp"
+#include "ctsConfig.h"
 #include "ctsConfig.h"
 // wil headers always included last
 #include <wil/stl.h>
@@ -33,10 +33,11 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-ctsMediaStreamServerListeningSocket::ctsMediaStreamServerListeningSocket(wil::unique_socket&& listeningSocket, ctl::ctSockaddr listeningAddr, std::shared_ptr<ctl::ctThreadIocp_base> threadIocp) :
+ctsMediaStreamServerListeningSocket::ctsMediaStreamServerListeningSocket(wil::unique_socket&& listeningSocket, ctl::ctSockaddr listeningAddr, std::shared_ptr<ctl::ctThreadIocp_base> threadIocp, std::function<void(SOCKET, const ctl::ctSockaddr&, const ctl::ctSockaddr&, const char*, uint32_t)> packetCallback) :
     m_threadIocp(std::move(threadIocp)),
     m_listeningSocket(std::move(listeningSocket)),
-    m_listeningAddr(std::move(listeningAddr))
+    m_listeningAddr(std::move(listeningAddr)),
+    m_packetCallback(std::move(packetCallback))
 {
     FAIL_FAST_IF_MSG(
         !!(ctsConfig::g_configSettings->Options & ctsConfig::OptionType::HandleInlineIocp),
@@ -157,6 +158,11 @@ void ctsMediaStreamServerListeningSocket::InitiateRecv() noexcept
     }
 }
 
+void ctsMediaStreamServerListeningSocket::Start() noexcept
+{
+    InitiateRecv();
+}
+
 void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped) noexcept
 {
     // Cannot be holding the object_guard when calling into any pimpl-> methods
@@ -201,7 +207,7 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
             else
             {
                 m_priorFailureWasConnectionReset = false;
-                // Forward the raw packet to the server implementation and let it parse/handle contents
+                // Forward the raw packet to the provided callback and let it parse/handle contents
                 const char* buf = m_recvBuffer.data();
                 const uint32_t len = static_cast<uint32_t>(bytesReceived);
                 // capture local variables for use outside the lock
@@ -210,8 +216,12 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
 
                 IncrementConnectionCount();
 
-                pimplOperation = [listeningSocket, localAddr, remote = m_remoteAddr, buf, len]() {
-                    ctsMediaStreamServerImpl::OnPacketReceived(listeningSocket, localAddr, remote, buf, len);
+                const auto callback = m_packetCallback; // copy for thread-safety
+                pimplOperation = [callback, listeningSocket, localAddr, remote = m_remoteAddr, buf, len]() {
+                    if (callback)
+                    {
+                        callback(listeningSocket, localAddr, remote, buf, len);
+                    }
                 };
             }
         }
