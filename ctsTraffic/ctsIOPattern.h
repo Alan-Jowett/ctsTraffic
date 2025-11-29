@@ -616,7 +616,9 @@ private:
 class ctsIoPatternMediaStreamSender final : public ctsIoPatternStatistics<ctsUdpStatistics>
 {
 public:
-    ctsIoPatternMediaStreamSender() noexcept;
+    // If `sendStart` is true this side will send the START message to begin the session.
+    // Default behavior preserves existing semantics: sender does not send START.
+    ctsIoPatternMediaStreamSender(bool sendStart = false) noexcept;
     ~ctsIoPatternMediaStreamSender() noexcept override = default;
 
     ctsIoPatternMediaStreamSender(const ctsIoPatternMediaStreamSender&) = delete;
@@ -642,7 +644,10 @@ private:
         IdSent,
         IoStarted
     } m_state{ServerState::NotStarted};
-};
+        // configuration: whether this side should send START
+        bool m_sendStart{false};
+        bool m_sentStartAlready{false};
+    };
 
 //
 // UDP Media client
@@ -656,7 +661,9 @@ private:
 class ctsIoPatternMediaStreamReceiver final : public ctsIoPatternStatistics<ctsUdpStatistics>
 {
 public:
-    ctsIoPatternMediaStreamReceiver();
+    // If `sendStart` is true this side will send the START message to begin the session.
+    // Default behavior preserves existing semantics: receiver sends START.
+    ctsIoPatternMediaStreamReceiver(bool sendStart = true);
     ~ctsIoPatternMediaStreamReceiver() noexcept override;
 
     ctsIoPatternMediaStreamReceiver(const ctsIoPatternMediaStreamReceiver&) = delete;
@@ -711,5 +718,8 @@ private:
     static VOID CALLBACK TimerCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept;
     // Callback to track when the server has actually started sending
     static VOID CALLBACK StartCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept;
+    // configuration: whether this side should send START
+    bool m_sendStart{true};
+    bool m_sentStartAlready{false};
 };
 } //namespace

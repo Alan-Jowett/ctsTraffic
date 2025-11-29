@@ -51,10 +51,11 @@ namespace ctsTraffic
 //   -- The receiver is only using untracked_task requests from the base
 //      since the correctness and lifetime of the session is only known from this instance
 
-ctsIoPatternMediaStreamReceiver::ctsIoPatternMediaStreamReceiver() :
+ctsIoPatternMediaStreamReceiver::ctsIoPatternMediaStreamReceiver(bool sendStart) :
     ctsIoPatternStatistics(ctsConfig::g_configSettings->PrePostRecvs),
     m_frameRateMsPerFrame(1000.0 / static_cast<uint32_t>(ctsConfig::GetMediaStream().FramesPerSecond)),
-    m_maxDatagramSize(ctsConfig::GetMediaStream().DatagramMaxSize)
+    m_maxDatagramSize(ctsConfig::GetMediaStream().DatagramMaxSize),
+    m_sendStart(sendStart)
 {
     // if the entire session fits in the initial buffer, update accordingly
     m_initialBufferFrames = std::min(m_finalFrame, m_initialBufferFrames);
@@ -164,6 +165,20 @@ ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(con
 
             ctsConfig::PrintErrorInfo(L"ctsIOPatternMediaStreamClient received a zero-byte datagram");
             return ctsIoPatternError::TooFewBytes;
+        }
+
+        // Accept the literal START control message before the normal protocol header parsing
+        if (completedBytes == c_udpDatagramStartStringLength &&
+            0 == memcmp(task.m_buffer + task.m_bufferOffset, g_udpDatagramStartString, c_udpDatagramStartStringLength))
+        {
+            // reply with our connection id using a recv buffer sized for a connection-id response
+            const auto returnTask = ctsMediaStreamMessage::MakeConnectionIdTask(
+                CreateUntrackedTask(ctsTaskAction::Recv, c_udpDatagramConnectionIdHeaderLength),
+                GetConnectionIdentifier());
+            SendTaskToCallback(returnTask);
+            // since we responded, ensure we still request another recv
+            ++m_recvNeeded;
+            return ctsIoPatternError::NoError;
         }
 
         if (!ctsMediaStreamMessage::ValidateBufferLengthFromTask(task, completedBytes))
@@ -452,20 +467,29 @@ VOID CALLBACK ctsIoPatternMediaStreamReceiver::StartCallback(PTP_CALLBACK_INSTAN
 
     if (!thisPtr->ReceivedBufferedFrames())
     {
-        // send another start message
-        PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient re-requesting START\n");
+        if (thisPtr->m_sendStart && !thisPtr->m_sentStartAlready)
+        {
+            // send START only if configured to send it
+            PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamClient sending START\n");
 
-        ctsTask resendTask;
-        resendTask.m_ioAction = ctsTaskAction::Send;
-        resendTask.m_trackIo = false;
-        resendTask.m_buffer = const_cast<char*>(c_startBuffer);
-        resendTask.m_bufferOffset = 0;
-        // ReSharper disable once CppRedundantParentheses
-        resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
-        resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
+            ctsTask resendTask;
+            resendTask.m_ioAction = ctsTaskAction::Send;
+            resendTask.m_trackIo = false;
+            resendTask.m_buffer = const_cast<char*>(c_startBuffer);
+            resendTask.m_bufferOffset = 0;
+            // ReSharper disable once CppRedundantParentheses
+            resendTask.m_bufferLength = sizeof(c_startBuffer) - 1; // minus null at the end of the string
+            resendTask.m_bufferType = ctsTask::BufferType::Static; // this is our own buffer: the base class should not mess with it
 
-        thisPtr->SetNextStartTimer();
-        thisPtr->SendTaskToCallback(resendTask);
+            thisPtr->m_sentStartAlready = true;
+            thisPtr->SetNextStartTimer();
+            thisPtr->SendTaskToCallback(resendTask);
+        }
+        else
+        {
+            // keep scheduling the start-check timer until configured sender has started or buffering completes
+            thisPtr->SetNextStartTimer();
+        }
     }
     // else, don't schedule this timer anymore
 }
@@ -542,10 +566,11 @@ VOID CALLBACK ctsIoPatternMediaStreamReceiver::TimerCallback(PTP_CALLBACK_INSTAN
 //     After a 'buffer period' of data has been received,
 //     The receiver starts as timer to 'process' a time-slice of data
 //
-ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender() noexcept :
+ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender(bool sendStart) noexcept :
     ctsIoPatternStatistics(1), // the pattern will use the recv writeable-buffer for sending a connection ID
     m_frameSizeBytes(ctsConfig::GetMediaStream().FrameSizeBytes),
-    m_frameRateFps(ctsConfig::GetMediaStream().FramesPerSecond)
+    m_frameRateFps(ctsConfig::GetMediaStream().FramesPerSecond),
+    m_sendStart(sendStart)
 {
     PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamServer - frame rate in milliseconds per frame : %lld\n", static_cast<int64_t>(1000UL / m_frameRateFps));
 }
@@ -590,8 +615,20 @@ ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender() noexcept :
 
     ctsIoPatternError ctsIoPatternMediaStreamSender::CompleteTaskBackToPattern(const ctsTask& task, uint32_t currentTransfer) noexcept
     {
-        if (task.m_bufferType != ctsTask::BufferType::UdpConnectionId)
-        {
+            // If we received the literal START control message, reply with our connection id
+            if (task.m_ioAction == ctsTaskAction::Recv &&
+                currentTransfer == c_udpDatagramStartStringLength &&
+                0 == memcmp(task.m_buffer + task.m_bufferOffset, g_udpDatagramStartString, c_udpDatagramStartStringLength))
+            {
+                const auto returnTask = ctsMediaStreamMessage::MakeConnectionIdTask(
+                    CreateUntrackedTask(ctsTaskAction::Recv, c_udpDatagramConnectionIdHeaderLength),
+                    GetConnectionIdentifier());
+                SendTaskToCallback(returnTask);
+                return ctsIoPatternError::NoError;
+            }
+
+            if (task.m_bufferType != ctsTask::BufferType::UdpConnectionId)
+            {
             const int64_t currentTransferBits = static_cast<int64_t>(currentTransfer) * 8LL;
 
             ctsConfig::g_configSettings->UdpStatusDetails.m_bitsReceived.Add(currentTransferBits);
