@@ -375,6 +375,17 @@ void ctsIoPatternMediaStreamReceiver::SetNextStartTimer() const noexcept
     }
 }
 
+// Sender side: schedule the next START send attempt (if configured)
+void ctsIoPatternMediaStreamSender::SetNextStartTimer() const noexcept
+{
+    if (m_startTimer != nullptr)
+    {
+        // schedule a retry in 500ms + one frame interval to give receiver time to buffer
+        FILETIME relativeFileTime(ctTimer::convert_ms_to_relative_filetime(static_cast<int64_t>(1000UL / (m_frameRateFps ? m_frameRateFps : 1)) + 500LL));
+        SetThreadpoolTimer(m_startTimer, &relativeFileTime, 0, 0);
+    }
+}
+
 // "render the current frame"
 // - update the current frame as "read" and move the head to the next frame
 // _Requires_lock_held_(m_lock)
@@ -573,6 +584,48 @@ ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender(bool sendStart) noe
     m_sendStart(sendStart)
 {
     PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamServer - frame rate in milliseconds per frame : %lld\n", static_cast<int64_t>(1000UL / m_frameRateFps));
+
+    // create the start timer if this sender may initiate the START handshake
+    if (m_sendStart)
+    {
+        m_startTimer = CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE, PVOID pContext, PTP_TIMER) noexcept {
+            auto* thisPtr = static_cast<ctsIoPatternMediaStreamSender*>(pContext);
+            // Acquire the base lock before touching internals
+            const auto lock = thisPtr->AcquireIoPatternLock();
+            if (thisPtr->m_sentStartAlready || thisPtr->m_state != ServerState::NotStarted)
+            {
+                // if already started or not in a state to send START, don't send
+                return;
+            }
+
+            static constexpr char c_startBuffer[] = "START";
+
+            ctsTask startTask;
+            startTask.m_ioAction = ctsTaskAction::Send;
+            startTask.m_trackIo = false;
+            startTask.m_buffer = const_cast<char*>(c_startBuffer);
+            startTask.m_bufferOffset = 0;
+            startTask.m_bufferLength = sizeof(c_startBuffer) - 1;
+            startTask.m_bufferType = ctsTask::BufferType::Static;
+
+            thisPtr->m_sentStartAlready = true;
+            // schedule next timer just in case
+            thisPtr->SetNextStartTimer();
+            thisPtr->SendTaskToCallback(startTask);
+        }, this, nullptr);
+        THROW_LAST_ERROR_IF(!m_startTimer);
+    }
+}
+
+ctsIoPatternMediaStreamSender::~ctsIoPatternMediaStreamSender() noexcept
+{
+    if (m_startTimer != nullptr)
+    {
+        SetThreadpoolTimer(m_startTimer, nullptr, 0, 0);
+        WaitForThreadpoolTimerCallbacks(m_startTimer, FALSE);
+        CloseThreadpoolTimer(m_startTimer);
+        m_startTimer = nullptr;
+    }
 }
 
     // required virtual functions
@@ -592,6 +645,14 @@ ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender(bool sendStart) noe
         case ServerState::IdSent:
             m_baseTimeMilliseconds = ctTimer::snap_qpc_as_msec();
             m_state = ServerState::IoStarted;
+            // once IO starts, it's appropriate to cancel any START retry timer
+            if (m_startTimer != nullptr)
+            {
+                SetThreadpoolTimer(m_startTimer, nullptr, 0, 0);
+                WaitForThreadpoolTimerCallbacks(m_startTimer, FALSE);
+                CloseThreadpoolTimer(m_startTimer);
+                m_startTimer = nullptr;
+            }
             [[fallthrough]];
         case ServerState::IoStarted:
             if (m_currentFrameRequested < m_frameSizeBytes)

@@ -619,7 +619,7 @@ public:
     // If `sendStart` is true this side will send the START message to begin the session.
     // Default behavior preserves existing semantics: sender does not send START.
     ctsIoPatternMediaStreamSender(bool sendStart = false) noexcept;
-    ~ctsIoPatternMediaStreamSender() noexcept override = default;
+    ~ctsIoPatternMediaStreamSender() noexcept override;
 
     ctsIoPatternMediaStreamSender(const ctsIoPatternMediaStreamSender&) = delete;
     ctsIoPatternMediaStreamSender& operator=(const ctsIoPatternMediaStreamSender&) = delete;
@@ -647,6 +647,10 @@ private:
         // configuration: whether this side should send START
         bool m_sendStart{false};
         bool m_sentStartAlready{false};
+        // timer used to optionally send START from sender side
+        PTP_TIMER m_startTimer = nullptr;
+        // schedule the next start timer
+        void SetNextStartTimer() const noexcept;
     };
 
 //
