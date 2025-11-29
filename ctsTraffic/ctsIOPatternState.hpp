@@ -13,6 +13,15 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #pragma once
 
+/**
+ * @file ctsIOPatternState.hpp
+ * @brief State machine and helpers for tracking IO pattern progress.
+ *
+ * This header implements `ctsIoPatternState` which encapsulates the protocol
+ * level state machine used by the IO patterns to decide what IO to issue next
+ * and to validate completed IO operations.
+ */
+
 // os headers
 #include <Windows.h>
 // project headers
@@ -36,6 +45,10 @@ enum class ctsIoPatternType : std::int8_t
     HardShutdown,
     RequestFin
 };
+
+/**
+ * @brief Pattern-level error codes returned after validating completed IO.
+ */
 
 enum class ctsIoPatternError : std::int8_t
 {
@@ -84,23 +97,72 @@ class ctsIoPatternState
     bool m_pendedState = false;
 
 public:
+    /**
+     * @brief Construct default pattern state.
+     */
     ctsIoPatternState() noexcept;
 
+    /**
+     * @brief Get number of bytes remaining to transfer for this pattern.
+     *
+     * @return Number of bytes remaining to transfer.
+     */
     [[nodiscard]] uint64_t GetRemainingTransfer() const noexcept;
 
+    /**
+     * @brief Get/Set the configured maximum transfer for this instance.
+     *
+     * @return Configured maximum number of bytes to transfer.
+     */
     [[nodiscard]] uint64_t GetMaxTransfer() const noexcept;
     void SetMaxTransfer(uint64_t maxTransfer) noexcept;
 
+    /**
+     * @brief Get/Set the ideal send backlog used by the IO pattern.
+     */
     [[nodiscard]] uint32_t GetIdealSendBacklog() const noexcept;
     void SetIdealSendBacklog(uint32_t newIsb) noexcept;
 
+    /**
+     * @brief Returns true if the pattern reached a completed or failed state.
+     */
     [[nodiscard]] bool IsCompleted() const noexcept;
 
+    /**
+     * @brief Returns true when the current internal state indicates more IO is needed.
+     */
     [[nodiscard]] bool IsCurrentStateMoreIo() const noexcept;
+
+    /**
+     * @brief Determine the next externally-visible pattern type to request.
+     *
+     * Uses the internal state machine and may pend state transitions until
+     * prior actions complete.
+     */
     ctsIoPatternType GetNextPatternType() noexcept;
+
+    /**
+     * @brief Inform the state machine that `nextTask` was issued and update in-flight bytes.
+     *
+     * @param nextTask [in] Task that was provided to the caller from InitiateIo.
+     */
     void NotifyNextTask(const ctsTask& nextTask) noexcept;
+
+    /**
+     * @brief Notify the state machine that a task completed and validate the result.
+     *
+     * @param completedTask [in] The task that completed.
+     * @param completedTransferBytes [in] Number of bytes successfully transferred.
+     * @return Pattern-level error code describing whether the completion satisfied protocol expectations.
+     */
     ctsIoPatternError CompletedTask(const ctsTask& completedTask, uint32_t completedTransferBytes) noexcept;
 
+    /**
+     * @brief Update the state machine with a Win32 error encountered during IO.
+     *
+     * @param error [in] Win32 error code.
+     * @return Pattern-level error code representing the new state.
+     */
     ctsIoPatternError UpdateError(DWORD error) noexcept;
 };
 

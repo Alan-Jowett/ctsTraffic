@@ -53,6 +53,17 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
         // - if we have a waiting ctsSocket to accept it, will add it to connected_sockets
         // - else we'll queue it to awaiting_endpoints
         void Start(SOCKET socket, const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& targetAddr);
+
+        // Information about a listening socket (used for final reporting)
+        struct ListenerInfo
+        {
+            ctl::ctSockaddr ListeningAddress;
+            uint32_t ConnectionCount;
+            size_t ShardIndex;
+        };
+
+        // Return detailed listener info including address and shard index for reporting
+        std::vector<ListenerInfo> GetListenerInfos() noexcept;
     }
 
     // Called to 'accept' incoming connections

@@ -13,6 +13,11 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 #pragma once
 
+/**
+ * @file ctsIOPatternRateLimitPolicy.hpp
+ * @brief Rate-limiting policies for IO patterns (throttle or don't throttle).
+ */
+
 // ctl headers
 #include <ctTimer.hpp>
 // project headers
@@ -21,12 +26,24 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
+/** Tag type: throttle sends to meet bytes/sec target */
 using ctsIOPatternRateLimitThrottle = struct ctsIOPatternRateLimitThrottle_t;
+
+/** Tag type: do not throttle sends */
 using ctsIOPatternRateLimitDontThrottle = struct ctsIOPatternRateLimitDontThrottle_t;
 
 template <typename Protocol>
 struct ctsIOPatternRateLimitPolicy
 {
+    /**
+     * @brief Update the task's `m_timeOffsetMilliseconds` based on rate limiting.
+     *
+     * Specializations provide either a no-op (don't throttle) or the throttle
+     * behavior.
+     *
+     * @param task [in,out] The task whose time offset may be updated.
+     * @param bufferSize [in] The number of bytes associated with this task.
+     */
     void update_time_offset(ctsTask&, const int64_t& bufferSize) noexcept = delete;
 };
 
@@ -38,6 +55,12 @@ template <>
 struct ctsIOPatternRateLimitPolicy<ctsIOPatternRateLimitDontThrottle>
 {
     // ReSharper disable once CppMemberFunctionMayBeStatic
+    /**
+     * @brief No-op rate limiter; leaves `task.m_timeOffsetMilliseconds` untouched.
+     *
+     * @param task [in,out] The task to consider (ignored).
+     * @param bufferSize [in] The buffer size (ignored).
+     */
     void update_time_offset(ctsTask&, const int64_t&) const noexcept
     {
         // no-op
@@ -67,6 +90,13 @@ public:
 #endif
     }
 
+    /**
+     * @brief Calculate and set `task.m_timeOffsetMilliseconds` to respect the
+     *        configured TCP bytes-per-second throttling.
+     *
+     * @param task [in,out] Task to update; only `Send` tasks are adjusted.
+     * @param bufferSize [in] Number of bytes this task would send.
+     */
     void update_time_offset(ctsTask& task, uint64_t bufferSize) noexcept
     {
         if (task.m_ioAction != ctsTaskAction::Send)

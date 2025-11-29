@@ -11,6 +11,17 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+#
+/**
+ * @file ctsMediaStreamServer.cpp
+ * @brief Server-side implementation for UDP media-stream handling.
+ *
+ * This translation unit implements the server-side logic for the media
+ * streaming IO pattern. It is responsible for creating listening sockets,
+ * accepting client START requests, scheduling datagram sends for connected
+ * clients, and managing the lifecycle of connected sockets.
+ */
+
 // cpp headers
 #include <memory>
 #include <vector>
@@ -18,8 +29,13 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
+#include <intrin.h>
 // ctl headers
 #include <ctSockaddr.hpp>
+#include <ctThreadIocp.hpp>
+#include <ctThreadIocp_shard.hpp>
+#include <ctCpuAffinity.hpp>
+#include <mstcpip.h>
 // project headers
 #include "ctsConfig.h"
 #include "ctsSocket.h"
@@ -141,30 +157,129 @@ namespace ctsTraffic
             // 'listen' to each address
             for (const auto& addr : ctsConfig::g_configSettings->ListenAddresses)
             {
-                wil::unique_socket listening(ctsConfig::CreateSocket(addr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
-
-                auto error = ctsConfig::SetPreBindOptions(listening.get(), addr);
-                if (error != NO_ERROR)
+                if (ctsConfig::g_configSettings->EnableRecvSharding)
                 {
-                    THROW_WIN32_MSG(error, "SetPreBindOptions (ctsMediaStreamServer)");
-                }
+                    const auto shardCount = ctsConfig::GetShardCount();
+                    const auto affinityPolicy = ctsConfig::GetCpuAffinityPolicy();
 
-                if (SOCKET_ERROR == bind(listening.get(), addr.sockaddr(), addr.length()))
+                    // compute per-shard affinities (round-robin per-cpu)
+                    std::optional<std::vector<ctl::GroupAffinity>> maybeAffinities = ctl::ComputeShardAffinities(shardCount, affinityPolicy);
+
+                    for (uint32_t shard = 0; shard < shardCount; ++shard)
+                    {
+                        wil::unique_socket listening(ctsConfig::CreateSocket(addr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
+
+                        auto error = ctsConfig::SetPreBindOptions(listening.get(), addr);
+                        if (error != NO_ERROR)
+                        {
+                            THROW_WIN32_MSG(error, "SetPreBindOptions (ctsMediaStreamServer)");
+                        }
+
+                        // capture the socket value before moved into the vector
+                        const SOCKET listeningSocketToPrint(listening.get());
+
+                        // If we have affinity mapping, attempt to apply SIO_CPU_AFFINITY for this socket
+                        if (maybeAffinities && shard < static_cast<uint32_t>(maybeAffinities->size()))
+                        {
+                            const ctl::GroupAffinity& ga = (*maybeAffinities)[shard];
+                            // Per MSDN, SIO_CPU_AFFINITY expects a USHORT processor index (0-based)
+                            // as its input buffer. Compute the local processor index from the
+                            // GroupAffinity mask (single-bit expected) using a CPU-friendly
+                            // bit-scan instruction and pass that as a USHORT.
+                            unsigned int localIndex = 0;
+                            const KAFFINITY mask = ga.Mask;
+                            unsigned long idx = 0;
+#if defined(__MACHINEX86)
+							if (_BitScanForward(&idx, static_cast<unsigned long>(mask)))
+							{
+								localIndex = static_cast<unsigned int>(idx);
+							}
+#else
+                            if (_BitScanForward64(&idx, static_cast<unsigned long long>(mask)))
+                            {
+                                localIndex = static_cast<unsigned int>(idx);
+                            }
+#endif
+                            USHORT processorIndex = static_cast<USHORT>(localIndex);
+                            DWORD bytes = 0;
+                            const int rc = WSAIoctl(listening.get(), SIO_CPU_AFFINITY, &processorIndex, sizeof(processorIndex), nullptr, 0, &bytes, nullptr, nullptr);
+                            if (rc != 0)
+                            {
+                                const auto erl = WSAGetLastError();
+                                ctsConfig::PrintErrorInfo(L"WSAIoctl(SIO_CPU_AFFINITY) failed for shard %d with error %d", shard, erl);
+                            }
+                            else
+                            {
+                                PRINT_DEBUG_INFO(L"ctsMediaStreamServer - applied SIO_CPU_AFFINITY (group %u, cpu %u) to socket %Iu\n", ga.Group, processorIndex, listeningSocketToPrint);
+                            }
+                        }
+
+                        if (SOCKET_ERROR == bind(listening.get(), addr.sockaddr(), addr.length()))
+                        {
+                            error = WSAGetLastError();
+                            char addrBuffer[ctl::ctSockaddr::FixedStringLength]{};
+                            addr.writeAddress(addrBuffer);
+                            THROW_WIN32_MSG(error, "bind %hs (ctsMediaStreamServer)", addrBuffer);
+                        }
+
+                        // create a shard implementation for this socket with configured worker count
+                        // pass the IOCP batch size from config; only applicable when sharding is enabled
+                        // If we computed per-shard affinities, pass the shard's affinity so worker threads
+                        // are affinitized consistently with the socket's SIO_CPU_AFFINITY above.
+                        std::vector<ctl::GroupAffinity> workerAffinities;
+                        if (maybeAffinities && shard < static_cast<uint32_t>(maybeAffinities->size()))
+                        {
+                            workerAffinities.push_back((*maybeAffinities)[shard]);
+                        }
+
+                        const auto threadIocp = std::make_shared<ctl::ctThreadIocp_shard>(
+                            listening.get(),
+                            static_cast<size_t>(ctsConfig::g_configSettings->ShardWorkerCount),
+                            std::move(workerAffinities),
+                            static_cast<size_t>(ctsConfig::g_configSettings->IocpBatchSize));
+
+                        g_listeningSockets.emplace_back(
+                            std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));
+
+                        PRINT_DEBUG_INFO(
+                            L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (shard %d, %Iu)\n",
+                            addr.writeCompleteAddress().c_str(),
+                            shard,
+                            listeningSocketToPrint);
+                    }
+                }
+                else
                 {
-                    error = WSAGetLastError();
-                    char addrBuffer[ctl::ctSockaddr::FixedStringLength]{};
-                    addr.writeAddress(addrBuffer);
-                    THROW_WIN32_MSG(error, "bind %hs (ctsMediaStreamServer)", addrBuffer);
-                }
+                    wil::unique_socket listening(ctsConfig::CreateSocket(addr.family(), SOCK_DGRAM, IPPROTO_UDP, ctsConfig::g_configSettings->SocketFlags));
 
-                // capture the socket value before moved into the vector
-                const SOCKET listeningSocketToPrint(listening.get());
-                g_listeningSockets.emplace_back(
-                    std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr));
-                PRINT_DEBUG_INFO(
-                    L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (%Iu)\n",
-                    addr.writeCompleteAddress().c_str(),
-                    listeningSocketToPrint);
+                    auto error = ctsConfig::SetPreBindOptions(listening.get(), addr);
+                    if (error != NO_ERROR)
+                    {
+                        THROW_WIN32_MSG(error, "SetPreBindOptions (ctsMediaStreamServer)");
+                    }
+
+                    if (SOCKET_ERROR == bind(listening.get(), addr.sockaddr(), addr.length()))
+                    {
+                        error = WSAGetLastError();
+                        char addrBuffer[ctl::ctSockaddr::FixedStringLength]{};
+                        addr.writeAddress(addrBuffer);
+                        THROW_WIN32_MSG(error, "bind %hs (ctsMediaStreamServer)", addrBuffer);
+                    }
+
+                    // capture the socket value before moved into the vector
+                    const SOCKET listeningSocketToPrint(listening.get());
+
+                    // non-sharded: original behavior (threadpool IO manager)
+                    const auto threadIocp = std::make_shared<ctl::ctThreadIocp>(listening.get(), ctsConfig::g_configSettings->pTpEnvironment);
+
+                    g_listeningSockets.emplace_back(
+                        std::make_unique<ctsMediaStreamServerListeningSocket>(std::move(listening), addr, threadIocp));
+
+                    PRINT_DEBUG_INFO(
+                        L"\t\tctsMediaStreamServer - Receiving datagrams on %ws (%Iu)\n",
+                        addr.writeCompleteAddress().c_str(),
+                        listeningSocketToPrint);
+                }
             }
 
             if (g_listeningSockets.empty())
@@ -192,6 +307,21 @@ namespace ctsTraffic
             {
                 throw std::runtime_error("ctsMediaStreamServerListener could not be instantiated");
             }
+        }
+
+        std::vector<ListenerInfo> GetListenerInfos() noexcept
+        {
+            std::vector<ListenerInfo> infos;
+            infos.reserve(g_listeningSockets.size());
+            for (size_t i = 0; i < g_listeningSockets.size(); ++i)
+            {
+                infos.push_back(ListenerInfo{
+                    g_listeningSockets[i]->GetListeningAddress(),
+                    g_listeningSockets[i]->GetConnectionCount(),
+                    i
+                });
+            }
+            return infos;
         }
 
         // Schedule the first IO on the specified ctsSocket
@@ -286,6 +416,7 @@ namespace ctsTraffic
                         foundSocket == g_listeningSockets.end(),
                         "Could not find the socket (%Iu) in the waiting_endpoint from our listening sockets (%p)\n",
                         waitingEndpoint->first, &g_listeningSockets);
+
 
                 ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), waitingEndpoint->second);
 

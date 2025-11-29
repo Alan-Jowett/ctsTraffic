@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 #pragma once
+
 #include <stdexcept>
 
 #include <Windows.h>
@@ -11,17 +12,38 @@
 #include <wil/com.h>
 #include <wil/resource.h>
 
+/**
+ * @file ctWmiService.hpp
+ * @brief Lightweight WMI service wrapper and class property enumeration helpers.
+ *
+ * `ctWmiService` encapsulates connecting to a WMI namespace and provides
+ * convenience helpers to invoke `IWbemServices` methods. `ctWmiEnumerateClassProperties`
+ * exposes an iterator-based interface to enumerate class properties for a
+ * given WMI class object.
+ */
+
 namespace ctl
 {
-	// Callers must instantiate a ctWmiService instance in order to use any of the ctWmi* classes
-	// This class tracks the WMI initialization of the IWbemLocator and IWbemService interfaces
-	//   which maintain a connection to the specified WMI Service through which WMI calls are made
+	/**
+	 * @brief RAII wrapper for an IWbemServices connection.
+	 *
+	 * The constructor connects to the specified WMI namespace and configures
+	 * the COM proxy security blanket. Callers are responsible for calling
+	 * `CoInitialize`/`CoInitializeEx` and configuring process-wide security
+	 * before creating `ctWmiService` if required.
+	 */
 	class ctWmiService
 	{
 	public:
-		// CoInitializeSecurity is not called by the ctWmi* classes. This security
-		//   policy should be defined by the code consuming these libraries, as these
-		//   libraries cannot assume the security context to apply to the process.
+		/**
+		 * @brief Construct and connect to the WMI namespace at `path`.
+		 *
+		 * @param path [in] WMI namespace path (for example `ROOT\\CIMV2`).
+		 * @throws HRESULT on failure to connect or configure the proxy.
+		 *
+		 * Note: Callers must initialize COM (e.g. `CoInitializeEx`) prior to
+		 * constructing `ctWmiService` if COM has not already been initialized.
+		 */
 		explicit ctWmiService(_In_ PCWSTR path)
 		{
 			m_wbemLocator = wil::CoCreateInstance<WbemLocator, IWbemLocator>();
@@ -53,16 +75,32 @@ namespace ctl
 		ctWmiService(ctWmiService&& rhs) noexcept = default;
 		ctWmiService& operator=(ctWmiService&& rhs) noexcept = default;
 
+		/**
+		 * @brief Indirection to the underlying `IWbemServices` pointer.
+		 *
+		 * @return IWbemServices* [out] Raw pointer to the underlying COM proxy.
+		 */
 		IWbemServices* operator->() noexcept
 		{
 			return m_wbemServices.get();
 		}
 
+		/**
+		 * @brief Const indirection to the underlying `IWbemServices` pointer.
+		 *
+		 * @return const IWbemServices* [out] Raw pointer to the underlying COM proxy.
+		 */
 		const IWbemServices* operator->() const noexcept
 		{
 			return m_wbemServices.get();
 		}
 
+		/**
+		 * @brief Compare two `ctWmiService` instances for equality.
+		 *
+		 * @param service [in] Other instance to compare.
+		 * @return true when both instances reference the same underlying COM objects.
+		 */
 		bool operator ==(const ctWmiService& service) const noexcept
 		{
 			return m_wbemLocator == service.m_wbemLocator &&
@@ -74,16 +112,35 @@ namespace ctl
 			return !(*this == service);
 		}
 
+		/**
+		 * @brief Retrieve the underlying `IWbemServices` pointer.
+		 *
+		 * @return IWbemServices* [out] Raw pointer to `IWbemServices`.
+		 */
 		IWbemServices* get() noexcept
 		{
 			return m_wbemServices.get();
 		}
 
+		/**
+		 * @brief Retrieve the underlying `IWbemServices` pointer (const).
+		 *
+		 * @return const IWbemServices* [out] Raw pointer to `IWbemServices`.
+		 */
 		[[nodiscard]] const IWbemServices* get() const noexcept
 		{
 			return m_wbemServices.get();
 		}
 
+		/**
+		 * @brief Delete a WMI object given its object path asynchronously.
+		 *
+		 * @param objPath [in] Object path string identifying the WMI instance to delete.
+		 * @param context [in,opt] Optional `IWbemContext` for the call.
+		 *
+		 * Performs the delete as an asynchronous `DeleteInstance` call and waits
+		 * for the call result. Throws on failure.
+		 */
 		void delete_path(_In_ PCWSTR objPath, const wil::com_ptr<IWbemContext>& context) const
 		{
 			wil::com_ptr<IWbemCallResult> result;
@@ -98,9 +155,11 @@ namespace ctl
 			THROW_IF_FAILED(status);
 		}
 
-		// Deletes the WMI object based off the object path specified in the input
-		// The object path takes the form of:
-		//    MyClass.MyProperty1='33',MyProperty2='value'
+		/**
+		 * @brief Delete a WMI instance specified by object path synchronously.
+		 *
+		 * @param objPath [in] Object path string identifying the WMI instance to delete.
+		 */
 		void delete_path(_In_ PCWSTR objPath) const
 		{
 			const wil::com_ptr<IWbemContext> nullContext;
@@ -112,7 +171,13 @@ namespace ctl
 		wil::com_ptr<IWbemServices> m_wbemServices{};
 	};
 
-	// Exposes enumerating properties of a WMI Provider (class object) through an iterator interface.
+	/**
+	 * @brief Exposes enumerating properties of a WMI class object through an iterator.
+	 *
+	 * Construct with either an already-resolved `IWbemClassObject` or a class name
+	 * and a `ctWmiService` to fetch the class object. The iterator returns property
+	 * names and supports querying the CIM type via `type()`.
+	 */
 	class ctWmiEnumerateClassProperties
 	{
 	public:
@@ -146,11 +211,20 @@ namespace ctl
 				nullptr));
 		}
 
+		/**
+		 * @brief Get an iterator to the first property name.
+		 * @param[in] nonSystemPropertiesOnly When true, only non-system properties are returned.
+		 * @return An `iterator` positioned at the first property or `end()` if none.
+		 */
 		[[nodiscard]] iterator begin(const bool nonSystemPropertiesOnly = true) const
 		{
 			return { m_wbemClass, nonSystemPropertiesOnly };
 		}
 
+		/**
+		 * @brief End sentinel for property enumeration.
+		 * @return Default-constructed `iterator` representing the end.
+		 */
 		[[nodiscard]] static iterator end() noexcept
 		{
 			return {};
@@ -194,6 +268,11 @@ namespace ctl
 				swap(m_propertyType, rhs.m_propertyType);
 			}
 
+			/**
+			 * @brief Retrieve the current property name.
+			 * @return The property name as a `wil::shared_bstr`.
+			 * @throws std::out_of_range if the iterator is at the end.
+			 */
 			wil::shared_bstr operator*() const
 			{
 				if (m_index == m_endIteratorIndex)
@@ -203,6 +282,11 @@ namespace ctl
 				return m_propertyName;
 			}
 
+			/**
+			 * @brief Pointer-like access to the current property name.
+			 * @return Pointer to the current property name BSTR.
+			 * @throws std::out_of_range if the iterator is at the end.
+			 */
 			const wil::shared_bstr* operator->() const
 			{
 				if (m_index == m_endIteratorIndex)
@@ -212,6 +296,11 @@ namespace ctl
 				return &m_propertyName;
 			}
 
+			/**
+			 * @brief Retrieve the CIMTYPE of the current property.
+			 * @return The CIMTYPE value for the current property.
+			 * @throws std::out_of_range if the iterator is at the end.
+			 */
 			[[nodiscard]] CIMTYPE type() const
 			{
 				if (m_index == m_endIteratorIndex)

@@ -92,7 +92,6 @@
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
 
-
 namespace ctl
 {
 	/**
@@ -120,7 +119,7 @@ namespace ctl
 	 * @param[in] lhs Left-hand value.
 	 * @return true if values are considered equal, false otherwise.
 	 */
-	inline bool operator ==(const wil::unique_variant& rhs, const wil::unique_variant& lhs) noexcept
+	inline bool operator==(const wil::unique_variant &rhs, const wil::unique_variant &lhs) noexcept
 	{
 		if (rhs.vt == VT_NULL || lhs.vt == VT_NULL)
 		{
@@ -247,7 +246,7 @@ namespace ctl
 	 * @param[in] lhs Left-hand value.
 	 * @return true if the values are not equal, false otherwise.
 	 */
-	inline bool operator !=(const wil::unique_variant& rhs, const wil::unique_variant& lhs) noexcept
+	inline bool operator!=(const wil::unique_variant &rhs, const wil::unique_variant &lhs) noexcept
 	{
 		return !(rhs == lhs);
 	}
@@ -267,7 +266,7 @@ namespace ctl
 		 * @throws wil::ResultException on WMI failures.
 		 */
 		inline wil::unique_variant ReadCounterFromWbemObjectAccess(
-			_In_ IWbemObjectAccess* instance,
+			_In_ IWbemObjectAccess *instance,
 			_In_ PCWSTR counterName)
 		{
 			LONG propertyHandle{};
@@ -305,7 +304,7 @@ namespace ctl
 					propertyHandle,
 					valueSize,
 					&returnedSize,
-					reinterpret_cast<BYTE*>(value.data()));
+					reinterpret_cast<BYTE *>(value.data()));
 				if (WBEM_E_BUFFER_TOO_SMALL == hr)
 				{
 					valueSize = returnedSize;
@@ -314,7 +313,7 @@ namespace ctl
 						propertyHandle,
 						valueSize,
 						&returnedSize,
-						reinterpret_cast<BYTE*>(value.data()));
+						reinterpret_cast<BYTE *>(value.data()));
 				}
 				THROW_IF_FAILED(hr);
 				currentValue = ctWmiMakeVariant(value.c_str());
@@ -331,53 +330,37 @@ namespace ctl
 			return currentValue;
 		}
 
-			/**
-			 * @class ctPerformanceCounterDataAccessor
-			 * @brief Template accessor that refreshes and exposes WMI performance data.
-			 *
-			 * This template adapts two families of WMI access patterns:
-			 * - `IWbemHiPerfEnum` with `IWbemObjectAccess` for multi-instance counters.
-			 * - `IWbemClassObject` with `IWbemClassObject` for single-instance (static) classes.
-			 *
-			 * @tparam TEnum The refresher/enumeration type (e.g., `IWbemHiPerfEnum`).
-			 * @tparam TAccess The accessor type used to read instance data.
-			 */
-		//
-		// Note: caller *MUST* provide thread safety
-		//       this class is not providing locking at this level
-		//
-		// Note: callers *MUST* guarantee connections with the WMI service stay connected
-		//       for the lifetime of this object [e.g. guaranteed ctWmiService is instantiated]
-		//
-		// Note: callers *MUST* guarantee that COM is CoInitialized on this thread before calling
-		//
-		// Note: the ctPerformanceCounter class *will* retain WMI service instance
-		//       it's recommended to guarantee it stays alive
-		//
-		// Template typename options:
-		//
-		// typename TEnum == IWbemHiPerfEnum
-		// - encapsulates the processing of IWbemHiPerfEnum instances of type _classname
-		//
-		// typename TEnum == IWbemClassObject
-		// - encapsulates the processing of a single refreshable IWbemClassObject of type _classname
-		//
-		// typename TAccess == IWbemObjectAccess
-		// - begin/end return an iterator to a vector<IWbemObjectAccess> of refreshed perf data
-		// - Note: could be N number of instances
-		//
-		// typename TAccess == IWbemClassObject
-		// - begin/end return an iterator to a vector<IWbemClassObject> of refreshed perf data
-		// - Note: will only ever be a single instance
+		/**
+		 * @class ctPerformanceCounterDataAccessor
+		 * @brief Internal helper that binds a WMI refresher enumeration/object to a C++ iterator.
+		 *
+		 * The template adapts two WMI access patterns so callers may uniformly iterate
+		 * over the current set of accessor objects for a provider class. The concrete
+		 * template specializations implement refresh and clear semantics for the
+		 * corresponding WMI types.
+		 *
+		 * @tparam TEnum Enumeration/refresher COM type (e.g., `IWbemHiPerfEnum` or `IWbemClassObject`).
+		 * @tparam TAccess Accessor COM type used to read instance properties.
+		 *
+		 * @note This class does not perform external synchronization; callers must
+		 *       ensure threading guarantees for WMI usage and COM initialization.
+		 */
 		template <typename TEnum, typename TAccess>
 		class ctPerformanceCounterDataAccessor
 		{
 		public:
-			using ctAccessIterator = typename std::vector<TAccess*>::const_iterator;
+			using ctAccessIterator = typename std::vector<TAccess *>::const_iterator;
 
+			/**
+			 * @brief Construct an accessor for the specified WMI class refresher.
+			 *
+			 * @param[in] wmi Initialized `ctWmiService` instance used to bind the refresher.
+			 * @param[in] config `IWbemConfigureRefresher` used to add enumerations or objects.
+			 * @param[in] classname Unicode WMI class name to observe (for example, `L"Win32_PerfFormattedData_..."`).
+			 */
 			ctPerformanceCounterDataAccessor(
 				ctWmiService wmi,
-				const wil::com_ptr<IWbemConfigureRefresher>& config,
+				const wil::com_ptr<IWbemConfigureRefresher> &config,
 				_In_ PCWSTR classname);
 
 			~ctPerformanceCounterDataAccessor() noexcept
@@ -405,14 +388,13 @@ namespace ctl
 			}
 
 			// non-copyable
-			ctPerformanceCounterDataAccessor(const ctPerformanceCounterDataAccessor&) = delete;
-			ctPerformanceCounterDataAccessor& operator=(const ctPerformanceCounterDataAccessor&) = delete;
+			ctPerformanceCounterDataAccessor(const ctPerformanceCounterDataAccessor &) = delete;
+			ctPerformanceCounterDataAccessor &operator=(const ctPerformanceCounterDataAccessor &) = delete;
 
 			// movable
-			ctPerformanceCounterDataAccessor(ctPerformanceCounterDataAccessor&& rhs) noexcept :
-				m_enumerationObject(std::move(rhs.m_enumerationObject)),
-				m_accessorObjects(std::move(rhs.m_accessorObjects)),
-				m_currentIterator(std::move(rhs.m_currentIterator))
+			ctPerformanceCounterDataAccessor(ctPerformanceCounterDataAccessor &&rhs) noexcept : m_enumerationObject(std::move(rhs.m_enumerationObject)),
+																								m_accessorObjects(std::move(rhs.m_accessorObjects)),
+																								m_currentIterator(std::move(rhs.m_currentIterator))
 			{
 				// since accessor_objects is storing raw pointers, manually clear out the rhs object,
 				// so they won't be double-deleted
@@ -420,7 +402,7 @@ namespace ctl
 				rhs.m_currentIterator = rhs.m_accessorObjects.end();
 			}
 
-			ctPerformanceCounterDataAccessor& operator=(ctPerformanceCounterDataAccessor&& rhs) noexcept
+			ctPerformanceCounterDataAccessor &operator=(ctPerformanceCounterDataAccessor &&rhs) noexcept
 			{
 				m_enumerationObject = std::move(rhs.m_enumerationObject);
 				m_accessorObjects = std::move(rhs.m_accessorObjects);
@@ -435,7 +417,7 @@ namespace ctl
 		private:
 			wil::com_ptr<TEnum> m_enumerationObject;
 			// TAccess pointers are returned through enumeration_object::GetObjects, reusing the same vector for each refresh call
-			std::vector<TAccess*> m_accessorObjects;
+			std::vector<TAccess *> m_accessorObjects;
 			ctAccessIterator m_currentIterator;
 
 			/**
@@ -445,16 +427,14 @@ namespace ctl
 		};
 
 		inline ctPerformanceCounterDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::ctPerformanceCounterDataAccessor(
-			ctWmiService wmi, const wil::com_ptr<IWbemConfigureRefresher>& config, _In_ PCWSTR classname) :
-			m_currentIterator(m_accessorObjects.end())
+			ctWmiService wmi, const wil::com_ptr<IWbemConfigureRefresher> &config, _In_ PCWSTR classname) : m_currentIterator(m_accessorObjects.end())
 		{
 			LONG lid{};
 			THROW_IF_FAILED(config->AddEnum(wmi.get(), classname, 0, nullptr, m_enumerationObject.addressof(), &lid));
 		}
 
 		inline ctPerformanceCounterDataAccessor<IWbemClassObject, IWbemClassObject>::ctPerformanceCounterDataAccessor(
-			ctWmiService wmi, const wil::com_ptr<IWbemConfigureRefresher>& config, _In_ PCWSTR classname) :
-			m_currentIterator(m_accessorObjects.end())
+			ctWmiService wmi, const wil::com_ptr<IWbemConfigureRefresher> &config, _In_ PCWSTR classname) : m_currentIterator(m_accessorObjects.end())
 		{
 			ctWmiEnumerateInstance enumInstances(wmi);
 			enumInstances.query(wil::str_printf<std::wstring>(L"SELECT * FROM %ws", classname).c_str());
@@ -523,7 +503,7 @@ namespace ctl
 		template <>
 		inline void ctPerformanceCounterDataAccessor<IWbemHiPerfEnum, IWbemObjectAccess>::clear() noexcept
 		{
-			for (IWbemObjectAccess* object : m_accessorObjects)
+			for (IWbemObjectAccess *object : m_accessorObjects)
 			{
 				object->Release();
 			}
@@ -539,19 +519,19 @@ namespace ctl
 
 		/**
 		 * @class ctPerformanceCounterCounterData
-		 * @brief Per-instance storage for sampled counter values.
+		 * @brief Thread-safe per-instance storage for sampled counter values.
 		 *
-		 * The class collects samples according to the configured
-		 * `ctPerformanceCounterCollectionType`. It is thread-safe for
-		 * concurrent add/read operations via an internal critical section.
+		 * Depending on the configured `ctPerformanceCounterCollectionType` this
+		 * class either stores each sample (Detailed), maintains aggregate
+		 * statistics (MeanOnly), or records only the first/last sample (FirstLast).
 		 *
-		 * @tparam T The numeric type used to store counter samples.
+		 * @tparam T Numeric type used for storing counter samples (for example `ULONG`).
 		 */
 		template <typename T>
 		class ctPerformanceCounterCounterData
 		{
 		private:
-			mutable wil::critical_section m_guardData{ 500 };
+			mutable wil::critical_section m_guardData{500};
 			const ctPerformanceCounterCollectionType m_collectionType = ctPerformanceCounterCollectionType::Detailed;
 			const std::wstring m_instanceName;
 			const std::wstring m_counterName;
@@ -563,7 +543,7 @@ namespace ctl
 			 *
 			 * @param[in] instanceData Sample value to add.
 			 */
-			void add_data(const T& instanceData)
+			void add_data(const T &instanceData)
 			{
 				const auto lock = m_guardData.lock();
 				switch (m_collectionType)
@@ -658,30 +638,28 @@ namespace ctl
 			 */
 			ctPerformanceCounterCounterData(
 				const ctPerformanceCounterCollectionType collectionType,
-				_In_ IWbemObjectAccess* instance,
-				_In_ PCWSTR counter) :
-				m_collectionType(collectionType),
-				m_instanceName(V_BSTR(ReadCounterFromWbemObjectAccess(instance, L"Name").addressof())),
-				m_counterName(counter)
+				_In_ IWbemObjectAccess *instance,
+				_In_ PCWSTR counter) : m_collectionType(collectionType),
+									   m_instanceName(V_BSTR(ReadCounterFromWbemObjectAccess(instance, L"Name").addressof())),
+									   m_counterName(counter)
 			{
 			}
 
 			/**
 			 * @brief Construct per-instance data from an IWbemClassObject (static class case).
-		 *
-		 * The static class is expected to have a NULL `Name` key; an exception
-		 * is thrown if the value is unexpectedly present.
-		 *
-		 * @param[in] collectionType Collection strategy to use.
-		 * @param[in] instance IWbemClassObject representing the single instance.
-		 * @param[in] counter Counter/property name being tracked.
-		 */
+			 *
+			 * The static class is expected to have a NULL `Name` key; an exception
+			 * is thrown if the value is unexpectedly present.
+			 *
+			 * @param[in] collectionType Collection strategy to use.
+			 * @param[in] instance IWbemClassObject representing the single instance.
+			 * @param[in] counter Counter/property name being tracked.
+			 */
 			ctPerformanceCounterCounterData(
 				const ctPerformanceCounterCollectionType collectionType,
-				_In_ IWbemClassObject* instance,
-				_In_ PCWSTR counter) :
-				m_collectionType(collectionType),
-				m_counterName(counter)
+				_In_ IWbemClassObject *instance,
+				_In_ PCWSTR counter) : m_collectionType(collectionType),
+									   m_counterName(counter)
 			{
 				wil::unique_variant value;
 				THROW_IF_FAILED(instance->Get(L"Name", 0, value.addressof(), nullptr, nullptr));
@@ -722,12 +700,12 @@ namespace ctl
 			 *
 			 * @param[in] instance IWbemObjectAccess instance to read the property from.
 			 */
-			void add(_In_ IWbemObjectAccess* instance)
+			void add(_In_ IWbemObjectAccess *instance)
 			{
 				T instanceData{};
 				if (ctWmiReadFromVariant(
-					ReadCounterFromWbemObjectAccess(instance, m_counterName.c_str()).addressof(),
-					&instanceData))
+						ReadCounterFromWbemObjectAccess(instance, m_counterName.c_str()).addressof(),
+						&instanceData))
 				{
 					add_data(instanceData);
 				}
@@ -738,7 +716,7 @@ namespace ctl
 			 *
 			 * @param[in] instance IWbemClassObject instance to read the property from.
 			 */
-			void add(_In_ IWbemClassObject* instance)
+			void add(_In_ IWbemClassObject *instance)
 			{
 				wil::unique_variant value;
 				THROW_IF_FAILED(instance->Get(m_counterName.c_str(), 0, value.addressof(), nullptr, nullptr));
@@ -792,21 +770,21 @@ namespace ctl
 			}
 
 			// non-copyable
-			ctPerformanceCounterCounterData(const ctPerformanceCounterCounterData&) = delete;
-			ctPerformanceCounterCounterData& operator=(const ctPerformanceCounterCounterData&) = delete;
+			ctPerformanceCounterCounterData(const ctPerformanceCounterCounterData &) = delete;
+			ctPerformanceCounterCounterData &operator=(const ctPerformanceCounterCounterData &) = delete;
 
 			// not movable
-			ctPerformanceCounterCounterData(ctPerformanceCounterCounterData&&) = delete;
-			ctPerformanceCounterCounterData& operator=(ctPerformanceCounterCounterData&&) = delete;
+			ctPerformanceCounterCounterData(ctPerformanceCounterCounterData &&) = delete;
+			ctPerformanceCounterCounterData &operator=(ctPerformanceCounterCounterData &&) = delete;
 		};
 
 		/**
 		 * @brief Query the `Name` property for an IWbemObjectAccess instance.
 		 *
-		 * @param[in] instance Accessor to query.
+		 * @param[in] instance IWbemObjectAccess accessor to query.
 		 * @return Variant containing the `Name` property.
 		 */
-		inline wil::unique_variant ctQueryInstanceName(_In_ IWbemObjectAccess* instance)
+		inline wil::unique_variant ctQueryInstanceName(_In_ IWbemObjectAccess *instance)
 		{
 			return ReadCounterFromWbemObjectAccess(instance, L"Name");
 		}
@@ -814,10 +792,10 @@ namespace ctl
 		/**
 		 * @brief Query the `Name` property for an IWbemClassObject instance.
 		 *
-		 * @param[in] instance IWbemClassObject to query.
+		 * @param[in] instance IWbemClassObject accessor to query.
 		 * @return Variant containing the `Name` property.
 		 */
-		inline wil::unique_variant ctQueryInstanceName(_In_ IWbemClassObject* instance)
+		inline wil::unique_variant ctQueryInstanceName(_In_ IWbemClassObject *instance)
 		{
 			wil::unique_variant value;
 			THROW_IF_FAILED(instance->Get(L"Name", 0, value.addressof(), nullptr, nullptr));
@@ -855,14 +833,13 @@ namespace ctl
 	//       it's recommended to guarantee it stays alive
 	/**
 	 * @class ctPerformanceCounterCounter
-	 * @brief Abstract base class for a single performance counter aggregator.
+	 * @brief Abstract base type representing an aggregator for one named counter property.
 	 *
-	 * Template parameter `T` is the stored sample type. Derived concrete
-	 * implementations provide the WMI-specific refresh logic and call into the
-	 * base class to add per-instance samples.
+	 * Concrete implementations perform WMI-specific refreshes and call into
+	 * the base class to add per-instance samples. Users may register filters
+	 * and obtain iterator ranges for a tracked instance using `reference_range`.
 	 *
-	 * Public API includes `add_filter` to restrict tracked instances and
-	 * `reference_range` to obtain iterators over collected time-slices.
+	 * @tparam T Sample storage type (for example `ULONG` or `ULONGLONG`).
 	 */
 	template <typename T>
 	class ctPerformanceCounterCounter
@@ -870,7 +847,10 @@ namespace ctl
 	public:
 		/**
 		 * @class iterator
-		 * @brief Iterator type used by `reference_range` to iterate time-slices.
+		 * @brief Lightweight forward iterator over stored time-slices.
+		 *
+		 * This iterator wraps a `std::vector<T>::const_iterator` and provides
+		 * basic checked traversal operations used by `reference_range`.
 		 */
 		class iterator
 		{
@@ -879,44 +859,41 @@ namespace ctl
 			using iterator_category = std::forward_iterator_tag;
 			using value_type = T;
 			using difference_type = size_t;
-			using pointer = T*;
-			using reference = T&;
+			using pointer = T *;
+			using reference = T &;
 
-			explicit iterator(typename std::vector<T>::const_iterator&& instance) noexcept :
-				m_current(std::move(instance)), m_isEmpty(false)
+			explicit iterator(typename std::vector<T>::const_iterator &&instance) noexcept : m_current(std::move(instance)), m_isEmpty(false)
 			{
 			}
 
 			iterator() = default;
 			~iterator() noexcept = default;
 
-			iterator(iterator&& i) noexcept :
-				m_current(std::move(i.m_current)),
-				m_isEmpty(i.m_isEmpty)
+			iterator(iterator &&i) noexcept : m_current(std::move(i.m_current)),
+											  m_isEmpty(i.m_isEmpty)
 			{
 			}
 
-			iterator& operator =(iterator&& i) noexcept
+			iterator &operator=(iterator &&i) noexcept
 			{
 				m_current = std::move(i.m_current);
 				m_isEmpty = i.m_isEmpty;
 				return *this;
 			}
 
-			iterator(const iterator& i) noexcept :
-				m_current(i.m_current),
-				m_isEmpty(i.m_isEmpty)
+			iterator(const iterator &i) noexcept : m_current(i.m_current),
+												   m_isEmpty(i.m_isEmpty)
 			{
 			}
 
-			iterator& operator =(const iterator& i) noexcept // NOLINT(cert-oop54-cpp)
+			iterator &operator=(const iterator &i) noexcept // NOLINT(cert-oop54-cpp)
 			{
 				iterator localCopy(i);
 				*this = std::move(localCopy);
 				return *this;
 			}
 
-			const T& operator*() const
+			const T &operator*() const
 			{
 				if (m_isEmpty)
 				{
@@ -926,7 +903,7 @@ namespace ctl
 				return *m_current;
 			}
 
-			bool operator==(const iterator& iter) const noexcept
+			bool operator==(const iterator &iter) const noexcept
 			{
 				if (m_isEmpty || iter.m_isEmpty)
 				{
@@ -935,13 +912,13 @@ namespace ctl
 				return m_current == iter.m_current;
 			}
 
-			bool operator!=(const iterator& iter) const noexcept
+			bool operator!=(const iterator &iter) const noexcept
 			{
 				return !(*this == iter);
 			}
 
 			// pre-increment
-			iterator& operator++()
+			iterator &operator++()
 			{
 				if (m_isEmpty)
 				{
@@ -966,7 +943,7 @@ namespace ctl
 			}
 
 			// increment by integer
-			iterator& operator+=(size_t inc)
+			iterator &operator+=(size_t inc)
 			{
 				if (m_isEmpty)
 				{
@@ -987,13 +964,12 @@ namespace ctl
 
 		/**
 		 * @brief Construct an aggregator for a named counter property.
-	 *
-		 * @param[in] counterName Property name to sample from WMI instances.
-		 * @param[in] collectionType Strategy used for storing samples.
+		 *
+		 * @param[in] counterName Wide string property name to sample from WMI objects.
+		 * @param[in] collectionType Storage strategy for samples.
 		 */
-		ctPerformanceCounterCounter(_In_ PCWSTR counterName, const ctPerformanceCounterCollectionType collectionType) :
-			m_collectionType(collectionType),
-			m_counterName(counterName)
+		ctPerformanceCounterCounter(_In_ PCWSTR counterName, const ctPerformanceCounterCollectionType collectionType) : m_collectionType(collectionType),
+																														m_counterName(counterName)
 		{
 			m_refresher = wil::CoCreateInstance<WbemRefresher, IWbemRefresher>();
 			m_configRefresher = m_refresher.query<IWbemConfigureRefresher>();
@@ -1001,24 +977,24 @@ namespace ctl
 
 		virtual ~ctPerformanceCounterCounter() noexcept = default;
 
-		ctPerformanceCounterCounter(const ctPerformanceCounterCounter&) = delete;
-		ctPerformanceCounterCounter& operator=(const ctPerformanceCounterCounter&) = delete;
-		ctPerformanceCounterCounter(ctPerformanceCounterCounter&&) = delete;
-		ctPerformanceCounterCounter& operator=(ctPerformanceCounterCounter&&) = delete;
+		ctPerformanceCounterCounter(const ctPerformanceCounterCounter &) = delete;
+		ctPerformanceCounterCounter &operator=(const ctPerformanceCounterCounter &) = delete;
+		ctPerformanceCounterCounter(ctPerformanceCounterCounter &&) = delete;
+		ctPerformanceCounterCounter &operator=(ctPerformanceCounterCounter &&) = delete;
 
 		//
 		// *not* thread-safe: caller must guarantee sequential access to add_filter()
 		//
 		/**
-		 * @brief Add an instance filter so only instances with the given
-		 * property value will be tracked.
+		 * @brief Add an instance filter limiting which instances are tracked.
 		 *
-		 * Must be called while counters are stopped. The `counterName` identifies
-		 * the property to compare and `propertyValue` is the expected value.
+		 * The filter restricts collection to instances whose `counterName` property
+		 * equals `propertyValue`. Callers must ensure counters are stopped when
+		 * invoking this method.
 		 *
-		 * @tparam V Variant-compatible value type for the property.
-		 * @param[in] counterName Property name to filter on.
-		 * @param[in] propertyValue Expected value for the property.
+		 * @tparam V Variant-compatible value type for comparison.
+		 * @param[in] counterName Property name to compare on each instance.
+		 * @param[in] propertyValue Expected property value to match.
 		 */
 		template <typename V>
 		void add_filter(_In_ PCWSTR counterName, V propertyValue)
@@ -1036,12 +1012,10 @@ namespace ctl
 		/**
 		 * @brief Obtain iterators referencing the sampled time-slices for an instance.
 		 *
-		 * If `instanceName` is `nullptr` the first matching stored instance is
-		 * returned (static classes may use a null `Name`). If no instance matches
-		 * an empty iterator pair is returned.
-		 *
-		 * @param[in,opt] instanceName Instance name to retrieve samples for.
-		 * @return Pair of iterators (begin,end) over stored samples.
+		 * @param[in,opt] instanceName Wide-string instance name to retrieve samples for,
+		 * or `nullptr` to match the first stored instance (used for static classes).
+		 * @return Pair of `iterator` (begin,end) for the stored samples. Empty pair
+		 * indicates no matching instance.
 		 */
 		std::pair<iterator, iterator> reference_range(_In_opt_ PCWSTR instanceName = nullptr)
 		{
@@ -1052,7 +1026,7 @@ namespace ctl
 			const auto lock = m_guardCounterData.lock();
 			const auto foundInstance = std::ranges::find_if(
 				m_counterData,
-				[&](const auto& instance)
+				[&](const auto &instance)
 				{
 					return instance->match(instanceName);
 				});
@@ -1063,7 +1037,7 @@ namespace ctl
 				return std::pair<iterator, iterator>(iterator(), iterator());
 			}
 
-			const std::unique_ptr<details::ctPerformanceCounterCounterData<T>>& instanceReference = *foundInstance;
+			const std::unique_ptr<details::ctPerformanceCounterCounterData<T>> &instanceReference = *foundInstance;
 			return std::pair<iterator, iterator>(instanceReference->begin(), instanceReference->end());
 		}
 
@@ -1071,47 +1045,62 @@ namespace ctl
 		//
 		// private structure to track the 'filter' which instances to track
 		//
+		/**
+		 * @struct ctPerformanceCounterInstanceFilter
+		 * @brief Encapsulates a property/value filter for selecting which instances to track.
+		 *
+		 * The filter compares the named property on an accessor instance against the
+		 * stored `m_propertyValue`. Comparison operators are provided for both
+		 * `IWbemObjectAccess` and `IWbemClassObject` accessor types.
+		 */
 		struct ctPerformanceCounterInstanceFilter
 		{
 			const std::wstring m_counterName;
 			const wil::unique_variant m_propertyValue;
 
-			ctPerformanceCounterInstanceFilter(_In_ PCWSTR counterName, wil::unique_variant&& propertyValue) :
-				m_counterName(counterName),
-				m_propertyValue(std::move(propertyValue))
+			ctPerformanceCounterInstanceFilter(_In_ PCWSTR counterName, wil::unique_variant &&propertyValue) : m_counterName(counterName),
+																											   m_propertyValue(std::move(propertyValue))
 			{
 			}
 
 			~ctPerformanceCounterInstanceFilter() = default;
 
-			ctPerformanceCounterInstanceFilter(const ctPerformanceCounterInstanceFilter& rhs) = delete;
-			ctPerformanceCounterInstanceFilter& operator=(const ctPerformanceCounterInstanceFilter& rhs) = delete;
+			ctPerformanceCounterInstanceFilter(const ctPerformanceCounterInstanceFilter &rhs) = delete;
+			ctPerformanceCounterInstanceFilter &operator=(const ctPerformanceCounterInstanceFilter &rhs) = delete;
 
-			// must const-cast to allow the const objects to be movable
-			// this is safe as these are const only for the accessors of this object
-			ctPerformanceCounterInstanceFilter(ctPerformanceCounterInstanceFilter&& rhs) noexcept :
-				m_counterName(std::move(*const_cast<std::wstring*>(&rhs.m_counterName))),
-				m_propertyValue(std::move(*const_cast<wil::unique_variant*>(&rhs.m_propertyValue)))
+			ctPerformanceCounterInstanceFilter(ctPerformanceCounterInstanceFilter &&rhs) noexcept : m_counterName(std::move(*const_cast<std::wstring *>(&rhs.m_counterName))),
+																									m_propertyValue(std::move(*const_cast<wil::unique_variant *>(&rhs.m_propertyValue)))
 			{
 			}
 
-			ctPerformanceCounterInstanceFilter& operator=(ctPerformanceCounterInstanceFilter&&) noexcept = delete;
+			ctPerformanceCounterInstanceFilter &operator=(ctPerformanceCounterInstanceFilter &&) noexcept = delete;
 
-			bool operator==(_In_ IWbemObjectAccess* instance) const
+			/**
+			 * @brief Compare filter against an `IWbemObjectAccess` instance.
+			 *
+			 * @param[in] instance IWbemObjectAccess to compare against.
+			 * @return true when the instance's property equals the stored value.
+			 */
+			bool operator==(_In_ IWbemObjectAccess *instance) const
 			{
 				return m_propertyValue == details::ReadCounterFromWbemObjectAccess(instance, m_counterName.c_str());
 			}
 
-			bool operator!=(_In_ IWbemObjectAccess* instance) const
+			bool operator!=(_In_ IWbemObjectAccess *instance) const
 			{
 				return !(*this == instance);
 			}
 
-			bool operator==(_In_ IWbemClassObject* instance) const
+			/**
+			 * @brief Compare filter against an `IWbemClassObject` instance.
+			 *
+			 * @param[in] instance IWbemClassObject to compare against.
+			 * @return true when the instance's property equals the stored value.
+			 */
+			bool operator==(_In_ IWbemClassObject *instance) const
 			{
 				wil::unique_variant value;
 				THROW_IF_FAILED(instance->Get(m_counterName.c_str(), 0, value.addressof(), nullptr, nullptr));
-				// if the filter currently doesn't match anything we have, return not equal
 				if (value.vt == VT_NULL)
 				{
 					return false;
@@ -1125,7 +1114,7 @@ namespace ctl
 				return m_propertyValue == value;
 			}
 
-			bool operator!=(_In_ IWbemClassObject* instance) const
+			bool operator!=(_In_ IWbemClassObject *instance) const
 			{
 				return !(*this == instance);
 			}
@@ -1137,7 +1126,7 @@ namespace ctl
 		wil::com_ptr<IWbemConfigureRefresher> m_configRefresher;
 		std::vector<ctPerformanceCounterInstanceFilter> m_instanceFilter;
 		// Must lock access to counter_data
-		mutable wil::critical_section m_guardCounterData{ 500 };
+		mutable wil::critical_section m_guardCounterData{500};
 		std::vector<std::unique_ptr<details::ctPerformanceCounterCounterData<T>>> m_counterData;
 		bool m_dataStopped = true;
 
@@ -1147,58 +1136,58 @@ namespace ctl
 		// ctPerformanceCounter needs private access to invoke register_callback in the derived type
 		friend class ctPerformanceCounter;
 
-			/**
-			 * @brief Register a callback used by `ctPerformanceCounter` to drive
-			 * sampling lifecycle events.
-			 *
-			 * The returned callback accepts `CallbackAction` values and will invoke
-			 * the appropriate internal behavior (start/stop/update/clear).
-			 *
-			 * @return Function to be invoked by the manager.
-			 */
-			details::ctPerformanceCounterCallback register_callback()
+		/**
+		 * @brief Register a callback used by `ctPerformanceCounter` to drive
+		 * sampling lifecycle events.
+		 *
+		 * The returned callback accepts `CallbackAction` values and will invoke
+		 * the appropriate internal behavior (start/stop/update/clear).
+		 *
+		 * @return Function to be invoked by the manager.
+		 */
+		details::ctPerformanceCounterCallback register_callback()
 		{
 			// the callback function must be no-except - it can't leak an exception to the caller
 			// as it shouldn't break calling all other callbacks if one happens to fail an update
 			return [this](const details::CallbackAction updateData) noexcept
+			{
+				try
 				{
-					try
+					switch (updateData)
 					{
-						switch (updateData)
+					case details::CallbackAction::Start:
+						update_counter_data();
+						m_dataStopped = false;
+						break;
+
+					case details::CallbackAction::Stop:
+						m_dataStopped = true;
+						break;
+
+					case details::CallbackAction::Update:
+						// only the derived class has appropriate the accessor class to update the data
+						update_counter_data();
+						break;
+
+					case details::CallbackAction::Clear:
+					{
+						FAIL_FAST_IF_MSG(
+							!m_dataStopped,
+							"ctPerformanceCounterCounter: must call stop_all_counters on the ctPerformanceCounter class containing this counter");
+
+						const auto lock = m_guardCounterData.lock();
+						for (auto &counterData : m_counterData)
 						{
-						case details::CallbackAction::Start:
-							update_counter_data();
-							m_dataStopped = false;
-							break;
-
-						case details::CallbackAction::Stop:
-							m_dataStopped = true;
-							break;
-
-						case details::CallbackAction::Update:
-							// only the derived class has appropriate the accessor class to update the data
-							update_counter_data();
-							break;
-
-						case details::CallbackAction::Clear:
-						{
-							FAIL_FAST_IF_MSG(
-								!m_dataStopped,
-								"ctPerformanceCounterCounter: must call stop_all_counters on the ctPerformanceCounter class containing this counter");
-
-							const auto lock = m_guardCounterData.lock();
-							for (auto& counterData : m_counterData)
-							{
-								counterData->clear();
-							}
-							break;
+							counterData->clear();
 						}
-						}
+						break;
 					}
-					CATCH_LOG()
-						// if failed to update the counter data this pass
-						// will try again the next timer callback
-				};
+					}
+				}
+				CATCH_LOG()
+				// if failed to update the counter data this pass
+				// will try again the next timer callback
+			};
 		}
 
 		//
@@ -1213,7 +1202,7 @@ namespace ctl
 		// this function is how one looks to see if the data machines requires knowing how to access the data from that specific WMI class
 		// - it's also how to access the data is captured with the TAccess template type
 		//
-		void add_instance(_In_ IWbemObjectAccess* instance)
+		void add_instance(_In_ IWbemObjectAccess *instance)
 		{
 			bool fAddData = m_instanceFilter.empty();
 			if (!fAddData)
@@ -1221,7 +1210,7 @@ namespace ctl
 				fAddData = std::any_of(
 					std::cbegin(m_instanceFilter),
 					std::cend(m_instanceFilter),
-					[&](const auto& filter)
+					[&](const auto &filter)
 					{
 						return filter == instance;
 					});
@@ -1243,7 +1232,7 @@ namespace ctl
 				const auto lock = m_guardCounterData.lock();
 				const auto trackedInstance = std::ranges::find_if(
 					m_counterData,
-					[&](const auto& counterData)
+					[&](const auto &counterData)
 					{
 						return counterData->match(instanceName.bstrVal);
 					});
@@ -1266,7 +1255,7 @@ namespace ctl
 			}
 		}
 
-		void add_instance(_In_ IWbemClassObject* instance)
+		void add_instance(_In_ IWbemClassObject *instance)
 		{
 			// static WMI objects have only one instance
 			const auto lock = m_guardCounterData.lock();
@@ -1301,23 +1290,22 @@ namespace ctl
 	{
 	public:
 		ctPerformanceCounterCounterImpl(
-			const ctWmiService& wmi,
+			const ctWmiService &wmi,
 			_In_ PCWSTR className,
 			_In_ PCWSTR counterName,
-			const ctPerformanceCounterCollectionType collectionType) :
-			ctPerformanceCounterCounter<TData>(counterName, collectionType),
-			m_accessor(wmi, this->access_refresher(), className)
-			// must qualify 'this' name lookup to access access_refresher since it's in the base class
+			const ctPerformanceCounterCollectionType collectionType) : ctPerformanceCounterCounter<TData>(counterName, collectionType),
+																	   m_accessor(wmi, this->access_refresher(), className)
+		// must qualify 'this' name lookup to access access_refresher since it's in the base class
 		{
 		}
 
 		~ctPerformanceCounterCounterImpl() override = default;
 
 		// non-copyable
-		ctPerformanceCounterCounterImpl(const ctPerformanceCounterCounterImpl&) = delete;
-		ctPerformanceCounterCounterImpl& operator=(const ctPerformanceCounterCounterImpl&) = delete;
-		ctPerformanceCounterCounterImpl(ctPerformanceCounterCounterImpl&&) = delete;
-		ctPerformanceCounterCounterImpl& operator=(ctPerformanceCounterCounterImpl&&) = delete;
+		ctPerformanceCounterCounterImpl(const ctPerformanceCounterCounterImpl &) = delete;
+		ctPerformanceCounterCounterImpl &operator=(const ctPerformanceCounterCounterImpl &) = delete;
+		ctPerformanceCounterCounterImpl(ctPerformanceCounterCounterImpl &&) = delete;
+		ctPerformanceCounterCounterImpl &operator=(ctPerformanceCounterCounterImpl &&) = delete;
 
 	private:
 		//
@@ -1348,7 +1336,7 @@ namespace ctl
 
 			// the accessor object exposes begin() / end() to allow access to instances
 			// - of the specified hi-performance counter
-			for (const auto& instance : m_accessor)
+			for (const auto &instance : m_accessor)
 			{
 				// must qualify this name lookup to access add_instance since it's in the base class
 				this->add_instance(instance);
@@ -1379,8 +1367,7 @@ namespace ctl
 		 *
 		 * @param[in] wmiService Initialized `ctWmiService` representing the WMI namespace.
 		 */
-		explicit ctPerformanceCounter(ctWmiService wmiService) :
-			m_wmiService(std::move(wmiService))
+		explicit ctPerformanceCounter(ctWmiService wmiService) : m_wmiService(std::move(wmiService))
 		{
 			m_lockedData = std::make_unique<LockedData>();
 			m_refresher = wil::CoCreateInstance<WbemRefresher, IWbemRefresher>();
@@ -1409,13 +1396,11 @@ namespace ctl
 		 * @param[in] perfCounterObject Shared pointer to the aggregator to register.
 		 */
 		template <typename T>
-		void add_counter(const std::shared_ptr<ctPerformanceCounterCounter<T>>& perfCounterObject)
+		void add_counter(const std::shared_ptr<ctPerformanceCounterCounter<T>> &perfCounterObject)
 		{
 			m_callbacks.push_back(perfCounterObject->register_callback());
 			auto revertCallback = wil::scope_exit([&]() noexcept
-				{
-					m_callbacks.pop_back();
-				});
+												  { m_callbacks.pop_back(); });
 
 			THROW_IF_FAILED(m_configRefresher->AddRefresher(perfCounterObject->m_refresher.get(), 0, nullptr));
 			// dismiss scope-guard - successfully added refresher
@@ -1435,7 +1420,7 @@ namespace ctl
 				THROW_LAST_ERROR_IF(!m_timer);
 			}
 
-			for (auto& callback : m_callbacks)
+			for (auto &callback : m_callbacks)
 			{
 				callback(details::CallbackAction::Start);
 			}
@@ -1465,7 +1450,7 @@ namespace ctl
 
 			m_timer.reset();
 
-			for (auto& callback : m_callbacks)
+			for (auto &callback : m_callbacks)
 			{
 				callback(details::CallbackAction::Stop);
 			}
@@ -1479,7 +1464,7 @@ namespace ctl
 		 */
 		void clear_counter_data() const noexcept
 		{
-			for (const auto& callback : m_callbacks)
+			for (const auto &callback : m_callbacks)
 			{
 				callback(details::CallbackAction::Clear);
 			}
@@ -1498,12 +1483,12 @@ namespace ctl
 		}
 
 		// non-copyable
-		ctPerformanceCounter(const ctPerformanceCounter&) = delete;
-		ctPerformanceCounter& operator=(const ctPerformanceCounter&) = delete;
-		ctPerformanceCounter& operator=(ctPerformanceCounter&& rhs) noexcept = delete;
+		ctPerformanceCounter(const ctPerformanceCounter &) = delete;
+		ctPerformanceCounter &operator=(const ctPerformanceCounter &) = delete;
+		ctPerformanceCounter &operator=(ctPerformanceCounter &&rhs) noexcept = delete;
 
 		// movable
-		ctPerformanceCounter(ctPerformanceCounter&& rhs) noexcept = default;
+		ctPerformanceCounter(ctPerformanceCounter &&rhs) noexcept = default;
 
 	private:
 		ctWmiService m_wmiService;
@@ -1520,7 +1505,7 @@ namespace ctl
 		// and the ctPerformanceCounter objects must be movable
 		struct LockedData
 		{
-			wil::critical_section m_lock{ 500 };
+			wil::critical_section m_lock{500};
 			bool m_countersStarted = false;
 		};
 
@@ -1528,13 +1513,13 @@ namespace ctl
 
 		static void NTAPI TimerCallback(PTP_CALLBACK_INSTANCE, PVOID pContext, PTP_TIMER) noexcept
 		{
-			const auto* pThis = static_cast<ctPerformanceCounter*>(pContext);
+			const auto *pThis = static_cast<ctPerformanceCounter *>(pContext);
 			try
 			{
 				// must guarantee COM is initialized on this thread
 				const auto com = wil::CoInitializeEx();
 				pThis->m_refresher->Refresh(0);
-				for (const auto& callback : pThis->m_callbacks)
+				for (const auto &callback : pThis->m_callbacks)
 				{
 					callback(details::CallbackAction::Update);
 				}
@@ -1554,7 +1539,13 @@ namespace ctl
 		}
 	};
 
-
+	/**
+	 * @enum ctWmiEnumClassType
+	 * @brief Indicates whether a WMI performance class is static or instance-based.
+	 *
+	 * - `Static`: the WMI class exposes a single (static) instance accessed via `IWbemClassObject`.
+	 * - `Instance`: the WMI class exposes multiple instances and is enumerated via `IWbemHiPerfEnum`.
+	 */
 	enum class ctWmiEnumClassType : std::uint8_t
 	{
 		Uninitialized,
@@ -1564,6 +1555,13 @@ namespace ctl
 		Instance
 	};
 
+	/**
+	 * @enum ctWmiEnumClassName
+	 * @brief Well-known identifiers for supported WMI performance classes.
+	 *
+	 * These symbolic names map to specific WMI provider class names stored
+	 * in the `ctPerformanceCounterDetails::c_performanceCounterPropertiesArray`.
+	 */
 	enum class ctWmiEnumClassName : std::uint8_t
 	{
 		Uninitialized,
@@ -1584,28 +1582,52 @@ namespace ctl
 		WfpFilterCount,
 	};
 
+	/**
+	 * @struct ctPerformanceCounterCounterProperties
+	 * @brief Compile-time descriptor of a WMI performance counter class.
+	 *
+	 * Instances of this structure describe the provider class name, whether the
+	 * class is static or instance-backed, and lists of property names grouped by
+	 * their expected storage type (`ULONG`, `ULONGLONG`, and string types).
+	 */
 	struct ctPerformanceCounterCounterProperties
 	{
+		/** @brief Whether the provider exposes a single static instance or multiple instances. */
 		const ctWmiEnumClassType m_classType = ctWmiEnumClassType::Uninitialized;
+		/** @brief Enumerated identifier for the well-known class. */
 		const ctWmiEnumClassName m_className = ctWmiEnumClassName::Uninitialized;
-		const wchar_t* m_providerName = nullptr;
+		/** @brief The WMI provider class name (for example, L"Win32_PerfFormattedData_..."). */
+		const wchar_t *m_providerName = nullptr;
 
+		/** @brief Number of `ULONG` property names in `m_ulongFieldNames`. */
 		const uint32_t m_ulongFieldNameCount = 0;
-		const wchar_t** m_ulongFieldNames = nullptr;
+		/** @brief Array of `ULONG` property names. */
+		const wchar_t **m_ulongFieldNames = nullptr;
 
+		/** @brief Number of `ULONGLONG` property names in `m_ulonglongFieldNames`. */
 		const uint32_t m_ulonglongFieldNameCount = 0;
-		const wchar_t** m_ulonglongFieldNames = nullptr;
+		/** @brief Array of `ULONGLONG` property names. */
+		const wchar_t **m_ulonglongFieldNames = nullptr;
 
+		/** @brief Number of string property names in `m_stringFieldNames`. */
 		const uint32_t m_stringFieldNameCount = 0;
-		const wchar_t** m_stringFieldNames = nullptr;
+		/** @brief Array of string property names. */
+		const wchar_t **m_stringFieldNames = nullptr;
 
+		/**
+		 * @brief Determine whether a property name exists for the requested storage type.
+		 *
+		 * @tparam T The storage type to check for (for example `ULONG`, `ULONGLONG`, or `std::wstring`).
+		 * @param[in] name Property name to look up.
+		 * @return true if the property name is known for the requested type; false otherwise.
+		 */
 		template <typename T>
 		bool PropertyNameExists(_In_ PCWSTR name) const noexcept;
 	};
 
 	template <>
 	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<ULONG>(_In_ PCWSTR name) const noexcept
-		// NOLINT(bugprone-exception-escape)
+	// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_ulongFieldNameCount; ++counter)
 		{
@@ -1620,7 +1642,7 @@ namespace ctl
 
 	template <>
 	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<ULONGLONG>(_In_ PCWSTR name) const noexcept
-		// NOLINT(bugprone-exception-escape)
+	// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_ulonglongFieldNameCount; ++counter)
 		{
@@ -1635,7 +1657,7 @@ namespace ctl
 
 	template <>
 	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<std::wstring>(_In_ PCWSTR name) const noexcept
-		// NOLINT(bugprone-exception-escape)
+	// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_stringFieldNameCount; ++counter)
 		{
@@ -1650,7 +1672,7 @@ namespace ctl
 
 	template <>
 	inline bool ctPerformanceCounterCounterProperties::PropertyNameExists<wil::unique_bstr>(_In_ PCWSTR name) const noexcept
-		// NOLINT(bugprone-exception-escape)
+	// NOLINT(bugprone-exception-escape)
 	{
 		for (auto counter = 0ul; counter < m_stringFieldNameCount; ++counter)
 		{
@@ -1663,17 +1685,24 @@ namespace ctl
 		return false;
 	}
 
+	/**
+	 * @namespace ctPerformanceCounterDetails
+	 * @brief Internal compile-time lists and provider names for supported counters.
+	 *
+	 * This namespace contains provider class name constants and arrays of
+	 * property names used by `ctCreatePerfCounter` to validate requested
+	 * counters at compile-time.
+	 */
 	namespace ctPerformanceCounterDetails
 	{
 		// ReSharper disable StringLiteralTypo
-		inline const wchar_t* g_commonStringPropertyNames[]{
+		inline const wchar_t *g_commonStringPropertyNames[]{
 			L"Caption",
 			L"Description",
-			L"Name"
-		};
+			L"Name"};
 
-		inline const wchar_t* g_memoryCounter = L"Win32_PerfFormattedData_PerfOS_Memory";
-		inline const wchar_t* g_memoryUlongCounterNames[]{
+		inline const wchar_t *g_memoryCounter = L"Win32_PerfFormattedData_PerfOS_Memory";
+		inline const wchar_t *g_memoryUlongCounterNames[]{
 			L"CacheFaultsPerSec",
 			L"DemandZeroFaultsPerSec",
 			L"FreeSystemPageTableEntries",
@@ -1687,9 +1716,8 @@ namespace ctl
 			L"PoolNonpagedAllocs",
 			L"PoolPagedAllocs",
 			L"TransitionFaultsPerSec",
-			L"WriteCopiesPerSec"
-		};
-		inline const wchar_t* g_memoryUlonglongCounterNames[]{
+			L"WriteCopiesPerSec"};
+		inline const wchar_t *g_memoryUlonglongCounterNames[]{
 			L"AvailableBytes",
 			L"AvailableKBytes",
 			L"AvailableMBytes",
@@ -1710,11 +1738,10 @@ namespace ctl
 			L"SystemDriverTotalBytes",
 			L"Timestamp_Object",
 			L"Timestamp_PerfTime",
-			L"Timestamp_Sys100NS"
-		};
+			L"Timestamp_Sys100NS"};
 
-		inline const wchar_t* g_processorInformationCounter = L"Win32_PerfFormattedData_Counters_ProcessorInformation";
-		inline const wchar_t* g_processorInformationUlongCounterNames[]{
+		inline const wchar_t *g_processorInformationCounter = L"Win32_PerfFormattedData_Counters_ProcessorInformation";
+		inline const wchar_t *g_processorInformationUlongCounterNames[]{
 			L"ClockInterruptsPersec",
 			L"DPCRate",
 			L"DPCsQueuedPersec",
@@ -1724,9 +1751,8 @@ namespace ctl
 			L"PercentPerformanceLimit",
 			L"PerformanceLimitFlags",
 			L"ProcessorFrequency",
-			L"ProcessorStateFlags"
-		};
-		inline const wchar_t* g_processorInformationUlonglongCounterNames[]{
+			L"ProcessorStateFlags"};
+		inline const wchar_t *g_processorInformationUlonglongCounterNames[]{
 			L"AverageIdleTime",
 			L"C1TransitionsPerSec",
 			L"C2TransitionsPerSec",
@@ -1747,11 +1773,10 @@ namespace ctl
 			L"PercentUserTime",
 			L"Timestamp_Object",
 			L"Timestamp_PerfTime",
-			L"Timestamp_Sys100NS"
-		};
+			L"Timestamp_Sys100NS"};
 
-		inline const wchar_t* g_perfProcProcessCounter = L"Win32_PerfFormattedData_PerfProc_Process";
-		inline const wchar_t* g_perfProcProcessUlongCounterNames[]{
+		inline const wchar_t *g_perfProcProcessCounter = L"Win32_PerfFormattedData_PerfProc_Process";
+		inline const wchar_t *g_perfProcProcessUlongCounterNames[]{
 			L"CreatingProcessID",
 			L"HandleCount",
 			L"IDProcess",
@@ -1759,9 +1784,8 @@ namespace ctl
 			L"PoolNonpagedBytes",
 			L"PoolPagedBytes",
 			L"PriorityBase",
-			L"ThreadCount"
-		};
-		inline const wchar_t* g_perfProcProcessUlonglongCounterNames[]{
+			L"ThreadCount"};
+		inline const wchar_t *g_perfProcProcessUlonglongCounterNames[]{
 			L"ElapsedTime",
 			L"Frequency_Object",
 			L"Frequency_PerfTime",
@@ -1786,11 +1810,10 @@ namespace ctl
 			L"VirtualBytes",
 			L"VirtualBytesPeak",
 			L"WorkingSet",
-			L"WorkingSetPeak"
-		};
+			L"WorkingSetPeak"};
 
-		inline const wchar_t* g_tcpipNetworkAdapterCounter = L"Win32_PerfFormattedData_Tcpip_NetworkAdapter";
-		inline const wchar_t* g_tcpipNetworkAdapterULongLongCounterNames[]{
+		inline const wchar_t *g_tcpipNetworkAdapterCounter = L"Win32_PerfFormattedData_Tcpip_NetworkAdapter";
+		inline const wchar_t *g_tcpipNetworkAdapterULongLongCounterNames[]{
 			L"BytesReceivedPersec",
 			L"BytesSentPersec",
 			L"BytesTotalPersec",
@@ -1815,11 +1838,10 @@ namespace ctl
 			L"TCPRSCExceptionsPersec",
 			L"Timestamp_Object",
 			L"Timestamp_PerfTime",
-			L"Timestamp_Sys100NS"
-		};
+			L"Timestamp_Sys100NS"};
 
-		inline const wchar_t* g_tcpipNetworkInterfaceCounter = L"Win32_PerfFormattedData_Tcpip_NetworkInterface";
-		inline const wchar_t* g_tcpipNetworkInterfaceULongLongCounterNames[]{
+		inline const wchar_t *g_tcpipNetworkInterfaceCounter = L"Win32_PerfFormattedData_Tcpip_NetworkInterface";
+		inline const wchar_t *g_tcpipNetworkInterfaceULongLongCounterNames[]{
 			L"BytesReceivedPerSec",
 			L"BytesSentPerSec",
 			L"BytesTotalPerSec",
@@ -1847,12 +1869,11 @@ namespace ctl
 			L"TCPRSCExceptionsPersec",
 			L"Timestamp_Object",
 			L"Timestamp_PerfTime",
-			L"Timestamp_Sys100NS"
-		};
+			L"Timestamp_Sys100NS"};
 
-		inline const wchar_t* g_tcpipIpv4Counter = L"Win32_PerfFormattedData_Tcpip_IPv4";
-		inline const wchar_t* g_tcpipIpv6Counter = L"Win32_PerfFormattedData_Tcpip_IPv6";
-		inline const wchar_t* g_tcpipIpULongCounterNames[]{
+		inline const wchar_t *g_tcpipIpv4Counter = L"Win32_PerfFormattedData_Tcpip_IPv4";
+		inline const wchar_t *g_tcpipIpv6Counter = L"Win32_PerfFormattedData_Tcpip_IPv6";
+		inline const wchar_t *g_tcpipIpULongCounterNames[]{
 			L"DatagramsForwardedPersec",
 			L"DatagramsOutboundDiscarded",
 			L"DatagramsOutboundNoRoute",
@@ -1869,12 +1890,11 @@ namespace ctl
 			L"FragmentedDatagramsPersec",
 			L"FragmentsCreatedPersec",
 			L"FragmentsReassembledPersec",
-			L"FragmentsReceivedPersec"
-		};
+			L"FragmentsReceivedPersec"};
 
-		inline const wchar_t* g_tcpipTcpv4Counter = L"Win32_PerfFormattedData_Tcpip_TCPv4";
-		inline const wchar_t* g_tcpipTcpv6Counter = L"Win32_PerfFormattedData_Tcpip_TCPv6";
-		inline const wchar_t* g_tcpipTcpULongCounterNames[]{
+		inline const wchar_t *g_tcpipTcpv4Counter = L"Win32_PerfFormattedData_Tcpip_TCPv4";
+		inline const wchar_t *g_tcpipTcpv6Counter = L"Win32_PerfFormattedData_Tcpip_TCPv6";
+		inline const wchar_t *g_tcpipTcpULongCounterNames[]{
 			L"ConnectionFailures",
 			L"ConnectionsActive",
 			L"ConnectionsEstablished",
@@ -1883,22 +1903,20 @@ namespace ctl
 			L"SegmentsReceivedPersec",
 			L"SegmentsRetransmittedPersec",
 			L"SegmentsSentPersec",
-			L"SegmentsPersec"
-		};
+			L"SegmentsPersec"};
 
-		inline const wchar_t* g_tcpipUdpv4Counter = L"Win32_PerfFormattedData_Tcpip_UDPv4";
-		inline const wchar_t* g_tcpipUdpv6Counter = L"Win32_PerfFormattedData_Tcpip_UDPv6";
-		inline const wchar_t* g_tcpipUdpULongCounterNames[]{
+		inline const wchar_t *g_tcpipUdpv4Counter = L"Win32_PerfFormattedData_Tcpip_UDPv4";
+		inline const wchar_t *g_tcpipUdpv6Counter = L"Win32_PerfFormattedData_Tcpip_UDPv6";
+		inline const wchar_t *g_tcpipUdpULongCounterNames[]{
 			L"DatagramsNoPortPersec",
 			L"DatagramsReceivedErrors",
 			L"DatagramsReceivedPersec",
 			L"DatagramsSentPersec",
-			L"DatagramsPersec"
-		};
+			L"DatagramsPersec"};
 
-		inline const wchar_t* g_tcpipPerformanceDiagnosticsCounter =
+		inline const wchar_t *g_tcpipPerformanceDiagnosticsCounter =
 			L"Win32_PerfFormattedData_TCPIPCounters_TCPIPPerformanceDiagnostics";
-		inline const wchar_t* g_tcpipPerformanceDiagnosticsULongCounterNames[]{
+		inline const wchar_t *g_tcpipPerformanceDiagnosticsULongCounterNames[]{
 			L"Deniedconnectorsendrequestsinlowpowermode",
 			L"IPv4NBLsindicatedwithlowresourceflag",
 			L"IPv4NBLsindicatedwithoutprevalidation",
@@ -1919,25 +1937,22 @@ namespace ctl
 			L"TCPconnectrequestsfallenoffloopbackfastpath",
 			L"TCPconnectrequestsPersecfallenoffloopbackfastpath",
 			L"TCPinboundsegmentsnotprocessedviafastpath",
-			L"TCPinboundsegmentsPersecnotprocessedviafastpath"
-		};
+			L"TCPinboundsegmentsPersecnotprocessedviafastpath"};
 
-		inline const wchar_t* g_microsoftWinsockBspCounter = L"Win32_PerfFormattedData_AFDCounters_MicrosoftWinsockBSP";
-		inline const wchar_t* g_microsoftWinsockBspULongCounterNames[]{
+		inline const wchar_t *g_microsoftWinsockBspCounter = L"Win32_PerfFormattedData_AFDCounters_MicrosoftWinsockBSP";
+		inline const wchar_t *g_microsoftWinsockBspULongCounterNames[]{
 			L"DroppedDatagrams",
 			L"DroppedDatagramsPersec",
 			L"RejectedConnections",
-			L"RejectedConnectionsPersec"
-		};
+			L"RejectedConnectionsPersec"};
 
-		inline const wchar_t* g_wfpFilterCounter = L"Win32_PerfFormattedData_Counters_WFP";
-		inline const wchar_t* g_wfpFilterULongCounterNames[]{
-			L"ProviderCount"
-		};
+		inline const wchar_t *g_wfpFilterCounter = L"Win32_PerfFormattedData_Counters_WFP";
+		inline const wchar_t *g_wfpFilterULongCounterNames[]{
+			L"ProviderCount"};
 
-		inline const wchar_t* g_wfpFilterCountCounter = L"Win32_PerfFormattedData_Counters_WFPFilterCount";
+		inline const wchar_t *g_wfpFilterCountCounter = L"Win32_PerfFormattedData_Counters_WFPFilterCount";
 		// ReSharper disable once IdentifierTypo
-		inline const wchar_t* g_wfpFilterCountULongLongCounterNames[]{
+		inline const wchar_t *g_wfpFilterCountULongLongCounterNames[]{
 			L"FWPM_LAYER_INBOUND_IPPACKET_V4",
 			L"FWPM_LAYER_INBOUND_IPPACKET_V4_DISCARD",
 			L"FWPM_LAYER_INBOUND_IPPACKET_V6",
@@ -2045,191 +2060,161 @@ namespace ctl
 		// allows for compile-time construction of the array of properties
 		inline const ctPerformanceCounterCounterProperties c_performanceCounterPropertiesArray[]{
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::Memory,
-				.m_providerName = g_memoryCounter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_memoryUlongCounterNames),
-				.m_ulongFieldNames = g_memoryUlongCounterNames,
-				.m_ulonglongFieldNameCount = ARRAYSIZE(g_memoryUlonglongCounterNames),
-				.m_ulonglongFieldNames = g_memoryUlonglongCounterNames,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::Memory,
+			 .m_providerName = g_memoryCounter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_memoryUlongCounterNames),
+			 .m_ulongFieldNames = g_memoryUlongCounterNames,
+			 .m_ulonglongFieldNameCount = ARRAYSIZE(g_memoryUlonglongCounterNames),
+			 .m_ulonglongFieldNames = g_memoryUlonglongCounterNames,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Instance,
-				.m_className = ctWmiEnumClassName::Processor,
-				.m_providerName = g_processorInformationCounter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_processorInformationUlongCounterNames),
-				.m_ulongFieldNames = g_processorInformationUlongCounterNames,
-				.m_ulonglongFieldNameCount = ARRAYSIZE(g_processorInformationUlonglongCounterNames),
-				.m_ulonglongFieldNames = g_processorInformationUlonglongCounterNames,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Instance,
+			 .m_className = ctWmiEnumClassName::Processor,
+			 .m_providerName = g_processorInformationCounter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_processorInformationUlongCounterNames),
+			 .m_ulongFieldNames = g_processorInformationUlongCounterNames,
+			 .m_ulonglongFieldNameCount = ARRAYSIZE(g_processorInformationUlonglongCounterNames),
+			 .m_ulonglongFieldNames = g_processorInformationUlonglongCounterNames,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Instance,
-				.m_className = ctWmiEnumClassName::Process,
-				.m_providerName = g_perfProcProcessCounter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_perfProcProcessUlongCounterNames),
-				.m_ulongFieldNames = g_perfProcProcessUlongCounterNames,
-				.m_ulonglongFieldNameCount = ARRAYSIZE(g_perfProcProcessUlonglongCounterNames),
-				.m_ulonglongFieldNames = g_perfProcProcessUlonglongCounterNames,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Instance,
+			 .m_className = ctWmiEnumClassName::Process,
+			 .m_providerName = g_perfProcProcessCounter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_perfProcProcessUlongCounterNames),
+			 .m_ulongFieldNames = g_perfProcProcessUlongCounterNames,
+			 .m_ulonglongFieldNameCount = ARRAYSIZE(g_perfProcProcessUlonglongCounterNames),
+			 .m_ulonglongFieldNames = g_perfProcProcessUlonglongCounterNames,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Instance,
-				.m_className = ctWmiEnumClassName::NetworkAdapter,
-				.m_providerName = g_tcpipNetworkAdapterCounter,
-				.m_ulongFieldNameCount = 0,
-				.m_ulongFieldNames = nullptr,
-				.m_ulonglongFieldNameCount = ARRAYSIZE(g_tcpipNetworkAdapterULongLongCounterNames),
-				.m_ulonglongFieldNames = g_tcpipNetworkAdapterULongLongCounterNames,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Instance,
+			 .m_className = ctWmiEnumClassName::NetworkAdapter,
+			 .m_providerName = g_tcpipNetworkAdapterCounter,
+			 .m_ulongFieldNameCount = 0,
+			 .m_ulongFieldNames = nullptr,
+			 .m_ulonglongFieldNameCount = ARRAYSIZE(g_tcpipNetworkAdapterULongLongCounterNames),
+			 .m_ulonglongFieldNames = g_tcpipNetworkAdapterULongLongCounterNames,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Instance,
-				.m_className = ctWmiEnumClassName::NetworkInterface,
-				.m_providerName = g_tcpipNetworkInterfaceCounter,
-				.m_ulongFieldNameCount = 0,
-				.m_ulongFieldNames = nullptr,
-				.m_ulonglongFieldNameCount = ARRAYSIZE(g_tcpipNetworkInterfaceULongLongCounterNames),
-				.m_ulonglongFieldNames = g_tcpipNetworkInterfaceULongLongCounterNames,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Instance,
+			 .m_className = ctWmiEnumClassName::NetworkInterface,
+			 .m_providerName = g_tcpipNetworkInterfaceCounter,
+			 .m_ulongFieldNameCount = 0,
+			 .m_ulongFieldNames = nullptr,
+			 .m_ulonglongFieldNameCount = ARRAYSIZE(g_tcpipNetworkInterfaceULongLongCounterNames),
+			 .m_ulonglongFieldNames = g_tcpipNetworkInterfaceULongLongCounterNames,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::TcpipIpv4,
-				.m_providerName = g_tcpipIpv4Counter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_tcpipIpULongCounterNames),
-				.m_ulongFieldNames = g_tcpipIpULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::TcpipIpv4,
+			 .m_providerName = g_tcpipIpv4Counter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_tcpipIpULongCounterNames),
+			 .m_ulongFieldNames = g_tcpipIpULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::TcpipIpv6,
-				.m_providerName = g_tcpipIpv6Counter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_tcpipIpULongCounterNames),
-				.m_ulongFieldNames = g_tcpipIpULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::TcpipIpv6,
+			 .m_providerName = g_tcpipIpv6Counter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_tcpipIpULongCounterNames),
+			 .m_ulongFieldNames = g_tcpipIpULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::TcpipTcpv4,
-				.m_providerName = g_tcpipTcpv4Counter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_tcpipTcpULongCounterNames),
-				.m_ulongFieldNames = g_tcpipTcpULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::TcpipTcpv4,
+			 .m_providerName = g_tcpipTcpv4Counter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_tcpipTcpULongCounterNames),
+			 .m_ulongFieldNames = g_tcpipTcpULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::TcpipTcpv6,
-				.m_providerName = g_tcpipTcpv6Counter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_tcpipTcpULongCounterNames),
-				.m_ulongFieldNames = g_tcpipTcpULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::TcpipTcpv6,
+			 .m_providerName = g_tcpipTcpv6Counter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_tcpipTcpULongCounterNames),
+			 .m_ulongFieldNames = g_tcpipTcpULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::TcpipUdpv4,
-				.m_providerName = g_tcpipUdpv4Counter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_tcpipUdpULongCounterNames),
-				.m_ulongFieldNames = g_tcpipUdpULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::TcpipUdpv4,
+			 .m_providerName = g_tcpipUdpv4Counter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_tcpipUdpULongCounterNames),
+			 .m_ulongFieldNames = g_tcpipUdpULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::TcpipUdpv6,
-				.m_providerName = g_tcpipUdpv6Counter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_tcpipUdpULongCounterNames),
-				.m_ulongFieldNames = g_tcpipUdpULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::TcpipUdpv6,
+			 .m_providerName = g_tcpipUdpv6Counter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_tcpipUdpULongCounterNames),
+			 .m_ulongFieldNames = g_tcpipUdpULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::TcpipDiagnostics,
-				.m_providerName = g_tcpipPerformanceDiagnosticsCounter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_tcpipPerformanceDiagnosticsULongCounterNames),
-				.m_ulongFieldNames = g_tcpipPerformanceDiagnosticsULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::TcpipDiagnostics,
+			 .m_providerName = g_tcpipPerformanceDiagnosticsCounter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_tcpipPerformanceDiagnosticsULongCounterNames),
+			 .m_ulongFieldNames = g_tcpipPerformanceDiagnosticsULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::WinsockBsp,
-				.m_providerName = g_microsoftWinsockBspCounter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_microsoftWinsockBspULongCounterNames),
-				.m_ulongFieldNames = g_microsoftWinsockBspULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::WinsockBsp,
+			 .m_providerName = g_microsoftWinsockBspCounter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_microsoftWinsockBspULongCounterNames),
+			 .m_ulongFieldNames = g_microsoftWinsockBspULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::WfpFilter,
-				.m_providerName = g_wfpFilterCounter,
-				.m_ulongFieldNameCount = ARRAYSIZE(g_wfpFilterULongCounterNames),
-				.m_ulongFieldNames = g_wfpFilterULongCounterNames,
-				.m_ulonglongFieldNameCount = 0,
-				.m_ulonglongFieldNames = nullptr,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::WfpFilter,
+			 .m_providerName = g_wfpFilterCounter,
+			 .m_ulongFieldNameCount = ARRAYSIZE(g_wfpFilterULongCounterNames),
+			 .m_ulongFieldNames = g_wfpFilterULongCounterNames,
+			 .m_ulonglongFieldNameCount = 0,
+			 .m_ulonglongFieldNames = nullptr,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 
-			{
-				.m_classType = ctWmiEnumClassType::Static,
-				.m_className = ctWmiEnumClassName::WfpFilterCount,
-				.m_providerName = g_wfpFilterCountCounter,
-				.m_ulongFieldNameCount = 0,
-				.m_ulongFieldNames = nullptr,
-				.m_ulonglongFieldNameCount = ARRAYSIZE(g_wfpFilterCountULongLongCounterNames),
-				.m_ulonglongFieldNames = g_wfpFilterCountULongLongCounterNames,
-				.m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
-				.m_stringFieldNames = g_commonStringPropertyNames
-			},
+			{.m_classType = ctWmiEnumClassType::Static,
+			 .m_className = ctWmiEnumClassName::WfpFilterCount,
+			 .m_providerName = g_wfpFilterCountCounter,
+			 .m_ulongFieldNameCount = 0,
+			 .m_ulongFieldNames = nullptr,
+			 .m_ulonglongFieldNameCount = ARRAYSIZE(g_wfpFilterCountULongLongCounterNames),
+			 .m_ulonglongFieldNames = g_wfpFilterCountULongLongCounterNames,
+			 .m_stringFieldNameCount = ARRAYSIZE(g_commonStringPropertyNames),
+			 .m_stringFieldNames = g_commonStringPropertyNames},
 		};
 	}
 
 	template <typename T>
 	std::shared_ptr<ctPerformanceCounterCounter<T>> ctMakeStaticPerfCounter(
-		const ctWmiService& wmi,
+		const ctWmiService &wmi,
 		_In_ PCWSTR className,
 		_In_ PCWSTR counterName,
 		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
@@ -2249,9 +2234,21 @@ namespace ctl
 		return ctMakeStaticPerfCounter<T>(wmi, className, counterName, collectionType);
 	}
 
+	/**
+	 * @brief Create a counter for a static (single-instance) WMI performance class.
+	 *
+	 * Convenience overload that binds to the default `root\\cimv2` namespace.
+	 *
+	 * @tparam T Storage type for sampled values.
+	 * @param[in] className WMI provider class name.
+	 * @param[in] counterName Property name to sample.
+	 * @param[in] collectionType Collection strategy to use.
+	 * @return Shared pointer to the created counter.
+	 */
+
 	template <typename T>
 	std::shared_ptr<ctPerformanceCounterCounter<T>> ctMakeInstancePerfCounter(
-		const ctWmiService& wmi,
+		const ctWmiService &wmi,
 		_In_ PCWSTR className,
 		_In_ PCWSTR counterName,
 		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
@@ -2272,6 +2269,18 @@ namespace ctl
 	}
 
 	/**
+	 * @brief Create a counter for an instance-backed WMI performance class.
+	 *
+	 * Convenience overload that binds to the default `root\\cimv2` namespace.
+	 *
+	 * @tparam T Storage type for sampled values.
+	 * @param[in] className WMI provider class name.
+	 * @param[in] counterName Property name to sample.
+	 * @param[in] collectionType Collection strategy to use.
+	 * @return Shared pointer to the created counter.
+	 */
+
+	/**
 	 * @brief Create a performance counter based on a known enum class name.
 	 *
 	 * This helper validates the requested counter name against the
@@ -2289,13 +2298,13 @@ namespace ctl
 
 	template <typename T>
 	std::shared_ptr<ctPerformanceCounterCounter<T>> ctCreatePerfCounter(
-		const ctWmiService& wmi,
+		const ctWmiService &wmi,
 		ctWmiEnumClassName className,
 		_In_ PCWSTR counterName,
 		ctPerformanceCounterCollectionType collectionType = ctPerformanceCounterCollectionType::Detailed)
 	{
-		const ctPerformanceCounterCounterProperties* foundProperty = nullptr;
-		for (const auto& counterProperty : ctPerformanceCounterDetails::c_performanceCounterPropertiesArray)
+		const ctPerformanceCounterCounterProperties *foundProperty = nullptr;
+		for (const auto &counterProperty : ctPerformanceCounterDetails::c_performanceCounterPropertiesArray)
 		{
 			if (className == counterProperty.m_className)
 			{
@@ -2333,4 +2342,16 @@ namespace ctl
 		const ctWmiService wmi(L"root\\cimv2");
 		return ctCreatePerfCounter<T>(wmi, className, counterName, collectionType);
 	}
+
+	/**
+	 * @brief Create a performance counter for a well-known enum class by id.
+	 *
+	 * Convenience overload that binds to the default `root\\cimv2` namespace.
+	 *
+	 * @tparam T Storage type for sampled values.
+	 * @param[in] className Well-known enum class identifier.
+	 * @param[in] counterName Property name to sample within the class.
+	 * @param[in] collectionType Collection strategy to use.
+	 * @return Shared pointer to the created counter.
+	 */
 } // namespace ctl

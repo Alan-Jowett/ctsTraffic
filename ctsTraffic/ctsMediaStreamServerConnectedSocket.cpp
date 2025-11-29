@@ -11,6 +11,16 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+#
+/**
+ * @file ctsMediaStreamServerConnectedSocket.cpp
+ * @brief Connected-socket helper for server-side media stream sending.
+ *
+ * This file implements the `ctsMediaStreamServerConnectedSocket` which
+ * manages scheduling datagram sends to an individual client, timer-based
+ * send scheduling, and completion handling for each connected endpoint.
+ */
+
 // parent header
 #include "ctsMediaStreamServerConnectedSocket.h"
 // cpp headers

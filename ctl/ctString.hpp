@@ -1,18 +1,20 @@
-/*
-
-Copyright (c) Microsoft Corporation
-All rights reserved.
-
-Licensed under the Apache License, Version 2.0 (the ""License""); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
-
-THIS CODE IS PROVIDED ON AN  *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABLITY OR NON-INFRINGEMENT.
-
-See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
-
-*/
-
 // ReSharper disable CppInconsistentNaming
 #pragma once
+/**
+ * @file ctString.hpp
+ * @brief Utility string helpers used across the codebase (UTF-8/UTF-16 conversion,
+ *        ordinal comparisons, formatted messages, and simple replacements).
+ *
+ * @copyright Copyright (c) Microsoft Corporation
+ * All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY OR NON-INFRINGEMENT.
+ *
+ * See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+ */
 
 // cpp headers
 #include <cstdarg>
@@ -23,13 +25,6 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <wil/win32_helpers.h>
 #include <wil/resource.h>
 
-
-//
-//
-// String parsing and manipulation functions to enable faster, more reliable development
-//
-// Notice all functions are in the ctl::ctString namespace
-//
 
 namespace ctl::ctString
 {
@@ -44,6 +39,12 @@ namespace ctl::ctString
 // Can throw wil::ResultException on failures from the underlying conversion calls
 // Can throw std::bad_alloc
 //
+/**
+ * @brief Convert a UTF-16 `std::wstring` to a UTF-8 `std::string`.
+ * @param str [in] Wide string to convert.
+ * @returns UTF-8 encoded std::string.
+ * @throws wil::ResultException on Win32 errors and std::bad_alloc on allocation failure.
+ */
 inline std::string convert_to_string(const std::wstring& str)
 {
     if (str.empty())
@@ -69,6 +70,12 @@ inline std::string convert_to_string(const std::wstring& str)
     return buf;
 }
 
+/**
+ * @brief Convert a UTF-8 `std::string` to a UTF-16 `std::wstring`.
+ * @param str [in] UTF-8 encoded string to convert.
+ * @returns UTF-16 encoded std::wstring.
+ * @throws wil::ResultException on Win32 errors and std::bad_alloc on allocation failure.
+ */
 inline std::wstring convert_to_wstring(const std::string& str)
 {
     if (str.empty())
@@ -122,6 +129,16 @@ inline std::wstring convert_to_wstring(const std::string& str)
 //
 namespace Detail
 {
+    /**
+     * @brief Internal helper performing ordinal comparison between two sequences.
+     * @param lhs [in] Left string pointer.
+     * @param lhs_size [in] Left string length (characters, not bytes).
+     * @param rhs [in] Right string pointer.
+     * @param rhs_size [in] Right string length (characters, not bytes).
+     * @param case_insensitive [in] When TRUE perform case-insensitive compare.
+     * @returns true if equal, false otherwise.
+     * @throws wil::ResultException on underlying Win32 failures.
+     */
     inline bool OrdinalEquals(
         _In_NLS_string_(lhs_size) const wchar_t* lhs,
         size_t lhs_size,
@@ -202,6 +219,9 @@ namespace Detail
 #endif /* WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP) */
 #pragma endregion
 
+    /**
+     * @brief Convert various string-like inputs to raw pointer + length helpers.
+     */
     inline _Ret_z_ const wchar_t* ConvertToPtr(const std::wstring& source) noexcept
     {
         return source.c_str();
@@ -283,6 +303,9 @@ bool iordinal_equals(LeftStringT lhs, RightStringT rhs)
 //
 // *NOT* nothrow
 //
+/**
+ * @brief Prefix/suffix search helpers (both case-sensitive and case-insensitive).
+ */
 inline bool starts_with(const std::wstring& haystack, const std::wstring& needle)
 {
     return
@@ -339,6 +362,12 @@ inline bool iends_with(const std::string& haystack, const std::string& needle)
         iordinal_equals(haystack.c_str() + (haystack.size() - needle.size()), needle.c_str());
 }
 
+/**
+ * @brief Format a system message id to a human-readable wstring using
+ *        `FormatMessageW`.
+ * @param messageId [in] Win32 message id.
+ * @returns Localized message string or empty string on failure.
+ */
 inline std::wstring format_message(DWORD messageId)
 {
     constexpr DWORD cchBuffer = 1024;
@@ -406,6 +435,12 @@ inline std::wstring format_message(DWORD messageId)
 //
 // Can throw a std::exception under low-resources
 //
+/**
+ * @brief Replace all occurrences of `searchString` with `replacementString` in-place.
+ * @param originalString [in,out] String that will be modified.
+ * @param searchString [in] Substring to find.
+ * @param replacementString [in] Substring to replace with.
+ */
 inline void replace_all(std::wstring& originalString, const std::wstring& searchString, const std::wstring& replacementString) // NOLINT(google-runtime-references)
 {
     const auto searchSize = searchString.size();
@@ -460,6 +495,10 @@ inline std::string replace_all_copy(std::string originalString, const std::strin
 //
 // Can throw a std::exception under low-resources
 //
+/**
+ * @brief Escape a string for safe use inside a WMI WQL query.
+ * @param unescapedString [in,out] String to escape (modified in-place).
+ */
 inline void escape_wmi_query(std::wstring& unescapedString)
 {
     if (unescapedString.size() > 1)
@@ -485,6 +524,12 @@ inline std::wstring escape_wmi_query_copy(std::wstring unescapedString)
     return unescapedString;
 }
 
+/**
+ * @brief printf-style formatting helper that returns a formatted wstring.
+ * @param pszFormat [in] Format string (printf-style, wide char).
+ * @returns Formatted std::wstring.
+ * @throws wil::ResultException on formatting errors.
+ */
 inline
 std::wstring __cdecl format_string(_In_ _Printf_format_string_ PCWSTR pszFormat, ...)
 {

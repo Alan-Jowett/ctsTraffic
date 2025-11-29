@@ -1,5 +1,12 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+/**
+ * @file
+ * @brief Small wrappers for working with WMI instances via IWbemClassObject.
+ *
+ * `ctWmiInstance` provides a convenient RAII wrapper around an
+ * `IWbemClassObject` and `IWbemServices` for reading and writing properties,
+ * executing instance methods, and enumerating instances via
+ * `ctWmiEnumerateInstance`.
+ */
 
 #pragma once
 #include <utility>
@@ -19,15 +26,18 @@
 
 namespace ctl
 {
+/**
+ * @brief Represents a WMI instance backed by an `IWbemClassObject`.
+ */
 class ctWmiInstance
 {
 public:
-    // Constructors:
-    // - requires a IWbemServices object already connected to WMI
-    explicit ctWmiInstance(ctWmiService service) noexcept :
-        m_wbemServices(std::move(service))
-    {
-    }
+    /**
+     * @brief Construct from a `ctWmiService` which is already connected.
+     *
+     * @param service [in] Connected `ctWmiService`.
+     */
+    explicit ctWmiInstance(ctWmiService service) noexcept : m_wbemServices(std::move(service)) {}
 
     ctWmiInstance(ctWmiService service, _In_ PCWSTR className) :
         m_wbemServices(std::move(service))
@@ -52,6 +62,10 @@ public:
     {
     }
 
+    /**
+     * @brief Equality comparison for two `ctWmiInstance` objects.
+     */
+
     bool operator ==(const ctWmiInstance& obj) const noexcept
     {
         return m_wbemServices == obj.m_wbemServices &&
@@ -67,6 +81,12 @@ public:
     {
         return m_instanceObject;
     }
+
+    /**
+     * @brief Retrieve the object path for this instance.
+     *
+     * @return wil::unique_bstr BSTR containing the relative path, or nullptr if not present.
+     */
 
     [[nodiscard]] wil::unique_bstr get_path() const
     {
@@ -90,6 +110,12 @@ public:
     {
         return m_wbemServices;
     }
+
+    /**
+     * @brief Retrieve the class name for this instance, if available.
+     *
+     * @return wil::unique_bstr Class name as BSTR or nullptr.
+     */
 
     // Retrieves the class name this ctWmiInstance is representing if any
     [[nodiscard]] wil::unique_bstr get_class_name() const
@@ -120,6 +146,12 @@ public:
     //   WBEM_FLAG_CREATE_OR_UPDATE
     //   WBEM_FLAG_UPDATE_ONLY
     //   WBEM_FLAG_CREATE_ONLY
+    /**
+     * @brief Persist the current instance to the WMI repository.
+     *
+     * @param context [in,opt] Optional `IWbemContext` for the call.
+     * @param wbemFlags [in] Flags such as `WBEM_FLAG_CREATE_OR_UPDATE`.
+     */
     void write_instance(_In_opt_ IWbemContext* context, const LONG wbemFlags = WBEM_FLAG_CREATE_OR_UPDATE)
     {
         wil::com_ptr<IWbemCallResult> result;
@@ -140,6 +172,10 @@ public:
     }
 
     void delete_instance()
+
+    /**
+     * @brief Delete this instance from the repository using its `__RELPATH`.
+     */
     {
         // delete the instance based off the __REPATH property
         wil::com_ptr<IWbemCallResult> result;
@@ -162,6 +198,14 @@ public:
     {
         return execute_method_impl(method, nullptr);
     }
+
+    /**
+     * @brief Execute an instance method with 1..5 [in] parameters.
+     *
+     * These template overloads create an in-parameters object, set the
+     * properties, and invoke the method. The returned `ctWmiInstance`
+     * contains the [out] parameters.
+     */
 
     template <typename Arg1>
     ctWmiInstance execute_method(_In_ PCWSTR method, Arg1 arg1)
@@ -319,6 +363,12 @@ public:
         return execute_method_impl(method, inParamsInstance.get());
     }
 
+    /**
+     * @brief Test whether a property is explicitly NULL.
+     *
+     * @param property_name [in] Property name to query.
+     * @return bool true if the property is VT_NULL.
+     */
     bool is_null(_In_ PCWSTR property_name) const
     {
         wil::unique_variant variant;
@@ -326,23 +376,13 @@ public:
         return V_VT(&variant) == VT_NULL;
     }
 
-    // get() and set()
-    //
-    //   Exposes the properties of the WMI object instantiated
-    //   WMI instances don't use all VARIANT types - some specializations
-    //   exist because, for example, 64-bit integers actually get passed through
-    //   WMI as BSTRs (even though variants support 64-bit integers directly).
-    //   See the MSDN documentation for WMI MOF Data Types (Numbers):
-    //   http://msdn.microsoft.com/en-us/library/aa392716(v=VS.85).aspx
-    //
-    //   Even though VARIANTS support 16- and 32-bit unsigned integers, WMI passes them both
-    //   around as 32-bit signed integers. Yes, that means you can't pass very large UINT32 values
-    //   correctly through WMI directly.
-    //
-    // get() returns false if the value is empty or null
-    //       returns true if retrieved the matching type
-
-
+    /**
+     * @brief Retrieve a raw `VARIANT` property value.
+     *
+     * @param property_name [in] Property name.
+     * @param value [out] Variant to receive the property value.
+     * @return bool `true` if the property was present and not empty/null.
+     */
     bool get(_In_ PCWSTR property_name, _Inout_ VARIANT* value) const
     {
         VariantClear(value);
@@ -350,6 +390,14 @@ public:
         return !IsVariantEmptyOrNull(value);
     }
 
+    /**
+     * @brief Retrieve a strongly-typed property value.
+     *
+     * @tparam T Destination type.
+     * @param property_name [in] Property name.
+     * @param value [out] Pointer to receive the converted value.
+     * @return bool `true` if conversion succeeded.
+     */
     template <typename T>
     bool get(_In_ PCWSTR property_name, _Out_ T* value) const
     {
@@ -359,18 +407,35 @@ public:
         return ctWmiReadFromVariant(variant.addressof(), value);
     }
 
+    /**
+     * @brief Set a property using a raw `VARIANT` value.
+     *
+     * @param property_name [in] Property name.
+     * @param value [in] Variant containing the value.
+     */
     void set(_In_ PCWSTR property_name, _In_ const VARIANT* value) const
     {
         set_property(property_name, value);
     }
 
+    /**
+     * @brief Set a property from a strongly-typed value.
+     *
+     * @tparam T Type convertible to a WMI VARIANT via `ctWmiMakeVariant`.
+     * @param property_name [in] Property name.
+     * @param value [in] Value to set.
+     */
     template <typename T>
     void set(_In_ PCWSTR property_name, const T value) const
     {
         set_property(property_name, ctWmiMakeVariant(value).addressof());
     }
 
-    // Calling IWbemClassObject::Delete on a property of an instance resets to the default value.
+    /**
+     * @brief Reset a property to its class default by invoking `Delete` on the IWbemClassObject.
+     *
+     * @param property_name [in] Property name.
+     */
     void set_default(_In_ PCWSTR property_name) const
     {
         THROW_IF_FAILED(m_instanceObject->Delete(property_name));

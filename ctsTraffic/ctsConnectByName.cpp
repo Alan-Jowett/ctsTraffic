@@ -11,6 +11,10 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 */
 
+/**
+ * @file ctsConnectByName.cpp
+ * @brief Blocking connect helper using WSAConnectByName for name-based connects.
+ */
 // cpp headers
 #include <memory>
 // os headers
@@ -33,6 +37,15 @@ namespace ctsTraffic
     //
     // Its intended use is either for UDP sockets, or for very few concurrent connections
     //
+    /**
+     * @brief Perform a blocking connect by name on the socket.
+     *
+     * This function calls `WSAConnectByNameW` which performs a blocking connect
+     * and resolves the provided target name. It is intended for low-concurrency
+     * uses (or UDP) where blocking behavior is acceptable.
+     *
+     * @param weakSocket [in] Weak reference to the `ctsSocket` requesting the connect.
+     */
     void ctsConnectByName(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
     {
         // attempt to get a reference to the socket

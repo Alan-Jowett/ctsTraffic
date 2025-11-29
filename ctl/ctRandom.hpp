@@ -14,6 +14,25 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // ReSharper disable CppInconsistentNaming
 #pragma once
 
+/**
+ * @file ctRandom.hpp
+ * @brief Simple non-cryptographic random generator wrapper.
+ *
+ * Wraps the STL Mersenne Twister engine and provides convenience methods
+ * for uniformly distributed integers and reals, normal distribution sampling,
+ * and simple seeding. Not intended for cryptographic uses.
+ *
+ * @copyright Copyright (c) Microsoft Corporation
+ * All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE, MERCHANTABILITY OR NON-INFRINGEMENT.
+ *
+ * See the Apache Version 2.0 License for specific language governing permissions and limitations under the License.
+ */
+
 // cpp headers
 #include <random>
 #include <memory>
@@ -35,48 +54,72 @@ namespace ctl
 // that this class requires considerable space (~5kb heap space), but random number
 // generation is fast and provides fairly good random distributions (good
 // enough for just about anything non-cryptographic)
+/**
+ * @brief Simple non-cryptographic random generator wrapper.
+ *
+ * Wraps the STL Mersenne Twister engine and provides convenience methods
+ * for uniformly distributed integers and reals, normal distribution sampling,
+ * and simple seeding. Not intended for cryptographic uses.
+ */
 class ctRandomTwister
 {
 public:
     using engine_type = std::mt19937;
 
-    // Constructs the generator with an explicitly specified seed.
-    // This is usually unnecessary, since the default constructor will seed the generator
-    // with an appropriately random seed
-    //
-    // This allocates a large (5kb) chunk of heap memory and may throw std::bad_alloc
+    /**
+     * @brief Constructs the generator with an explicitly specified seed.
+     * @param[in] seed Seed value used to initialize the engine.
+     *
+     * This allocates a large (≈5KB) engine on the heap and may throw
+     * `std::bad_alloc` on allocation failure.
+     */
     explicit ctRandomTwister(uint32_t seed);
 
-    // Seeds itself randomly with std::random_device
-    ///
-    // This allocates a large (5kb) chunk of heap memory and may throw std::bad_alloc
+    /**
+     * @brief Default-construct and self-seed using `std::random_device`.
+     *
+     * Allocates the engine on the heap and may throw `std::bad_alloc`.
+     */
     ctRandomTwister();
 
-    // Generates a new random integer in the range [lowerInclusiveBound, upperInclusiveBound].
-    // Each integer in the range is equally likely to be chosen.
-    //
-    // It's usually best to explicitly specify the template argument to this function - the compiler
-    // can surprise you if you let it choose what type to output.
+    /**
+     * @brief Generate a uniformly distributed integer in the inclusive range.
+     * @tparam IntegerT Integer type to produce.
+     * @param[in] lowerInclusiveBound Lower inclusive bound.
+     * @param[in] upperInclusiveBound Upper inclusive bound.
+     * @return A randomly chosen integer in [lowerInclusiveBound, upperInclusiveBound].
+     */
     template <class IntegerT>
     IntegerT uniform_int(IntegerT lowerInclusiveBound, IntegerT upperInclusiveBound);
 
-    // Generates a new random floating-point number in the range [lowerInclusiveBound, upperInclusiveBound].
-    //
-    // The result is chosen according to a uniformly random distribution of real numbers, not a uniformly
-    // random distribution of those numbers representable as RealTs. That is, even though a double can represent
-    // more distinct values in the range [0.0, 1.0] than it can in the range [99.0, 100.0], uniform_real(0.0, 100.0)
-    // will return a number in those two ranges equally often.
+    /**
+     * @brief Generate a uniformly distributed real number in the inclusive range.
+     * @tparam RealT Floating-point type to produce.
+     * @param[in] lowerInclusiveBound Lower inclusive bound.
+     * @param[in] upperInclusiveBound Upper inclusive bound.
+     * @return A randomly chosen real value in [lowerInclusiveBound, upperInclusiveBound].
+     */
     template <class RealT>
     RealT uniform_real(RealT lowerInclusiveBound, RealT upperInclusiveBound);
 
-    // Generates a new random floating-point number chosen uniformly at random from the range [0.0, 1.0].
+    /**
+     * @brief Generate a probability value in [0.0, 1.0].
+     * @return A uniformly distributed double in [0.0, 1.0].
+     */
     [[nodiscard]] double uniform_probability() const;
 
-    // Generates a new random double chosen randomly from a normal distribution with the characteristics
-    // given by the two parameters (by default, a standard normal distribution).
+    /**
+     * @brief Sample from a normal (Gaussian) distribution.
+     * @param[in] distributionMean Mean of the distribution (default 0.0).
+     * @param[in] distributionSigma Standard deviation (default 1.0).
+     * @return A normally distributed double.
+     */
     [[nodiscard]] double normal_real(double distributionMean = 0.0, double distributionSigma = 1.0) const;
 
-    // Seeds the generator manually.
+    /**
+     * @brief Re-seed the underlying engine.
+     * @param[in] seed Seed value to initialize the engine.
+     */
     void seed(uint32_t seed) const;
 
     // Enabling move and swap
