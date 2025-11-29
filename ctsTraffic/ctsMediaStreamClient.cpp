@@ -33,7 +33,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-    
+    _Guarded_by_(g_socketVectorGuard) static std::vector<std::shared_ptr<ctsMediaStreamReceiver>> g_activeMediaStreamReceivers;
+    static wil::critical_section g_socketVectorGuard{ ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock }; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
 
     // The function that is registered with ctsTraffic to run Winsock IO using IO Completion Ports
     // - with the specified ctsSocket
@@ -49,6 +50,9 @@ namespace ctsTraffic
         // Start the connected-socket handler to manage receiving/parsing
         const auto connectedSocket = std::make_shared<ctsMediaStreamReceiver>(sharedSocket);
         connectedSocket->Start();
+
+        const auto lockConnectedObject = g_socketVectorGuard.lock();
+        g_activeMediaStreamReceivers.push_back(connectedSocket);
     }
 
     // The function that is registered with ctsTraffic to 'connect' to the target server by sending a START command
@@ -124,7 +128,4 @@ namespace ctsTraffic
         }
     }
 
-    // The receive/IO logic was moved to `ctsMediaStreamReceiver`.
-
-    // connect completion handled synchronously via WSASendTo in this refactor
 } // namespace

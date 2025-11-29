@@ -59,9 +59,15 @@ void ctsMediaStreamSender::QueueTask(const ctsTask& task) noexcept
         _Analysis_assume_lock_acquired_(m_objectGuard);
         if (task.m_timeOffsetMilliseconds < 2)
         {
-            // in this case, immediately schedule the WSASendTo
+            // For immediate/catch-up sends we must NOT synchronously invoke the
+            // timer callback on the current call stack as that can cause
+            // unbounded recursion (the timer callback may call QueueTask again).
+            // Instead, set the next task and schedule the threadpool timer to
+            // fire immediately. This posts the work to the TP and breaks the
+            // recursion, allowing the callback to run on the TP thread.
             m_nextTask = task;
-            MediaStreamTimerCallback(nullptr, this, nullptr);
+            FILETIME zeroFiletime{}; // cause immediate execution
+            SetThreadpoolTimer(m_taskTimer.get(), &zeroFiletime, 0, 0);
         }
         else
         {

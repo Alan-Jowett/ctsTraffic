@@ -212,6 +212,10 @@ namespace ctsTraffic
         case ctsTaskAction::GracefulShutdown:
         case ctsTaskAction::HardShutdown:
         default:
+            // Intentionally fall through and ignore shutdown actions here: the
+            // media-stream receiver is receive-only and does not need to perform
+            // any shutdown handling. `returnStatus` is default-initialized
+            // (errorCode=0, continueIo=false) so no further handling is required.
             break;
         }
 
