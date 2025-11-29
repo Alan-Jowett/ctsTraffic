@@ -124,6 +124,13 @@ namespace ctsTraffic
         // ReSharper disable once CppZeroConstantCanBeReplacedWithNullptr
         static INIT_ONCE g_initImpl = INIT_ONCE_STATIC_INIT;
 
+        _Requires_lock_held_(g_socketVectorGuard)
+        void AddMediaStreamer(
+            std::weak_ptr<ctsSocket> weakSocket,
+            SOCKET sendingSocket,
+            const ctl::ctSockaddr& remoteAddr, 
+            const std::shared_ptr<ctsSocket> sharedSocket);
+
         static BOOL CALLBACK InitOnceImpl(PINIT_ONCE, PVOID, PVOID*) noexcept try
         {
             // 'listen' to each address
@@ -314,7 +321,7 @@ namespace ctsTraffic
             const auto foundSocket = g_connectedSockets.find(remoteAddr);
             if (foundSocket == g_connectedSockets.end())
             {
-                return std::unique_ptr<ctsMediaStreamSender>(nullptr);
+                return std::shared_ptr<ctsMediaStreamSender>(nullptr);
             }
             return foundSocket->second;
         }
@@ -343,8 +350,8 @@ namespace ctsTraffic
 
                     
                     const auto existingSocket = FindConnectedSocket(waitingKey);
-                    std::visit([&](auto&& arg)
-                    {
+                    if (std::visit([&](auto &&arg) -> bool
+                                   {
                         if (arg)
                         {
                             ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
@@ -352,9 +359,12 @@ namespace ctsTraffic
                                 waitingEndpoint->second.writeCompleteAddress().c_str());
                             // return early if this was a duplicate request: this can happen if there is latency or drops
                             // between the client and server as they attempt to negotiating starting a new stream
-                            return;
+                            return true;
                         }
-                    }, existingSocket);
+                        return false; }, existingSocket))
+                    {
+                        return;
+                    }
 
                     AddMediaStreamer(
                         weakSocket,
@@ -430,8 +440,8 @@ namespace ctsTraffic
 
             const ctl::ctSockaddr targetKey = targetAddr;
             const auto existingSocket = FindConnectedSocket(targetKey);
-            std::visit([&](auto&& arg)
-            {
+            if (std::visit([&](auto &&arg) -> bool
+                           {
                 if (arg)
                 {
                     ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
@@ -439,9 +449,12 @@ namespace ctsTraffic
                         targetAddr.writeCompleteAddress().c_str());
                     // return early if this was a duplicate request: this can happen if there is latency or drops
                     // between the client and server as they attempt to negotiating starting a new stream
-                    return;
+                    return true;
                 }
-            }, existingSocket);
+                return false; }, existingSocket))
+            {
+                return;
+            }
 
             const auto awaitingEndpoint = std::ranges::find_if(
                 g_awaitingEndpoints,
@@ -504,9 +517,6 @@ namespace ctsTraffic
             const ctl::ctSockaddr& remoteAddr, 
             const std::shared_ptr<ctsSocket> sharedSocket)
         {
-            (sharedSocket);
-
-            const auto lockAwaitingObject = g_socketVectorGuard.lock();
             if (ctsConfig::g_configSettings->IoPattern == ctsConfig::IoPatternType::MediaStreamPull)
             {
                 g_connectedSockets.emplace(
@@ -524,8 +534,6 @@ namespace ctsTraffic
                 PRINT_DEBUG_INFO(L"\t\tctsMediaStreamReceiver::start - socket with remote address %ws added to connected_sockets",
                     remoteAddr.writeCompleteAddress().c_str());
             }
-            
         }
-
     }
 }

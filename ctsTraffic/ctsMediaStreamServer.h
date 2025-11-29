@@ -78,12 +78,6 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
 
         // Lookup a connected socket by remote address. Returns nullptr if not found.
         mediaStreamerPtr FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
-
-        void AddMediaStreamer(
-            std::weak_ptr<ctsSocket> weakSocket,
-            SOCKET sendingSocket,
-            const ctl::ctSockaddr& remoteAddr, 
-            const std::shared_ptr<ctsSocket> sharedSocket);
     }
 
     // Called to 'accept' incoming connections
