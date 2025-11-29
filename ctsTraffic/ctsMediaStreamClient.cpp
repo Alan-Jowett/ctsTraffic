@@ -13,6 +13,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 // cpp headers
 #include <memory>
+#include <vector>
+#include <variant>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -22,6 +24,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsMediaStreamProtocol.hpp"
 #include "ctsMediaStreamClient.h"
 #include "ctsMediaStreamReceiver.h"
+#include "ctsMediaStreamSender.h"
 #include "ctsWinsockLayer.h"
 #include "ctsIOTask.hpp"
 #include "ctsIOPattern.h"
@@ -33,7 +36,9 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-    _Guarded_by_(g_socketVectorGuard) static std::vector<std::shared_ptr<ctsMediaStreamReceiver>> g_activeMediaStreamReceivers;
+    using mediaStreamerPtr = std::variant<std::shared_ptr<ctsMediaStreamSender>, std::shared_ptr<ctsMediaStreamReceiver>>;
+
+    _Guarded_by_(g_socketVectorGuard) static std::vector<mediaStreamerPtr> g_activeMediaStreamers;
     static wil::critical_section g_socketVectorGuard{ ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock }; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
 
     // The function that is registered with ctsTraffic to run Winsock IO using IO Completion Ports
@@ -41,18 +46,38 @@ namespace ctsTraffic
     void ctsMediaStreamClientIo(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
     {
         // This client only initiates the connect (START) flow. Receiving/parsing is handled
-        // by `ctsMediaStreamReceiver` after the START handshake completes.
+        // by `mediaStreamer` after the START handshake completes.
         const auto sharedSocket(weakSocket.lock());
         if (!sharedSocket)
         {
             return;
         }
-        // Start the connected-socket handler to manage receiving/parsing
-        const auto connectedSocket = std::make_shared<ctsMediaStreamReceiver>(sharedSocket);
-        connectedSocket->Start();
+        
+        if (ctsConfig::IoPatternType::MediaStreamPull == ctsConfig::g_configSettings->IoPattern)
+        {
+            // Start the connected-socket handler to manage receiving/parsing
+            const auto connectedSocket = std::make_shared<ctsMediaStreamReceiver>(sharedSocket);
+            connectedSocket->Start();
 
-        const auto lockConnectedObject = g_socketVectorGuard.lock();
-        g_activeMediaStreamReceivers.push_back(connectedSocket);
+            const auto lockConnectedObject = g_socketVectorGuard.lock();
+            g_activeMediaStreamers.push_back(connectedSocket);
+        }
+        else if (ctsConfig::IoPatternType::MediaStreamPush == ctsConfig::g_configSettings->IoPattern)
+        {
+            // Start the connected-socket handler to manage sending
+            SOCKET socket = INVALID_SOCKET;
+            {
+                const auto lockedSocket = sharedSocket->AcquireSocketLock();
+                socket = lockedSocket.GetSocket();
+            }
+
+            const auto connectedSocket = std::make_shared<ctsMediaStreamSender>(sharedSocket, socket,
+                sharedSocket->GetRemoteSockaddr());
+            connectedSocket->Start();
+
+            const auto lockConnectedObject = g_socketVectorGuard.lock();
+            g_activeMediaStreamers.push_back(connectedSocket);
+        }
     }
 
     // The function that is registered with ctsTraffic to 'connect' to the target server by sending a START command

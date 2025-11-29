@@ -644,14 +644,16 @@ private:
         IdSent,
         IoStarted
     } m_state{ServerState::NotStarted};
-        // configuration: whether this side should send START
-        bool m_sendStart{false};
-        bool m_sentStartAlready{false};
-        // timer used to optionally send START from sender side
-        PTP_TIMER m_startTimer = nullptr;
-        // schedule the next start timer
-        void SetNextStartTimer() const noexcept;
-    };
+
+    // configuration: whether this side should send START
+    bool m_sendStart{false};
+    bool m_sentStartAlready{false};
+
+    // timer used to optionally send START from sender side
+    PTP_TIMER m_startTimer = nullptr;
+    // schedule the next start timer
+    void SetNextStartTimer() const noexcept;
+};
 
 //
 // UDP Media client
@@ -706,6 +708,8 @@ private:
     ctsConfig::JitterFrameEntry m_previousFrame;
 
     bool m_finishedStream = false;
+    bool m_sendStart{true};
+    bool m_sentStartAlready{false};
 
     // member functions - all require the base lock
     std::vector<ctsConfig::JitterFrameEntry>::iterator FindSequenceNumber(int64_t sequenceNumber) noexcept;
@@ -723,7 +727,5 @@ private:
     // Callback to track when the server has actually started sending
     static VOID CALLBACK StartCallback(PTP_CALLBACK_INSTANCE, _In_ PVOID pContext, PTP_TIMER) noexcept;
     // configuration: whether this side should send START
-    bool m_sendStart{true};
-    bool m_sentStartAlready{false};
 };
 } //namespace

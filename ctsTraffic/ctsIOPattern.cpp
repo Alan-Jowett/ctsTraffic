@@ -112,9 +112,16 @@ namespace ctsTraffic
         case ctsConfig::IoPatternType::MediaStreamPull:
             if (ctsConfig::IsListening())
             {
-                return make_shared<ctsIoPatternMediaStreamSender>();
+                return make_shared<ctsIoPatternMediaStreamSender>(false);
             }
-            return make_shared<ctsIoPatternMediaStreamReceiver>();
+            return make_shared<ctsIoPatternMediaStreamReceiver>(true);
+
+        case ctsConfig::IoPatternType::MediaStreamPush:
+            if (ctsConfig::IsListening())
+            {
+                return make_shared<ctsIoPatternMediaStreamReceiver>(false);
+            }
+            return make_shared<ctsIoPatternMediaStreamSender>(true);
 
         case ctsConfig::IoPatternType::NoIoSet: // fall through
         default: // NOLINT(clang-diagnostic-covered-switch-default)
