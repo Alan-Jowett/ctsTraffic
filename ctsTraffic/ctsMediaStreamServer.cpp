@@ -61,6 +61,8 @@ namespace ctsTraffic
     // Called initiate IO on a datagram socket
     void ctsMediaStreamServerIo(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
     {
+        ctsMediaStreamServerImpl::InitOnce();
+
         const auto sharedSocket(weakSocket.lock());
         if (!sharedSocket)
         {
@@ -77,8 +79,6 @@ namespace ctsTraffic
         }
 
         sharedConnectedSocket->Start();
-
-        ctsMediaStreamServerImpl::InitOnce();
     }
 
     // Called to remove that socket from the tracked vector of connected sockets
@@ -386,16 +386,8 @@ namespace ctsTraffic
         // - remove_socket takes the remote address to find the socket
         void RemoveSocket(const ctl::ctSockaddr& targetAddr)
         {
-            const auto foundSocket = FindConnectedSocket(targetAddr);
-            if (foundSocket)
-            {
-                const auto lockConnectedObject = g_socketVectorGuard.lock();
-                const auto it = g_connectedSockets.find(targetAddr);
-                if (it != g_connectedSockets.end())
-                {
-                    g_connectedSockets.erase(it);
-                }
-            }
+            const auto lockConnectedObject = g_socketVectorGuard.lock();
+            g_connectedSockets.erase(targetAddr);
         }
 
         // Notified by listening sockets when any datagram is received.

@@ -89,11 +89,6 @@ void ctsMediaStreamServerConnectedSocket::Start() noexcept
         {
             return;
         }
-        auto sharedSocketLocal = m_weakSocket.lock();
-        if (!sharedSocketLocal)
-        {
-            THROW_WIN32_MSG(WSAECONNABORTED, "ctsSocket already freed");
-        }
 
         ctsTask nextTask;
         try
