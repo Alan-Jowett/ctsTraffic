@@ -385,49 +385,17 @@ namespace ctsTraffic
                         return;
                     }
 
-                    // create connected socket and provide a small start-functor
-                    // which will be invoked by the connected-socket when Start()
-                    // is called. This decouples the connected socket from direct
-                    // manipulation of the server-side ctsSocket.
-                    auto startFunctor = [weakSocket, listeningSock = waitingEndpoint->first, remote = waitingEndpoint->second](const ctl::ctSockaddr& localAddr) noexcept {
-                        const auto sharedSocket = weakSocket.lock();
-                        if (!sharedSocket)
-                        {
-                            return;
-                        }
-                        try
-                        {
-                            ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), remote);
-                            sharedSocket->SetLocalSockaddr(localAddr);
-                            sharedSocket->SetRemoteSockaddr(remote);
-                            sharedSocket->CompleteState(NO_ERROR);
-                            ctsConfig::PrintNewConnection(localAddr, remote);
-                        }
-                        catch (...) { ctsConfig::PrintThrownException(); }
-                    };
-
-                    auto completeFunctor = [weakSocket](uint32_t errorCode) noexcept {
-                        const auto sharedSocket = weakSocket.lock();
-                        if (sharedSocket)
-                        {
-                            sharedSocket->CompleteState(errorCode);
-                        }
-                    };
-
                     g_connectedSockets.emplace_back(
                         std::make_shared<ctsMediaStreamServerConnectedSocket>(
                             weakSocket,
                             waitingEndpoint->first,
                             waitingEndpoint->second,
-                            ConnectedSocketIo,
-                            startFunctor,
-                            completeFunctor));
+                            ConnectedSocketIo));
 
                     PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::accept_socket - socket with remote address %ws added to connected_sockets",
                         waitingEndpoint->second.writeCompleteAddress().c_str());
 
-                    // now complete the ctsSocket 'Create' request by delegating
-                    // the remaining per-connection setup to the connected-socket
+                    // now complete the ctsSocket 'Create' request
                     const auto foundSocket = std::ranges::find_if(
                         g_listeningSockets,
                         [&waitingEndpoint](const std::unique_ptr<ctsMediaStreamServerListeningSocket>& listener) noexcept {
@@ -438,18 +406,14 @@ namespace ctsTraffic
                         "Could not find the socket (%Iu) in the waiting_endpoint from our listening sockets (%p)\n",
                         waitingEndpoint->first, &g_listeningSockets);
 
-                    // call Start on the connected socket to finish setup and complete
-                    // the server-side ctsSocket back to the ctsSocketState
-                    try
-                    {
-                        const auto& newConnected = g_connectedSockets.back();
-                        if (newConnected)
-                        {
-                            newConnected->Start((*foundSocket)->GetListeningAddress());
-                        }
-                    }
-                    catch (...) { ctsConfig::PrintThrownException(); }
 
+                ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), waitingEndpoint->second);
+
+                sharedSocket->SetLocalSockaddr((*foundSocket)->GetListeningAddress());
+                sharedSocket->SetRemoteSockaddr(waitingEndpoint->second);
+                sharedSocket->CompleteState(NO_ERROR);
+
+                    ctsConfig::PrintNewConnection(sharedSocket->GetLocalSockaddr(), sharedSocket->GetRemoteSockaddr());
                     // if added to connected_sockets, can then safely remove it from the waiting endpoint
                     g_awaitingEndpoints.pop_back();
                 }
@@ -519,41 +483,8 @@ namespace ctsTraffic
                 if (const auto sharedInstance = weakInstance.lock())
                 {
                     // 'move' the accepting socket to connected
-                    // create connected socket and provide start functor which will
-                    // complete the accepted ctsSocket when Start() is invoked
-                    auto startFunctor = [weakInstance, remote = targetAddr](const ctl::ctSockaddr& localAddr) noexcept {
-                        const auto sharedInstance = weakInstance.lock();
-                        if (!sharedInstance)
-                        {
-                            return;
-                        }
-                        try
-                        {
-                            ctsConfig::SetPostConnectOptions(sharedInstance->AcquireSocketLock().GetSocket(), remote);
-                            sharedInstance->SetLocalSockaddr(localAddr);
-                            sharedInstance->SetRemoteSockaddr(remote);
-                            sharedInstance->CompleteState(NO_ERROR);
-                            ctsConfig::PrintNewConnection(localAddr, remote);
-                        }
-                        catch (...) { ctsConfig::PrintThrownException(); }
-                    };
-
-                    auto completeFunctor = [weakInstance](uint32_t errorCode) noexcept {
-                        const auto sharedInstance = weakInstance.lock();
-                        if (sharedInstance)
-                        {
-                            sharedInstance->CompleteState(errorCode);
-                        }
-                    };
-
                     g_connectedSockets.emplace_back(
-                        std::make_shared<ctsMediaStreamServerConnectedSocket>(
-                            weakInstance,
-                            socket,
-                            targetAddr,
-                            ConnectedSocketIo,
-                            startFunctor,
-                            completeFunctor));
+                        std::make_shared<ctsMediaStreamServerConnectedSocket>(weakInstance, socket, targetAddr, ConnectedSocketIo));
 
                     PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::start - socket with remote address %ws added to connected_sockets",
                         targetAddr.writeCompleteAddress().c_str());
@@ -562,16 +493,15 @@ namespace ctsTraffic
                     addToAwaiting = false;
                     g_acceptingSockets.pop_back();
 
-                try
-                {
-                    const auto& newConnected = g_connectedSockets.back();
-                    if (newConnected)
-                    {
-                        newConnected->Start(localAddr);
-                    }
-                }
-                catch (...) { ctsConfig::PrintThrownException(); }
-                break;
+                ctsConfig::SetPostConnectOptions(socket, targetAddr);
+
+                // now complete the accepted ctsSocket back to the ctsSocketState
+                sharedInstance->SetLocalSockaddr(localAddr);
+                sharedInstance->SetRemoteSockaddr(targetAddr);
+                sharedInstance->CompleteState(NO_ERROR);
+
+                    ctsConfig::PrintNewConnection(localAddr, targetAddr);
+                    break;
                 }
             }
 
