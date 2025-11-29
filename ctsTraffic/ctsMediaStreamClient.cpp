@@ -13,7 +13,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 // cpp headers
 #include <memory>
-#include <vector>
+#include <unordered_map>
 #include <variant>
 // os headers
 #include <Windows.h>
@@ -38,7 +38,7 @@ namespace ctsTraffic
 {
     using mediaStreamerPtr = std::variant<std::shared_ptr<ctsMediaStreamSender>, std::shared_ptr<ctsMediaStreamReceiver>>;
 
-    _Guarded_by_(g_socketVectorGuard) static std::vector<mediaStreamerPtr> g_activeMediaStreamers;
+    _Guarded_by_(g_socketVectorGuard) static std::unordered_map<ctl::ctSockaddr, mediaStreamerPtr> g_activeMediaStreamers;
     static wil::critical_section g_socketVectorGuard{ ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock }; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
 
     // The function that is registered with ctsTraffic to run Winsock IO using IO Completion Ports
@@ -60,7 +60,7 @@ namespace ctsTraffic
             connectedSocket->Start();
 
             const auto lockConnectedObject = g_socketVectorGuard.lock();
-            g_activeMediaStreamers.push_back(connectedSocket);
+            g_activeMediaStreamers.insert({sharedSocket->GetLocalSockaddr(), connectedSocket});
         }
         else if (ctsConfig::IoPatternType::MediaStreamPush == ctsConfig::g_configSettings->IoPattern)
         {
@@ -76,7 +76,7 @@ namespace ctsTraffic
             connectedSocket->Start();
 
             const auto lockConnectedObject = g_socketVectorGuard.lock();
-            g_activeMediaStreamers.push_back(connectedSocket);
+            g_activeMediaStreamers.insert({sharedSocket->GetLocalSockaddr(), connectedSocket});
         }
     }
 
@@ -151,6 +151,19 @@ namespace ctsTraffic
                 return;
             }
         }
+    }
+
+    // The function that is registered to 'close' the specified ctsSocket
+    void ctsMediaStreamClientClose(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
+    {
+        const auto sharedSocket(weakSocket.lock());
+        if (!sharedSocket)
+        {
+            return;
+        }
+
+        const auto lockConnectedObject = g_socketVectorGuard.lock();
+        g_activeMediaStreamers.erase(sharedSocket->GetLocalSockaddr());
     }
 
 } // namespace

@@ -25,4 +25,7 @@ void ctsMediaStreamClientIo(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
 
 // The function that is registered to 'connect' to the target server by sending a START command using IO Completion Ports
 void ctsMediaStreamClientConnect(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
+
+// The function that is registered to 'close' the specified ctsSocket
+void ctsMediaStreamClientClose(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
 } // namespace

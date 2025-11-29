@@ -618,7 +618,7 @@ class ctsIoPatternMediaStreamSender final : public ctsIoPatternStatistics<ctsUdp
 public:
     // If `sendStart` is true this side will send the START message to begin the session.
     // Default behavior preserves existing semantics: sender does not send START.
-    ctsIoPatternMediaStreamSender(bool sendStart = false) noexcept;
+    ctsIoPatternMediaStreamSender(bool sendStart = false);
     ~ctsIoPatternMediaStreamSender() noexcept override;
 
     ctsIoPatternMediaStreamSender(const ctsIoPatternMediaStreamSender&) = delete;

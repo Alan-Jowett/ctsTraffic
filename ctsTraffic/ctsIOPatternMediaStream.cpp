@@ -577,7 +577,7 @@ VOID CALLBACK ctsIoPatternMediaStreamReceiver::TimerCallback(PTP_CALLBACK_INSTAN
 //     After a 'buffer period' of data has been received,
 //     The receiver starts as timer to 'process' a time-slice of data
 //
-ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender(bool sendStart) noexcept :
+ctsIoPatternMediaStreamSender::ctsIoPatternMediaStreamSender(bool sendStart) :
     ctsIoPatternStatistics(1), // the pattern will use the recv writeable-buffer for sending a connection ID
     m_frameSizeBytes(ctsConfig::GetMediaStream().FrameSizeBytes),
     m_frameRateFps(ctsConfig::GetMediaStream().FramesPerSecond),
