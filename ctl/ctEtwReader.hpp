@@ -1,5 +1,10 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+/**
+ * @file ctEtwReader.hpp
+ * @brief ETW trace session helper for starting, stopping and consuming events.
+ *
+ * @copyright Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ */
 
 #pragma once
 
@@ -29,6 +34,18 @@ constexpr ULONG EVENT_TRACE_USE_MS_FLUSH_TIMER = 0x00000010; // FlushTimer value
 constexpr uint32_t SLEEP_MS_WAITING_FOR_EXPECTED_RECORDS = 50;
 
 namespace ctl {
+/**
+ * @brief Helper class that manages ETW trace sessions and event delivery.
+ *
+ * `ctEtwReader` manages a trace session created via `StartSession` or opened
+ * from a saved ETL via `OpenSavedSession`. It spawns a worker thread to call
+ * `ProcessTrace` and invokes a caller-provided filter callback for each
+ * `EVENT_RECORD` consumed. Typical usage:
+ *  - Call `StartSession` or `OpenSavedSession`.
+ *  - Optionally call `EnableProviders` to enable providers for the session.
+ *  - Process events via the callback provided at construction.
+ *  - Call `StopSession` to stop and clean up.
+ */
 class ctEtwReader
 {
   public:
@@ -51,24 +68,20 @@ class ctEtwReader
     ctEtwReader&
     operator=(ctEtwReader&&) noexcept = default;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // StartSession()
-    //
-    //  Creates and starts a trace session with the specified name
-    //
-    //  Arguments:
-    //      szSessionName - null-terminated string for the unique name for the new trace session
-    //
-    //      szFileName - null-terminated string for the ETL trace file to be created
-    //                   Optional parameter - pass NULL to not create a trace file
-    //
-    //      sessionGUID - unique GUID identifying this trace session to all providers
-    //
-    //      msFlushTimer - value, in milliseconds, of the ETW flush timer
-    //                     Optional parameter - default value of 0 means system default is used
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Create and start a named ETW trace session.
+     *
+     * Creates and starts a trace session with the specified name. If a
+     * session with the same name already exists the implementation will attempt
+     * to stop it and start a new session. The function makes a copy of
+     * `sessionGUID` for later use when enabling/disabling providers.
+     *
+     * @param[in] szSessionName Null-terminated unique name for the trace session.
+     * @param[in,opt] szFileName Optional null-terminated ETL file to create; pass `NULL` to avoid file creation.
+     * @param[in] sessionGUID Unique GUID identifying this trace session to providers.
+     * @param[in] msFlushTimer Flush timer in milliseconds; `0` uses the system default.
+     * @return HRESULT `S_OK` on success; Win32 error mapped HRESULT on failure.
+     */
     HRESULT
     StartSession(
         _In_ PCWSTR szSessionName,
@@ -76,86 +89,58 @@ class ctEtwReader
         const GUID& sessionGUID,
         ULONG msFlushTimer = 0) noexcept;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // OpenSavedSession()
-    //
-    //  Opens a trace session from the specific ETL file
-    //
-    //  Arguments:
-    //      szFileName - null-terminated string for the ETL trace file to be read
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Open a saved ETL trace file and begin consuming events.
+     *
+     * @param[in] szFileName Null-terminated path to the ETL file to read.
+     * @return HRESULT `S_OK` on success; a failing HRESULT on error.
+     */
     HRESULT
     OpenSavedSession(_In_ PCWSTR szFileName) noexcept;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // WaitForSession()
-    //
-    //  Waits on the session's thread handle until the thread exits.
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Wait for the internal session worker thread to exit.
+     *
+     * Blocks until the thread handling `ProcessTrace` exits. This is useful
+     * for deterministic shutdown in tests or when consuming a saved ETL file.
+     */
     void
     WaitForSession() const noexcept;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // GetSessionHandle()
-    //
-    //  Returns the session's thread handle.
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Retrieve the worker thread handle for the active session.
+     * @return HANDLE The worker thread handle, or `nullptr` if no session is active.
+     */
     HANDLE
     GetSessionHandle() const noexcept { return m_threadHandle; }
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // StopSession()
-    //
-    //  Stops the event trace session that was started with StartSession()
-    //      (and subsequently disables all providers)
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Stop the active trace session (if any) and disable providers.
+     *
+     * Safely stops and tears down the current session started with
+     * `StartSession`. This will attempt to stop the session and close
+     * associated trace and thread handles. The function is safe to call even
+     * when no session is active.
+     */
     void
     StopSession() noexcept;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // StopSession()
-    //
-    //  Stops the event trace session that was started with the provided name
-    //      (and subsequently disables all providers)
-    //
-    //  Arguments:
-    //      szSessionName - null-terminated string for the unique name for the trace session
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Stop the named trace session by session name.
+     * @param[in] szSessionName Null-terminated name of the trace session to stop.
+     */
     static void
     StopSession(_In_ PCWSTR szSessionName) noexcept;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // EnableProviders()
-    //
-    // Enables the specified ETW providers in the existing trace session.
-    // Fails if StartSession() has not been called successfully, or if the worker thread
-    //      pumping events has stopped unexpectedly.
-    //
-    //  Arguments:
-    //      providerGUIDs - std::vector of ETW Provider GUIDs that the caller wants enabled in this
-    //                       trace session.  An empty std::vector enables no providers.
-    //
-    //      uLevel - the "Level" parameter passed to EnableTraceEx for providers specified
-    //               default is TRACE_LEVEL_VERBOSE (all)
-    //
-    //      uMatchAnyKeyword - the "MatchAnyKeyword" parameter passed to EnableTraceEx
-    //                         default is 0 (none)
-    //
-    //      uMatchAllKeyword - the "MatchAllKeyword" parameter passed to EnableTraceEx
-    //                         default is 0 (none)
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Enable a set of ETW providers in the active session.
+     *
+     * @param[in] providerGUIDs Vector of provider GUIDs to enable; empty vector enables none.
+     * @param[in] uLevel Level to pass to `EnableTraceEx` (default TRACE_LEVEL_VERBOSE).
+     * @param[in] uMatchAnyKeyword MatchAnyKeyword for `EnableTraceEx` (default 0).
+     * @param[in] uMatchAllKeyword MatchAllKeyword for `EnableTraceEx` (default 0).
+     * @return HRESULT S_OK on success or a failing HRESULT on error.
+     */
     HRESULT
     EnableProviders(
         _In_ const std::vector<GUID>& providerGUIDs,
@@ -163,41 +148,51 @@ class ctEtwReader
         ULONGLONG uMatchAnyKeyword = 0,
         ULONGLONG uMatchAllKeyword = 0) noexcept;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // DisableProviders()
-    //
-    // Disables the specified ETW providers in the existing trace session.
-    // Fails if StartSession() has not been called successfully, or if the worker thread
-    //      pumping events has stopped unexpectedly.
-    //
-    // Arguments:
-    //      providerGUIDs - std::vector of ETW Provider GUIDs that the caller wants enabled in this
-    //                       trace session.  An empty std::vector enables no providers.
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Disable a set of ETW providers in the active session.
+     * @param[in] providerGUIDs Vector of provider GUIDs to disable.
+     * @return HRESULT S_OK on success or a failing HRESULT on error.
+     */
     HRESULT
     DisableProviders(const std::vector<GUID>& providerGUIDs) noexcept;
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    //
-    // FlushSession()
-    //
-    // Explicitly flushes events from the internal ETW buffers
-    // - is called internally when trying to Find or Remove
-    // - exposing this publicly for callers who need it in other scenarios
-    //
-    //////////////////////////////////////////////////////////////////////////////////////////
+    /**
+     * @brief Explicitly flush the ETW buffers for the active session.
+     *
+     * This is called internally when the reader needs to ensure buffered
+     * events are delivered, and is exposed for external callers that require
+     * a manual flush.
+     * @return HRESULT S_OK on success or a failing HRESULT on error.
+     */
     HRESULT
     FlushSession() const noexcept;
 
   private:
-    // static functions for worker threads
+    /**
+     * @brief Callback invoked by the ETW runtime for each `EVENT_RECORD`.
+     * @param[in] pEventRecord Pointer to the event record provided by ETW.
+     */
     static VOID WINAPI
     EventRecordCallback(PEVENT_RECORD pEventRecord) noexcept;
+
+    /**
+     * @brief Buffer callback used when reading saved ETL files to indicate
+     *        whether processing should continue.
+     * @param[in] Buffer Pointer to the `EVENT_TRACE_LOGFILE` buffer structure.
+     * @return ULONG Non-zero to continue processing; zero to stop.
+     */
     static ULONG WINAPI
     BufferCallback(PEVENT_TRACE_LOGFILE Buffer) noexcept;
 
+    /**
+     * @brief Allocate and populate an `EVENT_TRACE_PROPERTIES` struct.
+     *
+     * @param[in,out] pPropertyBuffer Receives the allocated raw buffer that owns the returned struct.
+     * @param[in] szSessionName Session name to be copied into the properties buffer.
+     * @param[in,opt] szFileName Optional ETL filename to copy into the properties buffer.
+     * @param[in] msFlushTimer Optional flush timer in milliseconds; 0 indicates system default.
+     * @return EVENT_TRACE_PROPERTIES* Pointer into `pPropertyBuffer` to the populated properties struct.
+     */
     EVENT_TRACE_PROPERTIES*
     BuildEventTraceProperties(
         _Inout_ std::shared_ptr<BYTE[]>& pPropertyBuffer,
@@ -205,18 +200,41 @@ class ctEtwReader
         _In_opt_ PCWSTR szFileName,
         ULONG msFlushTimer) const;
 
+    /**
+     * @brief Validate that the trace handle and worker thread are still alive.
+     *
+     * The method checks the worker thread status to ensure `ProcessTrace`
+     * didn't exit prematurely; if it did, the function throws an error.
+     */
     void
     VerifyTraceSession();
 
+    /**
+     * @brief Internal helper to call `OpenTrace` and create the worker thread.
+     * @param[in,out] eventLogfile Prepared `EVENT_TRACE_LOGFILE` structure for `OpenTrace`.
+     */
     void
     OpenTraceImpl(EVENT_TRACE_LOGFILE& eventLogfile);
 
+    /**
+     * @brief Callback invoked for each consumed `EVENT_RECORD`.
+     *
+     * The callback is provided by the consumer of `ctEtwReader` and is invoked
+     * for each `EVENT_RECORD` delivered by the ETW runtime. The `EVENT_RECORD`
+     * pointer is valid only for the duration of the callback.
+     */
     std::function<void(const EVENT_RECORD* pRecord)> m_eventFilter{};
+    /** Trace session handle returned by `StartTrace`. */
     TRACEHANDLE m_sessionHandle{NULL};
+    /** Trace handle returned by `OpenTrace` for processing events. */
     TRACEHANDLE m_traceHandle{INVALID_PROCESSTRACE_HANDLE};
+    /** Worker thread handle running `ProcessTrace`. */
     HANDLE m_threadHandle{nullptr};
+    /** GUID used to identify the current trace session when enabling providers. */
     GUID m_sessionGUID{};
+    /** Number of buffers reported for a saved ETL session (BuffersWritten). */
     UINT m_numBuffers{0};
+    /** Whether the initial number of buffers has been observed for saved sessions. */
     bool m_initNumBuffers{false};
 };
 

@@ -1,5 +1,73 @@
-// Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+/**
+ * @file ctPerformanceCounter.hpp
+ * @brief WMI-based performance counter collection utilities.
+ *
+ * Copyright (c) Microsoft Corporation.
+ * Licensed under the MIT License.
+ *
+ * This header implements helpers to enumerate, sample, and aggregate
+ * performance counters exposed via WMI. It provides data accessors,
+ * per-counter storage and aggregation, and a manager that schedules
+ * periodic refreshes.
+ *
+ * Concepts for this file:
+ * - WMI Classes expose performance counters through hi-performance WMI interfaces
+ * - ctPerformanceCounterCounter exposes one counter within one WMI performance counter class
+ * - Every performance counter object contains a 'Name' key field, uniquely identifying a 'set' of data points for that counter
+ * - Counters are 'snapped' every one second, with the timeslot tracked with the data
+ *
+ * Factory and implementation notes:
+ * - Factory functions (ctShared<class>PerfCounter) create per-counter instances.
+ * - They accept the WMI class name and the counter name to sample.
+ * - Internally, a templated ctPerformanceCounterCounterImpl handles enumeration and data access.
+ *
+ * Detailed concepts and notes:
+ * - WMI classes expose performance counters via high-performance WMI interfaces.
+ * - `ctPerformanceCounterCounter` represents one counter within a WMI performance class.
+ * - Each performance counter object contains a `Name` key field which uniquely identifies
+ *   the set of data points for that counter.
+ * - Counters are sampled ("snapped") on a periodic interval (typically once per second),
+ *   and each sample is stored as a time-slice.
+ *
+ * Factory usage and template parameters:
+ * - Users obtain counter objects through per-counter factory functions (named like
+ *   `ctShared<...>PerfCounter`). These factories accept the WMI class name and the
+ *   counter/property name to sample and return a typed counter object.
+ * - Internally, factories instantiate `ctPerformanceCounterCounterImpl` with three
+ *   template arguments:
+ *   1. The enumeration interface type (either `IWbemHiPerfEnum` or `IWbemClassObject`).
+ *   2. The accessor interface type (either `IWbemObjectAccess` or `IWbemClassObject`).
+ *   3. The data type used to represent the sampled counter values.
+ * - The implementation receives the WMI class name and the counter name as constructor
+ *   arguments and registers with the shared WMI refresher.
+ *
+ * Publicly exposed functionality from `ctPerformanceCounterCounter`:
+ * - `add_filter(counterName, value)`: restricts captured instances to those matching
+ *   the provided property/value pair.
+ * - `reference_range(instanceName)`: returns a pair of iterators (begin,end) referencing
+ *   the collected time-slices for the specified instance name; a `nullptr` instance name
+ *   matches all instances (used for static classes).
+ *
+ * Data collection behavior:
+ * - `ctPerformanceCounterCounter` updates its data by invoking a (pure-virtual)
+ *   `update_counter_data()` implementation once per sample interval. Derived classes
+ *   refresh their WMI accessor and call `add_instance()` for each returned instance.
+ * - `add_instance()` inspects the instance (using the accessor type) and either creates
+ *   a new `ctPerformanceCounterCounterData<T>` for previously unseen instances or appends
+ *   the value to an existing instance's data.
+ * - Caller responsibilities: callers must ensure thread-safety for WMI connections and
+ *   that COM is initialized on threads that interact with these classes.
+ *
+ * Accessor types and behavior:
+ * - Two accessor/enumeration combinations are supported:
+ *   - `IWbemHiPerfEnum` + `IWbemObjectAccess`: enumerates multiple instances and
+ *     provides `ReadDWORD`/`ReadQWORD` accessors for numeric and string properties.
+ *   - `IWbemClassObject` + `IWbemClassObject`: used for single-instance (static)
+ *     providers where values are read through `IWbemClassObject::Get`.
+ * - `ctPerformanceCounterCounterData<T>` encapsulates per-instance storage and exposes
+ *   `add()`/`match()`/iterator access. Collection types supported include detailed
+ *   (store all samples), mean-only (maintain count/min/max/mean), and first-last.
+ */
 
 // ReSharper disable CppInconsistentNaming
 #pragma once
@@ -25,49 +93,16 @@
 #include <wil/win32_helpers.h>
 
 
-// Concepts for this class:
-// - WMI Classes expose performance counters through hi-performance WMI interfaces
-// - ctPerformanceCounterCounter exposes one counter within one WMI performance counter class
-// - Every performance counter object contains a 'Name' key field, uniquely identifying a 'set' of data points for that counter
-// - Counters are 'snapped' every one second, with the timeslot tracked with the data
-//
-// ctPerformanceCounterCounter is exposed to the user through factory functions defined per-counter class (ctShared<class>PerfCounter)
-// - the factory functions takes in the counter name that the user wants to capture data for
-// - the factory function has a template type matching the data type of the counter data for that counter name
-//
-// Internally, the factory function instantiates a ctPerformanceCounterCounterImpl:
-// - has 3 template arguments:
-// 1. The IWbem* interface used to enumerate instances of this performance class (either IWbemHiPerfEnum or IWbemClassObject)
-// 2. The IWbem* interface used to access data in perf instances of this performance class (either IWbemObjectAccess or IWbemClassObject)
-// 3. The data type of the values for the counter name being recorded
-// - has 2 function arguments
-// 1. The string value of the WMI class to be used
-// 2. The string value of the counter name to be recorded
-//
-// Methods exposed publicly off of ctPerformanceCounterCounter:
-// - add_filter(): allows the caller to only capture instances which match the parameter/value combination for that object
-// - reference_range() : takes an Instance Name by which to return values
-// -- returns begin/end iterators to reference the data
-//
-// ctPerformanceCounterCounter populates data by invoking a pure virtual function (update_counter_data) every one second.
-// - update_counter_data takes a boolean parameter: true will invoke the virtual function to update the data, false will clear the data.
-// That pure virtual function (ctPerformanceCounterCounterImpl::update_counter_data) refreshes its counter (through its template accessor interface)
-// - then iterates through each instance recorded for that counter and invokes add_instance() in the base class.
-//
-// add_instance() takes a WMI* of the Accessor type: if that instance wasn't explicitly filtered out (through an instance_filter object),
-// - it looks to see if this is a new instance or if we have already been tracking that instance
-// - if new, we create a new ctPerformanceCounterCounterData object and add it to our counter_data
-// - if not new, we just add this object to the counter_data object that we already created
-//
-// There are 2 possible sets of WMI interfaces to access and enumerate performance data, these are defined in ctPerformanceCounterDataAccessor
-// - this is instantiated in ctPerformanceCounterCounterImpl as it knows the Access and Enum template types
-//
-// ctPerformanceCounterCounterData encapsulates the data points for one instance of one counter.
-// - exposes match() taking a string to check if it matches the instance it contains
-// - exposes add() taking both types of Access objects + a ULONGLONG time parameter to retrieve the data and add it to the internal map
-
 namespace ctl
 {
+	/**
+	 * @enum ctPerformanceCounterCollectionType
+	 * @brief Types of collection strategies for recorded counter values.
+	 *
+	 * - Detailed: store each sampled value.
+	 * - MeanOnly: maintain count/min/max/mean.
+	 * - FirstLast: store only the first and last values along with a count.
+	 */
 	enum class ctPerformanceCounterCollectionType : std::uint8_t
 	{
 		Detailed,
@@ -75,6 +110,16 @@ namespace ctl
 		FirstLast
 	};
 
+	/**
+	 * @brief Compare two VARIANT-like values for equality.
+	 *
+	 * Supports integer, string (BSTR), date and boolean comparisons. Floating
+	 * point comparisons are intentionally not supported and will fail fast.
+	 *
+	 * @param[in] rhs Right-hand value.
+	 * @param[in] lhs Left-hand value.
+	 * @return true if values are considered equal, false otherwise.
+	 */
 	inline bool operator ==(const wil::unique_variant& rhs, const wil::unique_variant& lhs) noexcept
 	{
 		if (rhs.vt == VT_NULL || lhs.vt == VT_NULL)
@@ -192,6 +237,16 @@ namespace ctl
 		return lhsInteger == rhsInteger;
 	}
 
+	/**
+	 * @brief Inequality comparison for two VARIANT-like values.
+	 *
+	 * Performs the negation of the equality comparison. See `operator==` for
+	 * the supported VARIANT types and comparison semantics.
+	 *
+	 * @param[in] rhs Right-hand value.
+	 * @param[in] lhs Left-hand value.
+	 * @return true if the values are not equal, false otherwise.
+	 */
 	inline bool operator !=(const wil::unique_variant& rhs, const wil::unique_variant& lhs) noexcept
 	{
 		return !(rhs == lhs);
@@ -199,6 +254,18 @@ namespace ctl
 
 	namespace details
 	{
+		/**
+		 * @brief Read a named counter property from an IWbemObjectAccess instance.
+		 *
+		 * This helper queries the property handle and reads the value using the
+		 * appropriate IWbemObjectAccess methods, returning the result as a
+		 * `wil::unique_variant`.
+		 *
+		 * @param[in] instance IWbemObjectAccess instance to read from.
+		 * @param[in] counterName Unicode property name to read.
+		 * @return Variant containing the value read from WMI.
+		 * @throws wil::ResultException on WMI failures.
+		 */
 		inline wil::unique_variant ReadCounterFromWbemObjectAccess(
 			_In_ IWbemObjectAccess* instance,
 			_In_ PCWSTR counterName)
@@ -264,10 +331,17 @@ namespace ctl
 			return currentValue;
 		}
 
-		// template class ctPerformanceCounterDataAccessor
-		//
-		// Refreshes performance data for the target specified based off the classname
-		// - and the template types specified [the below are the only types supported]:
+			/**
+			 * @class ctPerformanceCounterDataAccessor
+			 * @brief Template accessor that refreshes and exposes WMI performance data.
+			 *
+			 * This template adapts two families of WMI access patterns:
+			 * - `IWbemHiPerfEnum` with `IWbemObjectAccess` for multi-instance counters.
+			 * - `IWbemClassObject` with `IWbemClassObject` for single-instance (static) classes.
+			 *
+			 * @tparam TEnum The refresher/enumeration type (e.g., `IWbemHiPerfEnum`).
+			 * @tparam TAccess The accessor type used to read instance data.
+			 */
 		//
 		// Note: caller *MUST* provide thread safety
 		//       this class is not providing locking at this level
@@ -312,6 +386,12 @@ namespace ctl
 			}
 
 			// refreshes internal data with the latest performance data
+			/**
+			 * @brief Refresh the internal collection of accessor objects.
+			 *
+			 * After calling this method the object can be iterated to obtain the
+			 * latest set of WMI accessor objects for the target class.
+			 */
 			void refresh();
 
 			[[nodiscard]] ctAccessIterator begin() const noexcept
@@ -358,6 +438,9 @@ namespace ctl
 			std::vector<TAccess*> m_accessorObjects;
 			ctAccessIterator m_currentIterator;
 
+			/**
+			 * @brief Release any cached accessor objects and reset internal state.
+			 */
 			void clear() noexcept;
 		};
 
@@ -454,15 +537,16 @@ namespace ctl
 			m_currentIterator = m_accessorObjects.end();
 		}
 
-		// Structure to track the performance data for each property desired for the instance being tracked
-		//
-		// typename T : the data type of the counter to be stored
-		//
-		// Note: callers *MUST* guarantee connections with the WMI service stay connected
-		//       for the lifetime of this object [e.g. guaranteed ctWmiService is instantiated]
-		// Note: callers *MUST* guarantee that COM is CoInitialized on this thread before calling
-		// Note: the ctPerformanceCounter class *will* retain WMI service instance
-		//       it's recommended to guarantee it stays alive
+		/**
+		 * @class ctPerformanceCounterCounterData
+		 * @brief Per-instance storage for sampled counter values.
+		 *
+		 * The class collects samples according to the configured
+		 * `ctPerformanceCounterCollectionType`. It is thread-safe for
+		 * concurrent add/read operations via an internal critical section.
+		 *
+		 * @tparam T The numeric type used to store counter samples.
+		 */
 		template <typename T>
 		class ctPerformanceCounterCounterData
 		{
@@ -474,6 +558,11 @@ namespace ctl
 			std::vector<T> m_counterData;
 			uint64_t m_counterSum = 0;
 
+			/**
+			 * @brief Append a sample according to the collection strategy.
+			 *
+			 * @param[in] instanceData Sample value to add.
+			 */
 			void add_data(const T& instanceData)
 			{
 				const auto lock = m_guardData.lock();
@@ -536,6 +625,9 @@ namespace ctl
 				}
 			}
 
+			/**
+			 * @brief Return iterator to the beginning of stored samples.
+			 */
 			typename std::vector<T>::const_iterator access_begin() noexcept
 			{
 				const auto lock = m_guardData.lock();
@@ -547,6 +639,9 @@ namespace ctl
 				return m_counterData.cbegin();
 			}
 
+			/**
+			 * @brief Return iterator to the end of stored samples.
+			 */
 			typename std::vector<T>::const_iterator access_end() const noexcept
 			{
 				const auto lock = m_guardData.lock();
@@ -554,6 +649,13 @@ namespace ctl
 			}
 
 		public:
+			/**
+			 * @brief Construct per-instance data from an IWbemObjectAccess accessor.
+			 *
+			 * @param[in] collectionType Collection strategy to use.
+			 * @param[in] instance IWbemObjectAccess instance to query the `Name` key from.
+			 * @param[in] counter Counter/property name being tracked.
+			 */
 			ctPerformanceCounterCounterData(
 				const ctPerformanceCounterCollectionType collectionType,
 				_In_ IWbemObjectAccess* instance,
@@ -564,6 +666,16 @@ namespace ctl
 			{
 			}
 
+			/**
+			 * @brief Construct per-instance data from an IWbemClassObject (static class case).
+		 *
+		 * The static class is expected to have a NULL `Name` key; an exception
+		 * is thrown if the value is unexpectedly present.
+		 *
+		 * @param[in] collectionType Collection strategy to use.
+		 * @param[in] instance IWbemClassObject representing the single instance.
+		 * @param[in] counter Counter/property name being tracked.
+		 */
 			ctPerformanceCounterCounterData(
 				const ctPerformanceCounterCollectionType collectionType,
 				_In_ IWbemClassObject* instance,
@@ -586,6 +698,12 @@ namespace ctl
 			~ctPerformanceCounterCounterData() noexcept = default;
 
 			// instanceName == nullptr means match everything
+			/**
+			 * @brief Determine whether this stored instance matches the requested name.
+			 *
+			 * @param[in,opt] instanceName Name to match, or nullptr to match all.
+			 * @return true when the stored instance matches the provided name.
+			 */
 			bool match(_In_opt_ PCWSTR instanceName) const
 			{
 				if (!instanceName)
@@ -599,6 +717,11 @@ namespace ctl
 				return wil::compare_string_ordinal(instanceName, m_instanceName, true) == wistd::weak_ordering::equivalent;
 			}
 
+			/**
+			 * @brief Read the counter value from an IWbemObjectAccess and add a sample.
+			 *
+			 * @param[in] instance IWbemObjectAccess instance to read the property from.
+			 */
 			void add(_In_ IWbemObjectAccess* instance)
 			{
 				T instanceData{};
@@ -610,6 +733,11 @@ namespace ctl
 				}
 			}
 
+			/**
+			 * @brief Read the counter value from an IWbemClassObject and add a sample.
+			 *
+			 * @param[in] instance IWbemClassObject instance to read the property from.
+			 */
 			void add(_In_ IWbemClassObject* instance)
 			{
 				wil::unique_variant value;
@@ -625,6 +753,11 @@ namespace ctl
 				}
 			}
 
+			/**
+			 * @brief Iterator to the first stored sample.
+			 *
+			 * @return const_iterator pointing at the first sample.
+			 */
 			typename std::vector<T>::const_iterator begin() noexcept
 			{
 				const auto lock = m_guardData.lock();
@@ -637,12 +770,20 @@ namespace ctl
 				return access_end();
 			}
 
+			/**
+			 * @brief Number of samples currently stored.
+			 *
+			 * @return sample count.
+			 */
 			size_t count() noexcept
 			{
 				const auto lock = m_guardData.lock();
 				return access_end() - access_begin();
 			}
 
+			/**
+			 * @brief Clear all stored samples and reset aggregation state.
+			 */
 			void clear() noexcept
 			{
 				const auto lock = m_guardData.lock();
@@ -659,11 +800,23 @@ namespace ctl
 			ctPerformanceCounterCounterData& operator=(ctPerformanceCounterCounterData&&) = delete;
 		};
 
+		/**
+		 * @brief Query the `Name` property for an IWbemObjectAccess instance.
+		 *
+		 * @param[in] instance Accessor to query.
+		 * @return Variant containing the `Name` property.
+		 */
 		inline wil::unique_variant ctQueryInstanceName(_In_ IWbemObjectAccess* instance)
 		{
 			return ReadCounterFromWbemObjectAccess(instance, L"Name");
 		}
 
+		/**
+		 * @brief Query the `Name` property for an IWbemClassObject instance.
+		 *
+		 * @param[in] instance IWbemClassObject to query.
+		 * @return Variant containing the `Name` property.
+		 */
 		inline wil::unique_variant ctQueryInstanceName(_In_ IWbemClassObject* instance)
 		{
 			wil::unique_variant value;
@@ -671,7 +824,10 @@ namespace ctl
 			return value;
 		}
 
-		// type for the callback implemented in all ctPerformanceCounterCounter classes
+		/**
+		 * @enum CallbackAction
+		 * @brief Actions passed to registered counter callbacks.
+		 */
 		enum class CallbackAction : std::uint8_t
 		{
 			Start,
@@ -697,11 +853,25 @@ namespace ctl
 	// Note: callers *MUST* guarantee that COM is CoInitialized on this thread before calling
 	// Note: the ctPerformanceCounter class *will* retain WMI service instance
 	//       it's recommended to guarantee it stays alive
+	/**
+	 * @class ctPerformanceCounterCounter
+	 * @brief Abstract base class for a single performance counter aggregator.
+	 *
+	 * Template parameter `T` is the stored sample type. Derived concrete
+	 * implementations provide the WMI-specific refresh logic and call into the
+	 * base class to add per-instance samples.
+	 *
+	 * Public API includes `add_filter` to restrict tracked instances and
+	 * `reference_range` to obtain iterators over collected time-slices.
+	 */
 	template <typename T>
 	class ctPerformanceCounterCounter
 	{
 	public:
-		// iterates across *time-slices* captured over from ctPerformanceCounter
+		/**
+		 * @class iterator
+		 * @brief Iterator type used by `reference_range` to iterate time-slices.
+		 */
 		class iterator
 		{
 		public:
@@ -815,6 +985,12 @@ namespace ctl
 			bool m_isEmpty = true;
 		};
 
+		/**
+		 * @brief Construct an aggregator for a named counter property.
+	 *
+		 * @param[in] counterName Property name to sample from WMI instances.
+		 * @param[in] collectionType Strategy used for storing samples.
+		 */
 		ctPerformanceCounterCounter(_In_ PCWSTR counterName, const ctPerformanceCounterCollectionType collectionType) :
 			m_collectionType(collectionType),
 			m_counterName(counterName)
@@ -833,6 +1009,17 @@ namespace ctl
 		//
 		// *not* thread-safe: caller must guarantee sequential access to add_filter()
 		//
+		/**
+		 * @brief Add an instance filter so only instances with the given
+		 * property value will be tracked.
+		 *
+		 * Must be called while counters are stopped. The `counterName` identifies
+		 * the property to compare and `propertyValue` is the expected value.
+		 *
+		 * @tparam V Variant-compatible value type for the property.
+		 * @param[in] counterName Property name to filter on.
+		 * @param[in] propertyValue Expected value for the property.
+		 */
 		template <typename V>
 		void add_filter(_In_ PCWSTR counterName, V propertyValue)
 		{
@@ -846,6 +1033,16 @@ namespace ctl
 		// returns a pair<begin,end> of iterators that exposes data for each time-slice
 		// - static classes will have a null instance name
 		//
+		/**
+		 * @brief Obtain iterators referencing the sampled time-slices for an instance.
+		 *
+		 * If `instanceName` is `nullptr` the first matching stored instance is
+		 * returned (static classes may use a null `Name`). If no instance matches
+		 * an empty iterator pair is returned.
+		 *
+		 * @param[in,opt] instanceName Instance name to retrieve samples for.
+		 * @return Pair of iterators (begin,end) over stored samples.
+		 */
 		std::pair<iterator, iterator> reference_range(_In_opt_ PCWSTR instanceName = nullptr)
 		{
 			FAIL_FAST_IF_MSG(
@@ -950,7 +1147,16 @@ namespace ctl
 		// ctPerformanceCounter needs private access to invoke register_callback in the derived type
 		friend class ctPerformanceCounter;
 
-		details::ctPerformanceCounterCallback register_callback()
+			/**
+			 * @brief Register a callback used by `ctPerformanceCounter` to drive
+			 * sampling lifecycle events.
+			 *
+			 * The returned callback accepts `CallbackAction` values and will invoke
+			 * the appropriate internal behavior (start/stop/update/clear).
+			 *
+			 * @return Function to be invoked by the manager.
+			 */
+			details::ctPerformanceCounterCallback register_callback()
 		{
 			// the callback function must be no-except - it can't leak an exception to the caller
 			// as it shouldn't break calling all other callbacks if one happens to fail an update
@@ -1125,6 +1331,13 @@ namespace ctl
 		// private function required to be implemented from the abstract base class
 		// - concrete class must pass back a function callback for adding data points for the specified counter
 		//
+		/**
+		 * @brief Refresh the WMI accessor and add samples for returned instances.
+		 *
+		 * This implementation initializes COM on the calling thread, refreshes
+		 * the accessor, then iterates instances invoking the base-class
+		 * `add_instance` helper.
+		 */
 		void update_counter_data() override
 		{
 			const auto coInit = wil::CoInitializeEx();
@@ -1151,9 +1364,21 @@ namespace ctl
 	// CAUTION:
 	// - do not access the ctPerformanceCounterCounter instances while between calling start() and stop()
 	// - any iterators returned can be invalidated when more data is added on the next cycle
+	/**
+	 * @brief Manager that schedules periodic sampling of registered counters.
+	 *
+	 * `ctPerformanceCounter` holds a WMI refresher and a list of registered
+	 * counter callbacks. It drives periodic `Refresh` calls on the refresher
+	 * and notifies each registered counter to update or clear collected data.
+	 */
 	class ctPerformanceCounter final
 	{
 	public:
+		/**
+		 * @brief Create a manager bound to a WMI service used to register counters.
+		 *
+		 * @param[in] wmiService Initialized `ctWmiService` representing the WMI namespace.
+		 */
 		explicit ctPerformanceCounter(ctWmiService wmiService) :
 			m_wmiService(std::move(wmiService))
 		{
@@ -1174,6 +1399,15 @@ namespace ctl
 			m_timer.reset();
 		}
 
+		/**
+		 * @brief Register a counter aggregator with the manager.
+		 *
+		 * The manager stores a callback for the counter and adds its refresher to
+		 * the global config refresher.
+		 *
+		 * @tparam T Sample type of the counter object.
+		 * @param[in] perfCounterObject Shared pointer to the aggregator to register.
+		 */
 		template <typename T>
 		void add_counter(const std::shared_ptr<ctPerformanceCounterCounter<T>>& perfCounterObject)
 		{
@@ -1188,6 +1422,11 @@ namespace ctl
 			revertCallback.release();
 		}
 
+		/**
+		 * @brief Start periodic sampling for all registered counters.
+		 *
+		 * @param[in] interval Sampling interval in milliseconds.
+		 */
 		void start_all_counters(uint32_t interval)
 		{
 			if (!m_timer)
@@ -1212,6 +1451,11 @@ namespace ctl
 		}
 
 		// no-throw / no-fail
+		/**
+		 * @brief Stop sampling and cancel any scheduled timers.
+		 *
+		 * This method is noexcept and will not throw on failure.
+		 */
 		void stop_all_counters() noexcept
 		{
 			{
@@ -1228,6 +1472,11 @@ namespace ctl
 		}
 
 		// no-throw / no-fail
+		/**
+		 * @brief Clear all stored counter data from registered aggregators.
+		 *
+		 * This is a best-effort, noexcept operation.
+		 */
 		void clear_counter_data() const noexcept
 		{
 			for (const auto& callback : m_callbacks)
@@ -1236,6 +1485,9 @@ namespace ctl
 			}
 		}
 
+		/**
+		 * @brief Remove all registered counters and reset the internal refresher.
+		 */
 		void reset_counters()
 		{
 			m_callbacks.clear();
@@ -2018,6 +2270,22 @@ namespace ctl
 		const ctWmiService wmi(L"root\\cimv2");
 		return ctMakeInstancePerfCounter<T>(wmi, className, counterName, collectionType);
 	}
+
+	/**
+	 * @brief Create a performance counter based on a known enum class name.
+	 *
+	 * This helper validates the requested counter name against the
+	 * compile-time `c_performanceCounterPropertiesArray` and constructs the
+	 * appropriate static or instance-backed aggregator.
+	 *
+	 * @tparam T Type used to store counter samples (e.g., `ULONG`, `ULONGLONG`).
+	 * @param[in] wmi Initialized WMI service to use for creating the counter.
+	 * @param[in] className Enum indicating the well-known counter class.
+	 * @param[in] counterName Property name to sample.
+	 * @param[in] collectionType Collection strategy to use (default: Detailed).
+	 * @return Shared pointer to the created counter aggregator.
+	 * @throws wil::ResultException / wil::FailureException on validation or WMI errors.
+	 */
 
 	template <typename T>
 	std::shared_ptr<ctPerformanceCounterCounter<T>> ctCreatePerfCounter(
