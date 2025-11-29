@@ -109,7 +109,7 @@ namespace ctsTraffic
         case ctsConfig::IoPatternType::Duplex:
             return make_shared<ctsIoPatternDuplex>();
 
-        case ctsConfig::IoPatternType::MediaStream:
+        case ctsConfig::IoPatternType::MediaStreamPull:
             if (ctsConfig::IsListening())
             {
                 return make_shared<ctsIoPatternMediaStreamSender>();
