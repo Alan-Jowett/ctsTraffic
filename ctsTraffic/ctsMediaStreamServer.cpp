@@ -16,6 +16,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <variant>
 // os headers
 #include <Windows.h>
 #include <WinSock2.h>
@@ -33,6 +34,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsWinsockLayer.h"
 #include "ctsMediaStreamServer.h"
 #include "ctsMediaStreamSender.h"
+#include "ctsMediaStreamReceiver.h"
 #include "ctsMediaStreamServerListeningSocket.h"
 #include "ctsMediaStreamProtocol.hpp"
 // wil headers always included last
@@ -70,15 +72,21 @@ namespace ctsTraffic
         }
 
         const auto sharedConnectedSocket = ctsMediaStreamServerImpl::FindConnectedSocket(sharedSocket->GetRemoteSockaddr());
-        if (!sharedConnectedSocket)
+        
+        // If this is a ctlMediaStreamSender, start sending datagrams
+        // If this is a ctlMediaStreamReceiver, start receiving datagrams
+        std::visit([&](auto&& arg)
         {
-            ctsConfig::PrintErrorInfo(
-                L"ctsMediaStreamServer - failed to find the socket with remote address %ws in our connected socket list to continue sending datagrams",
-                sharedSocket->GetRemoteSockaddr().writeCompleteAddress().c_str());
-            THROW_WIN32_MSG(ERROR_INVALID_DATA, "ctsSocket was not found in the connected sockets to continue sending datagrams");
-        }
+            if (!arg)
+            {
+                ctsConfig::PrintErrorInfo(
+                    L"ctsMediaStreamServer - failed to find the socket with remote address %ws in our connected socket list to continue sending datagrams",
+                    sharedSocket->GetRemoteSockaddr().writeCompleteAddress().c_str());
+                THROW_WIN32_MSG(ERROR_INVALID_DATA, "ctsSocket was not found in the connected sockets to continue sending datagrams");
+            }
 
-        sharedConnectedSocket->Start();
+            arg->Start();
+        }, sharedConnectedSocket);
     }
 
     // Called to remove that socket from the tracked vector of connected sockets
@@ -98,13 +106,11 @@ namespace ctsTraffic
 
     namespace ctsMediaStreamServerImpl
     {
-        // The actual send logic was moved into ctsMediaStreamSender::PerformIo()
-
         static std::vector<std::unique_ptr<ctsMediaStreamServerListeningSocket>> g_listeningSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         static wil::critical_section g_socketVectorGuard{ ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock }; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
 
-        _Guarded_by_(g_socketVectorGuard) static std::unordered_map<ctl::ctSockaddr, std::shared_ptr<ctsMediaStreamSender>> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
+        _Guarded_by_(g_socketVectorGuard) static std::unordered_map<ctl::ctSockaddr, mediaStreamerPtr> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         // weak_ptr<> to ctsSocket objects ready to accept a connection
         _Guarded_by_(g_socketVectorGuard) static std::vector<std::weak_ptr<ctsSocket>> g_acceptingSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
@@ -302,13 +308,13 @@ namespace ctsTraffic
             return infos;
         }
 
-        std::shared_ptr<ctsMediaStreamSender> FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept
+        mediaStreamerPtr FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept
         {
             const auto lockConnectedObject = g_socketVectorGuard.lock();
             const auto foundSocket = g_connectedSockets.find(remoteAddr);
             if (foundSocket == g_connectedSockets.end())
             {
-                return nullptr;
+                return std::unique_ptr<ctsMediaStreamSender>(nullptr);
             }
             return foundSocket->second;
         }
@@ -335,27 +341,26 @@ namespace ctsTraffic
 
                     const ctl::ctSockaddr waitingKey = waitingEndpoint->second;
 
+                    
                     const auto existingSocket = FindConnectedSocket(waitingKey);
-
-                    if (existingSocket)
+                    std::visit([&](auto&& arg)
                     {
-                        ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
-                        PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::accept_socket - socket with remote address %ws asked to be Started but was already established",
-                            waitingEndpoint->second.writeCompleteAddress().c_str());
-                        // return early if this was a duplicate request: this can happen if there is latency or drops
-                        // between the client and server as they attempt to negotiating starting a new stream
-                        return;
-                    }
+                        if (arg)
+                        {
+                            ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
+                            PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::accept_socket - socket with remote address %ws asked to be Started but was already established",
+                                waitingEndpoint->second.writeCompleteAddress().c_str());
+                            // return early if this was a duplicate request: this can happen if there is latency or drops
+                            // between the client and server as they attempt to negotiating starting a new stream
+                            return;
+                        }
+                    }, existingSocket);
 
-                    g_connectedSockets.emplace(
-                        waitingKey,
-                        std::make_shared<ctsMediaStreamSender>(
-                            weakSocket,
-                            waitingEndpoint->first,
-                            waitingEndpoint->second));
-
-                    PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::accept_socket - socket with remote address %ws added to connected_sockets",
-                        waitingEndpoint->second.writeCompleteAddress().c_str());
+                    AddMediaStreamer(
+                        weakSocket,
+                        waitingEndpoint->first,
+                        waitingEndpoint->second,
+                        sharedSocket);
 
                     // now complete the ctsSocket 'Create' request
                     const auto foundSocket = std::ranges::find_if(
@@ -425,15 +430,18 @@ namespace ctsTraffic
 
             const ctl::ctSockaddr targetKey = targetAddr;
             const auto existingSocket = FindConnectedSocket(targetKey);
-            if (existingSocket)
+            std::visit([&](auto&& arg)
             {
-                ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
-                PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::start - socket with remote address %ws asked to be Started but was already in connected_sockets",
-                    targetAddr.writeCompleteAddress().c_str());
-                // return early if this was a duplicate request: this can happen if there is latency or drops
-                // between the client and server as they attempt to negotiating starting a new stream
-                return;
-            }
+                if (arg)
+                {
+                    ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
+                    PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::start - socket with remote address %ws asked to be Started but was already established",
+                        targetAddr.writeCompleteAddress().c_str());
+                    // return early if this was a duplicate request: this can happen if there is latency or drops
+                    // between the client and server as they attempt to negotiating starting a new stream
+                    return;
+                }
+            }, existingSocket);
 
             const auto awaitingEndpoint = std::ranges::find_if(
                 g_awaitingEndpoints,
@@ -457,13 +465,11 @@ namespace ctsTraffic
                 auto weakInstance = *g_acceptingSockets.rbegin();
                 if (const auto sharedInstance = weakInstance.lock())
                 {
-                    // 'move' the accepting socket to connected
-                    g_connectedSockets.emplace(
-                        targetKey,
-                        std::make_shared<ctsMediaStreamSender>(weakInstance, socket, targetAddr));
-
-                    PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::start - socket with remote address %ws added to connected_sockets",
-                        targetAddr.writeCompleteAddress().c_str());
+                    AddMediaStreamer(
+                        weakInstance,
+                        socket,
+                        targetAddr,
+                        sharedInstance);
 
                     // verify is successfully added to connected_sockets before popping off accepting_sockets
                     addToAwaiting = false;
@@ -492,6 +498,34 @@ namespace ctsTraffic
             }
         }
 
-        // ConnectedSocketIo has been moved into ctsMediaStreamSender::PerformIo()
+        void AddMediaStreamer(
+            std::weak_ptr<ctsSocket> weakSocket,
+            SOCKET sendingSocket,
+            const ctl::ctSockaddr& remoteAddr, 
+            const std::shared_ptr<ctsSocket> sharedSocket)
+        {
+            (sharedSocket);
+
+            const auto lockAwaitingObject = g_socketVectorGuard.lock();
+            if (ctsConfig::g_configSettings->IoPattern == ctsConfig::IoPatternType::MediaStreamPull)
+            {
+                g_connectedSockets.emplace(
+                    remoteAddr,
+                    std::make_shared<ctsMediaStreamSender>(weakSocket, sendingSocket, remoteAddr));
+
+                PRINT_DEBUG_INFO(L"\t\tctsMediaStreamSender::start - socket with remote address %ws added to connected_sockets",
+                    remoteAddr.writeCompleteAddress().c_str());
+            }
+            else
+            {
+                g_connectedSockets.emplace(
+                    remoteAddr,
+                    std::make_shared<ctsMediaStreamReceiver>(sharedSocket));
+                PRINT_DEBUG_INFO(L"\t\tctsMediaStreamReceiver::start - socket with remote address %ws added to connected_sockets",
+                    remoteAddr.writeCompleteAddress().c_str());
+            }
+            
+        }
+
     }
 }

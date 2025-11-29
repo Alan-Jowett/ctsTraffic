@@ -94,7 +94,7 @@ public:
     ctsMediaStreamSender(
         std::weak_ptr<ctsSocket> weakSocket,
         SOCKET sendingSocket,
-        ctl::ctSockaddr remoteAddr);
+        const ctl::ctSockaddr& remoteAddr);
 
     ~ctsMediaStreamSender() noexcept;
 

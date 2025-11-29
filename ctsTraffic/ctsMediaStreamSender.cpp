@@ -35,7 +35,7 @@ namespace ctsTraffic
 ctsMediaStreamSender::ctsMediaStreamSender(
     std::weak_ptr<ctsSocket> weakSocket,
     SOCKET sendingSocket,
-    ctSockaddr remoteAddr) :
+    const ctSockaddr& remoteAddr) :
     m_weakSocket(std::move(weakSocket)),
     m_sendingSocket(sendingSocket),
     m_remoteAddr(std::move(remoteAddr)),

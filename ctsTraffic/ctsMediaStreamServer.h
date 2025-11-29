@@ -15,6 +15,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 // cpp headers
 #include <memory>
+#include <variant>
 // ctl headers
 #include <ctSockaddr.hpp>
 // project headers
@@ -22,7 +23,9 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsIOTask.hpp"
 
 // Forward declarations
-namespace ctsTraffic { class ctsMediaStreamSender; }
+namespace ctsTraffic { class ctsMediaStreamSender; class ctsMediaStreamReceiver; }
+
+using mediaStreamerPtr = std::variant<std::shared_ptr<ctsTraffic::ctsMediaStreamSender>, std::shared_ptr<ctsTraffic::ctsMediaStreamReceiver>>;
 
 // We register both of these functions with ctsConfig:
 // - ctsMediaStreamServerListener is the "Accepting" function
@@ -74,7 +77,13 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
         std::vector<ListenerInfo> GetListenerInfos() noexcept;
 
         // Lookup a connected socket by remote address. Returns nullptr if not found.
-        std::shared_ptr<ctsMediaStreamSender> FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
+        mediaStreamerPtr FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
+
+        void AddMediaStreamer(
+            std::weak_ptr<ctsSocket> weakSocket,
+            SOCKET sendingSocket,
+            const ctl::ctSockaddr& remoteAddr, 
+            const std::shared_ptr<ctsSocket> sharedSocket);
     }
 
     // Called to 'accept' incoming connections
