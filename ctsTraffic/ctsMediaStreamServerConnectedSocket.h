@@ -30,7 +30,6 @@ See the Apache Version 2.0 License for specific language governing permissions a
 namespace ctsTraffic
 {
 class ctsMediaStreamServerConnectedSocket;
-using ctsMediaStreamConnectedSocketIoFunctor = std::function<wsIOResult (ctsMediaStreamServerConnectedSocket*)>;
 
 class ctsMediaStreamServerConnectedSocket
 {
@@ -45,8 +44,8 @@ private:
     // used to complete the state when finished and take a shared_ptr when needing to take a reference
     const std::weak_ptr<ctsSocket> m_weakSocket;
 
-    // invoked to do actual IO on the socket
-    const ctsMediaStreamConnectedSocketIoFunctor m_ioFunctor;
+    // perform IO on the socket (previously delegated to server via ConnectedSocketIo)
+    wsIOResult PerformIo() noexcept;
 
     // sending_socket is a shared socket from the datagram server
     // that (potentially) many connected datagram sockets will send from
@@ -61,8 +60,7 @@ public:
     ctsMediaStreamServerConnectedSocket(
         std::weak_ptr<ctsSocket> weakSocket,
         SOCKET sendingSocket,
-        ctl::ctSockaddr remoteAddr,
-        ctsMediaStreamConnectedSocketIoFunctor ioFunctor);
+        ctl::ctSockaddr remoteAddr);
 
     ~ctsMediaStreamServerConnectedSocket() noexcept;
 

@@ -120,8 +120,7 @@ namespace ctsTraffic
 
     namespace ctsMediaStreamServerImpl
     {
-        // function for doing the actual IO for a UDP media stream datagram connection
-        static wsIOResult ConnectedSocketIo(_In_ ctsMediaStreamServerConnectedSocket* connectedSocket) noexcept;
+        // The actual send logic was moved into ctsMediaStreamServerConnectedSocket::PerformIo()
 
         static std::vector<std::unique_ptr<ctsMediaStreamServerListeningSocket>> g_listeningSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
@@ -389,8 +388,7 @@ namespace ctsTraffic
                         std::make_shared<ctsMediaStreamServerConnectedSocket>(
                             weakSocket,
                             waitingEndpoint->first,
-                            waitingEndpoint->second,
-                            ConnectedSocketIo));
+                            waitingEndpoint->second));
 
                     PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::accept_socket - socket with remote address %ws added to connected_sockets",
                         waitingEndpoint->second.writeCompleteAddress().c_str());
@@ -484,7 +482,7 @@ namespace ctsTraffic
                 {
                     // 'move' the accepting socket to connected
                     g_connectedSockets.emplace_back(
-                        std::make_shared<ctsMediaStreamServerConnectedSocket>(weakInstance, socket, targetAddr, ConnectedSocketIo));
+                        std::make_shared<ctsMediaStreamServerConnectedSocket>(weakInstance, socket, targetAddr));
 
                     PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::start - socket with remote address %ws added to connected_sockets",
                         targetAddr.writeCompleteAddress().c_str());
@@ -516,107 +514,6 @@ namespace ctsTraffic
             }
         }
 
-        wsIOResult ConnectedSocketIo(_In_ ctsMediaStreamServerConnectedSocket* connectedSocket) noexcept
-        {
-            const SOCKET socket = connectedSocket->GetSendingSocket();
-            if (INVALID_SOCKET == socket)
-            {
-                return wsIOResult(WSA_OPERATION_ABORTED);
-            }
-
-            const ctl::ctSockaddr& remoteAddr(connectedSocket->GetRemoteAddress());
-            const ctsTask nextTask = connectedSocket->GetNextTask();
-
-            wsIOResult returnResults;
-            if (ctsTask::BufferType::UdpConnectionId == nextTask.m_bufferType)
-            {
-                // making a synchronous call
-                WSABUF wsaBuffer;
-                wsaBuffer.buf = nextTask.m_buffer;
-                wsaBuffer.len = nextTask.m_bufferLength;
-
-                const auto sendResult = WSASendTo(
-                    socket,
-                    &wsaBuffer,
-                    1,
-                    &returnResults.m_bytesTransferred,
-                    0,
-                    remoteAddr.sockaddr(),
-                    remoteAddr.length(),
-                    nullptr,
-                    nullptr);
-
-                if (SOCKET_ERROR == sendResult)
-                {
-                    const auto error = WSAGetLastError();
-                    ctsConfig::PrintErrorInfo(
-                        L"WSASendTo(%Iu, %ws) for the Connection-ID failed [%d]",
-                        socket,
-                        remoteAddr.writeCompleteAddress().c_str(),
-                        error);
-                    return wsIOResult(error);
-                }
-            }
-            else
-            {
-                const auto sequenceNumber = connectedSocket->IncrementSequence();
-                ctsMediaStreamSendRequests sendingRequests(
-                    nextTask.m_bufferLength, // total bytes to send
-                    sequenceNumber,
-                    nextTask.m_buffer);
-                for (auto& sendRequest : sendingRequests)
-                {
-                    // making a synchronous call
-                    DWORD bytesSent{};
-                    const auto sendResult = WSASendTo(
-                        socket,
-                        sendRequest.data(),
-                        static_cast<DWORD>(sendRequest.size()),
-                        &bytesSent,
-                        0,
-                        remoteAddr.sockaddr(),
-                        remoteAddr.length(),
-                        nullptr,
-                        nullptr);
-                    if (SOCKET_ERROR == sendResult)
-                    {
-                        const auto error = WSAGetLastError();
-                        if (WSAEMSGSIZE == error)
-                        {
-                            uint32_t bytesRequested = 0;
-                            // iterate across each WSABUF* in the array
-                            for (const auto& wsaBuffer : sendRequest)
-                            {
-                                bytesRequested += wsaBuffer.len;
-                            }
-                            ctsConfig::PrintErrorInfo(
-                                L"WSASendTo(%Iu, seq %lld, %ws) failed with WSAEMSGSIZE : attempted to send datagram of size %u bytes",
-                                socket,
-                                sequenceNumber,
-                                remoteAddr.writeCompleteAddress().c_str(),
-                                bytesRequested);
-                        }
-                        else
-                        {
-                            ctsConfig::PrintErrorInfo(
-                                L"WSASendTo(%Iu, seq %lld, %ws) failed [%d]",
-                                socket,
-                                sequenceNumber,
-                                remoteAddr.writeCompleteAddress().c_str(),
-                                error);
-                        }
-                        return wsIOResult(error);
-                    }
-
-                    // successfully completed synchronously
-                    returnResults.m_bytesTransferred += bytesSent;
-                    PRINT_DEBUG_INFO(
-                        L"\t\tctsMediaStreamServer sending seq number %lld (%u sent-bytes, %u frame-bytes)\n",
-                        sequenceNumber, bytesSent, returnResults.m_bytesTransferred);
-                }
-            }
-
-            return returnResults;
-        }
+        // ConnectedSocketIo has been moved into ctsMediaStreamServerConnectedSocket::PerformIo()
     }
 }
