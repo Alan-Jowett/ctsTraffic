@@ -31,6 +31,8 @@ namespace ctsTraffic
 {
 class ctsMediaStreamServerConnectedSocket;
 using ctsMediaStreamConnectedSocketIoFunctor = std::function<wsIOResult (ctsMediaStreamServerConnectedSocket*)>;
+using ctsMediaStreamConnectedSocketStartFunctor = std::function<void(const ctl::ctSockaddr&)>;
+using ctsMediaStreamConnectedSocketCompleteFunctor = std::function<void(uint32_t)>;
 
 class ctsMediaStreamServerConnectedSocket
 {
@@ -48,6 +50,12 @@ private:
     // invoked to do actual IO on the socket
     const ctsMediaStreamConnectedSocketIoFunctor m_ioFunctor;
 
+    // optional callback invoked when this connected socket is started
+    const ctsMediaStreamConnectedSocketStartFunctor m_startFunctor;
+
+    // optional callback invoked when this connected socket completes state
+    const ctsMediaStreamConnectedSocketCompleteFunctor m_completeFunctor;
+
     // sending_socket is a shared socket from the datagram server
     // that (potentially) many connected datagram sockets will send from
     // thus it's not owned by this class
@@ -62,7 +70,9 @@ public:
         std::weak_ptr<ctsSocket> weakSocket,
         SOCKET sendingSocket,
         ctl::ctSockaddr remoteAddr,
-        ctsMediaStreamConnectedSocketIoFunctor ioFunctor);
+        ctsMediaStreamConnectedSocketIoFunctor ioFunctor,
+        ctsMediaStreamConnectedSocketStartFunctor startFunctor = {},
+        ctsMediaStreamConnectedSocketCompleteFunctor completeFunctor = {});
 
     ~ctsMediaStreamServerConnectedSocket() noexcept;
 
@@ -95,6 +105,16 @@ public:
     void ScheduleTask(const ctsTask& task) noexcept;
 
     void CompleteState(uint32_t errorCode) const noexcept;
+
+    // called by the server implementation to finish initialization for a newly
+    // accepted/started connection. This mirrors the client-side Start() flow
+    // where the connected-socket takes responsibility for completing the
+    // ctsSocket and any per-connection setup.
+    // called by the server implementation to finish initialization for a newly
+    // accepted/started connection. The server may provide a small start-callback
+    // when the connected-socket is created which will be invoked by this Start()
+    // method. This decouples the connected-socket from direct ctsSocket operations.
+    void Start(const ctl::ctSockaddr& localAddr) noexcept;
 
     // non-copyable
     ctsMediaStreamServerConnectedSocket(const ctsMediaStreamServerConnectedSocket&) = delete;

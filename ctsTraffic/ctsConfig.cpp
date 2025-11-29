@@ -739,7 +739,7 @@ namespace ctsTraffic::ctsConfig
 				else
 				{
 					constexpr auto udpRecvBuff = 1048576ul; // 1 MB
-					g_configSettings->IoFunction = ctsMediaStreamClient;
+					g_configSettings->IoFunction = ctsMediaStreamClientIo;
 					g_configSettings->Options |= SetRecvBuf;
 					g_configSettings->RecvBufValue = udpRecvBuff;
 					g_configSettings->Options |= HandleInlineIocp;

@@ -14,6 +14,15 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // ReSharper disable CppInconsistentNaming
 #pragma once
 
+/**
+ * @file ctNetAdapterAddresses.hpp
+ * @brief Helper to enumerate and query network adapter addresses.
+ *
+ * Provides a lightweight wrapper around GetAdaptersAddresses to produce
+ * an STL-style iterable container of `IP_ADAPTER_ADDRESSES` records. Also
+ * includes a predicate functor to locate an adapter by a `ctSockaddr`.
+ */
+
 // cpp headers
 #include <stdexcept>
 #include <utility>
@@ -35,11 +44,21 @@ namespace ctl
 class ctNetAdapterAddresses
 {
 public:
+    /**
+     * @brief Iterator type over the `IP_ADAPTER_ADDRESSES` linked list.
+     *
+     * The iterator wraps a shared buffer owning the GetAdaptersAddresses
+     * output and provides STL-compatible forward-iterator semantics.
+     */
     class iterator
     {
     public:
         iterator() = default;
 
+        /**
+         * @brief Construct an iterator that will enumerate the buffer.
+         * @param[in] ipAdapter Shared buffer returned from GetAdaptersAddresses.
+         */
         explicit iterator(std::shared_ptr<std::vector<BYTE>> ipAdapter) noexcept :
             m_buffer(std::move(ipAdapter))
         {
@@ -49,6 +68,10 @@ public:
             }
         }
 
+        /**
+         * @brief Swap two iterators.
+         * @param[in,out] rhs Iterator to swap with.
+         */
         void swap(_Inout_ iterator& rhs) noexcept
         {
             using std::swap;
@@ -102,6 +125,10 @@ public:
             return *this;
         }
 
+        /**
+         * @brief Advance the iterator by one and return the previous value.
+         * @return Iterator state prior to increment.
+         */
         iterator operator++(int)
         {
             auto tempIterator(*this);
@@ -131,26 +158,41 @@ public:
         using reference = IP_ADAPTER_ADDRESSES&;
 
     private:
+        /**
+         * @brief Shared ownership of the raw buffer returned by GetAdaptersAddresses.
+         *
+         * The buffer contains a linked list of `IP_ADAPTER_ADDRESSES` structures.
+         */
         std::shared_ptr<std::vector<BYTE>> m_buffer{};
+
+        /**
+         * @brief Pointer to the current adapter address entry within `m_buffer`.
+         */
         PIP_ADAPTER_ADDRESSES m_current = nullptr;
     };
 
+    /**
+     * @brief Construct and immediately refresh adapter addresses.
+     * @param[in] family Address family filter (AF_UNSPEC/AF_INET/AF_INET6).
+     * @param[in] gaaFlags Flags forwarded to GetAdaptersAddresses (GAA_FLAG_*).
+     */
     explicit ctNetAdapterAddresses(unsigned family = AF_UNSPEC, DWORD gaaFlags = 0) :
         m_buffer(std::make_shared<std::vector<BYTE>>(16384))
     {
         this->refresh(family, gaaFlags);
     }
 
-    // refresh
-    //
-    // - retrieves the current set of adapter address information
-    // - Takes an optional _gaaFlags argument which is passed through directly to
-    //   GetAdapterAddresses internally - use standard GAA_FLAG_* constants
-    //
-    // NOTE: this will invalidate any iterators from this instance
-    // NOTE: this only implements the Basic exception guarantee
-    //       if this fails, an exception is thrown, and any prior
-    //       information is lost. This is still safe to call after errors.
+    /**
+     * @brief Refresh the internal adapter list from the system.
+     * @param[in] family Address family to request (AF_UNSPEC/AF_INET/AF_INET6).
+     * @param[in] gaaFlags Flags forwarded to GetAdaptersAddresses.
+     *
+     * This call replaces the internal buffer; any existing iterators
+     * referring to this instance will be invalidated.
+     *
+     * Exception guarantees: basic guarantee — on failure an exception is thrown
+     * and prior internal information is lost.
+     */
     void refresh(unsigned family = AF_UNSPEC, DWORD gaaFlags = 0) const
     {
         // get both v4 and v6 adapter info
@@ -179,11 +221,19 @@ public:
         }
     }
 
+    /**
+     * @brief Begin iterator for the adapter list.
+     * @return iterator pointing at the first adapter, or `end()` if none.
+     */
     [[nodiscard]] iterator begin() const noexcept
     {
         return iterator(m_buffer);
     }
 
+    /**
+     * @brief End iterator for the adapter list.
+     * @return Default-constructed iterator representing end.
+     */
     // ReSharper disable once CppMemberFunctionMayBeStatic
     [[nodiscard]] iterator end() const noexcept // NOLINT(readability-convert-member-functions-to-static)
     {
@@ -191,20 +241,37 @@ public:
     }
 
 private:
+    /**
+     * @brief Owning buffer that contains the adapter addresses list returned
+     * by GetAdaptersAddresses.
+     *
+     * Stored as a shared_ptr so iterators may keep a reference while
+     * allowing the ctNetAdapterAddresses instance to update/replace it.
+     */
     std::shared_ptr<std::vector<BYTE>> m_buffer{};
 };
 
-// functor ctNetAdapterMatchingAddrPredicate
-//
-// Created to leverage STL algorithms to parse a ctNetAdapterAddresses set of iterators
-// - to find the first interface that has the specified address assigned
+/**
+ * @brief Predicate functor to match a network adapter by a specific address.
+ *
+ * Designed to be used with STL algorithms and `ctNetAdapterAddresses::iterator`.
+ */
 struct ctNetAdapterMatchingAddrPredicate
 {
+    /**
+     * @brief Construct the predicate with a target address.
+     * @param[in] addr The `ctSockaddr` to match against adapter unicast addresses.
+     */
     explicit ctNetAdapterMatchingAddrPredicate(ctSockaddr addr) noexcept :
         m_targetAddr(std::move(addr))
     {
     }
 
+    /**
+     * @brief Test whether the supplied adapter contains the target address.
+     * @param[in] ipAddress The adapter record to inspect.
+     * @return True if the adapter has a unicast address equal to the target.
+     */
     bool operator ()(const IP_ADAPTER_ADDRESSES& ipAddress) const noexcept
     {
         for (const auto* unicastAddress = ipAddress.FirstUnicastAddress;
@@ -220,6 +287,9 @@ struct ctNetAdapterMatchingAddrPredicate
     }
 
 private:
+    /**
+     * @brief The target address to match against adapter unicast addresses.
+     */
     const ctSockaddr m_targetAddr;
 };
 } // namespace ctl

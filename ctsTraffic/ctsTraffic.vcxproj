@@ -407,6 +407,7 @@
     </Bscmake>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ctsMediaStreamClientConnectedSocket.cpp" />
     <ClCompile Include="ctsAcceptEx.cpp" />
     <ClCompile Include="ctsConfig.cpp" />
     <ClCompile Include="ctsConnectByName.cpp" />
@@ -433,6 +434,7 @@
     <ResourceCompile Include="Resource.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ctsMediaStreamClientConnectedSocket.h" />
     <ClInclude Include="..\ctl\ctMath.hpp" />
     <ClInclude Include="..\ctl\ctNetAdapterAddresses.hpp" />
     <ClInclude Include="..\ctl\ctThreadIocp_base.hpp" />

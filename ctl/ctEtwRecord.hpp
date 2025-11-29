@@ -42,91 +42,113 @@
 namespace ctl {
 
 ////////////////////////////////////////////////////////////////////////////////
-//
-//  class ctEtwRecord
-//
-//  Encapsulates accessing all the various properties one can potentially
-//      gather from a EVENT_RECORD structure passed to the consumer from ETW.
-//
-//  The constructor takes a ptr to the EVENT_RECORD to encapsulate, and makes
-//      a deep copy of all embedded and referenced data structures to access
-//      with the   getter member functions.
-//
-//  There are 2 method-types exposed:    get*() and  query*()
-//        get* functions have no parameters, and always return the associated
-//          value.  They will always have a value to return from any event.
-//
-//       query* functions take applicable [out] as parameters, and return bool.
-//          The values they retrieve are not guaranteed to be in all events,
-//          and will return false if they don't exist in the encapsulated event.
-//
-//  Note that all returned strings are dynamically allocated and returned via
-//      std::shared_ptr<wchar_t> smart pointer objects. Note that
-//      copying the object is very cheap (one Interlocked operation) and cannot
-//      fail. (thus isn't highly suggested to copy these smart pointer objects
-//      by value, not by reference - which defeats the internal ref-counting)
-//
-//  All methods that do not have a throw() exception specification can throw
-//      std::bad_alloc - which is derived from std::exception.  The constructor
-//      can throw ctException, which is also derived from std::exception.
-//
-////////////////////////////////////////////////////////////////////////////////
-
+/**
+ * @class ctEtwRecord
+ * @brief Encapsulates and deep-copies an ETW `EVENT_RECORD` for safe access.
+ *
+ * The constructor deep-copies embedded and referenced data (extended data
+ * items, property buffers, mappings, and TRACE_EVENT_INFO) so callers may
+ * safely query event properties after the original event buffer is freed.
+ *
+ * The class exposes two categories of methods:
+ *  - `get*()` functions: no parameters, always return a value present in
+ *    every event.
+ *  - `query*()` functions: accept output parameters (annotated below) and
+ *    return `bool` indicating whether the requested property exists.
+ *
+ * Note: returned strings and buffers are provided via `std::shared_ptr`.
+ * Methods may throw `std::bad_alloc`; the constructor may throw on fatal
+ * TDH errors.
+ */
 class ctEtwRecord
 {
   public:
-    ////////////////////////////////////////////////////////////
-    //
-    // A public typedef to access the pair class containing the property data
-    //
-    ////////////////////////////////////////////////////////////
+    /**
+     * @brief A pair containing a deep-copied property buffer and its size.
+     *
+     * The first element is a shared pointer to a BYTE[] buffer that holds
+     * the deep-copied property data. The second element is the size (in
+     * bytes) of the buffer.
+     */
     using ctPropertyPair = std::pair<std::shared_ptr<BYTE[]>, ULONG>;
 
-    ////////////////////////////////////////////////////////////
-    //
-    // Constructors
-    //  - default
-    //  - specifying the EVENT_RECORD* to deep-copy
-    //
-    // Destructor
-    // Copy Constructor
-    // Copy Assignment operator
-    //
-    // taking an EVENT_RECORD*
-    //  - replaces the existing encapsulated EVENT_RECORD info
-    //    with the specified EVENT_RECORD.
-    //
-    ////////////////////////////////////////////////////////////
+    /**
+     * @name Constructors and assignment
+     * @{
+     */
+    /**
+     * @brief Default constructor. Leaves the object empty.
+     */
     ctEtwRecord() noexcept = default;
-    explicit ctEtwRecord(_In_ const EVENT_RECORD*);
+
+    /**
+     * @brief Construct and deep-copy from an existing EVENT_RECORD.
+     * @param[in] record Pointer to the source EVENT_RECORD to deep-copy.
+     *
+     * The constructor performs a deep copy of the event record and any
+     * referenced property buffers. May throw on allocation or fatal TDH
+     * formatting errors.
+     */
+    explicit ctEtwRecord(_In_ const EVENT_RECORD* record);
+
+    /**
+     * @brief Defaulted destructor.
+     */
     ~ctEtwRecord() noexcept = default;
 
+    /**
+     * @brief Copy constructor (defaulted).
+     */
     ctEtwRecord(const ctEtwRecord&) noexcept = default;
-    ctEtwRecord&
-    operator=(_In_ const ctEtwRecord&) noexcept = default;
-    ctEtwRecord&
-    operator=(_In_ const EVENT_RECORD*);
 
+    /**
+     * @brief Copy assignment operator (defaulted).
+     * @param[in] other The other record to copy from.
+     * @return Reference to this object.
+     */
+    ctEtwRecord&
+    operator=(_In_ const ctEtwRecord& other) noexcept = default;
+
+    /**
+     * @brief Assign from an EVENT_RECORD pointer, performing a deep copy.
+     * @param[in] record Pointer to the source EVENT_RECORD.
+     * @return Reference to this object.
+     */
+    ctEtwRecord&
+    operator=(_In_ const EVENT_RECORD* record);
+
+    /**
+     * @brief Move constructor (defaulted).
+     */
     ctEtwRecord(ctEtwRecord&&) noexcept = default;
+
+    /**
+     * @brief Move assignment operator (defaulted).
+     */
     ctEtwRecord&
     operator=(ctEtwRecord&&) noexcept = default;
 
-    ////////////////////////////////////////////////////////////
-    //
-    // Implementing swap() to be a friendly container
-    //
-    ////////////////////////////////////////////////////////////
+    /** @} */
+
+    /**
+     * @brief Swap the contents of this record with another.
+     * @param[in,out] other The record to swap with.
+     */
     void
-    swap(ctEtwRecord&) noexcept;
-    ////////////////////////////////////////////////////////////
-    //
-    // Printing the entire ETW record
-    // Printing just the formatted event message
-    // - optionally with full details of each property
-    //
-    ////////////////////////////////////////////////////////////
+    swap(ctEtwRecord& other) noexcept;
+    /**
+     * @brief Append a full textual representation of the ETW record to
+     * a reusable string buffer.
+     * @param[out] reusable_string The string to append the record text to.
+     */
     void
     writeRecord(std::wstring& reusable_string) const;
+
+    /**
+     * @brief Return a string containing the full textual representation
+     * of the ETW record.
+     * @return A std::wstring containing the record text.
+     */
     std::wstring
     writeRecord() const
     {
@@ -134,8 +156,21 @@ class ctEtwRecord
         writeRecord(wsRecord);
         return wsRecord;
     }
+
+    /**
+     * @brief Append the formatted event message to a reusable string.
+     * @param[out] reusable_string The string to append the formatted message to.
+     * @param[in] include_message_properties If true, include full details
+     *        for each property in the formatted output.
+     */
     void
     writeFormattedMessage(std::wstring& reusable_string, bool include_message_properties) const;
+
+    /**
+     * @brief Return the formatted event message as a string.
+     * @param[in] _details When true, include property detail in the output.
+     * @return The formatted message.
+     */
     std::wstring
     writeFormattedMessage(bool _details = false) const
     {
@@ -143,126 +178,376 @@ class ctEtwRecord
         writeFormattedMessage(wsRecord, _details);
         return wsRecord;
     }
+
+    /**
+     * @brief Return a map of property name -> formatted property string for
+     * this event record.
+     * @return Map of property names to their formatted string values.
+     */
     std::map<std::wstring, std::wstring>
     writeMessageProperties() const;
-    ////////////////////////////////////////////////////////////
-    //
-    // comparison operators
-    //
-    ////////////////////////////////////////////////////////////
+    /**
+     * @name Comparison operators
+     * @{
+     */
+    /**
+     * @brief Equality comparison between two records.
+     * @param[in] other The other record to compare against.
+     * @return True if the records are equal, false otherwise.
+     */
     bool
-    operator==(_In_ const ctEtwRecord&) const;
+    operator==(_In_ const ctEtwRecord& other) const;
+
+    /**
+     * @brief Inequality comparison between two records.
+     * @param[in] other The other record to compare against.
+     * @return True if the records differ, false otherwise.
+     */
     bool
-    operator!=(_In_ const ctEtwRecord&) const;
-    ////////////////////////////////////////////////////////////
-    //
-    // EVENT_HEADER fields (8)
-    //
-    ////////////////////////////////////////////////////////////
+    operator!=(_In_ const ctEtwRecord& other) const;
+
+    /** @} */
+
+    /**
+     * @name EVENT_HEADER fields
+     * @{
+     */
+    /** @brief Get the thread id for the event. */
     ULONG
     getThreadId() const noexcept;
+
+    /** @brief Get the process id for the event. */
     ULONG
     getProcessId() const noexcept;
+
+    /** @brief Get the raw timestamp for the event. */
     LARGE_INTEGER
     getTimeStamp() const noexcept;
+
+    /** @brief Get the provider GUID for the event. */
     GUID
     getProviderId() const noexcept;
+
+    /** @brief Get the activity GUID associated with the event. */
     GUID
     getActivityId() const noexcept;
-    _Success_(return) bool queryKernelTime(_Out_ ULONG*) const noexcept;
-    _Success_(return) bool queryUserTime(_Out_ ULONG*) const noexcept;
+
+    /**
+     * @brief Query the kernel-mode CPU time for the event.
+     * @param[out] out_kernel_time Receives the kernel time value if present.
+     * @return True if kernel time was present and written, false otherwise.
+     */
+    _Success_(return) bool queryKernelTime(_Out_ ULONG* out_kernel_time) const noexcept;
+
+    /**
+     * @brief Query the user-mode CPU time for the event.
+     * @param[out] out_user_time Receives the user time value if present.
+     * @return True if user time was present and written, false otherwise.
+     */
+    _Success_(return) bool queryUserTime(_Out_ ULONG* out_user_time) const noexcept;
+
+    /** @brief Get the processor timestamp for the event. */
     ULONG64
     getProcessorTime() const noexcept;
-    ////////////////////////////////////////////////////////////
-    //
-    // EVENT_DESCRIPTOR fields (7)
-    //
-    ////////////////////////////////////////////////////////////
+
+    /** @} */
+
+    /**
+     * @name EVENT_DESCRIPTOR fields
+     * @{
+     */
+    /** @brief Get the Event ID from the descriptor. */
     USHORT
     getEventId() const noexcept;
+
+    /** @brief Get the descriptor version. */
     UCHAR
     getVersion() const noexcept;
+
+    /** @brief Get the channel value. */
     UCHAR
     getChannel() const noexcept;
+
+    /** @brief Get the level value. */
     UCHAR
     getLevel() const noexcept;
+
+    /** @brief Get the opcode value. */
     UCHAR
     getOpcode() const noexcept;
+
+    /** @brief Get the task value. */
     USHORT
     getTask() const noexcept;
+
+    /** @brief Get the keyword mask. */
     ULONGLONG
     getKeyword() const noexcept;
-    ////////////////////////////////////////////////////////////
-    //
-    // ETW_BUFFER_CONTEXT fields (3)
-    //
-    ////////////////////////////////////////////////////////////
+
+    /** @} */
+
+    /**
+     * @name ETW_BUFFER_CONTEXT fields
+     * @{
+     */
+    /** @brief Processor number where the event was logged. */
     UCHAR
     getProcessorNumber() const noexcept;
+
+    /** @brief Alignment value from ETW buffer context. */
     UCHAR
     getAlignment() const noexcept;
+
+    /** @brief Logger id associated with the record. */
     USHORT
     getLoggerId() const noexcept;
-    ////////////////////////////////////////////////////////////
-    //
-    // EVENT_HEADER_EXTENDED_DATA_ITEM options (6)
-    //
-    ////////////////////////////////////////////////////////////
-    _Success_(return) bool queryRelatedActivityId(_Out_ GUID*) const noexcept;
-    _Success_(return) bool querySID(_Out_ std::shared_ptr<BYTE[]>&, _Out_ size_t*) const;
-    _Success_(return) bool queryTerminalSessionId(_Out_ ULONG*) const noexcept;
-    _Success_(return) bool queryTransactionInstanceId(_Out_ ULONG*) const noexcept;
-    _Success_(return) bool queryTransactionParentInstanceId(_Out_ ULONG*) const noexcept;
-    _Success_(return) bool queryTransactionParentGuid(_Out_ GUID*) const noexcept;
-    ////////////////////////////////////////////////////////////
-    //
-    // TRACE_EVENT_INFO options (16)
-    //
-    ////////////////////////////////////////////////////////////
-    _Success_(return) bool queryProviderGuid(_Out_ GUID*) const noexcept;
-    _Success_(return) bool queryDecodingSource(_Out_ DECODING_SOURCE*) const noexcept;
-    _Success_(return) bool queryProviderName(_Out_ std::wstring&) const;
-    _Success_(return) bool queryLevelName(_Out_ std::wstring&) const;
-    _Success_(return) bool queryChannelName(_Out_ std::wstring&) const;
-    _Success_(return) bool queryKeywords(_Out_ std::vector<std::wstring>&) const;
-    _Success_(return) bool queryTaskName(_Out_ std::wstring&) const;
-    _Success_(return) bool queryOpcodeName(_Out_ std::wstring&) const;
-    _Success_(return) bool queryEventMessage(_Out_ std::wstring&) const;
-    _Success_(return) bool queryProviderMessageName(_Out_ std::wstring&) const;
-    _Success_(return) bool queryPropertyCount(_Out_ ULONG*) const noexcept;
-    _Success_(return) bool queryTopLevelPropertyCount(_Out_ ULONG*) const noexcept;
-    _Success_(return) bool queryEventPropertyStringValue(_Out_ std::wstring&) const;
+
+    /** @} */
+
+    /**
+     * @name EVENT_HEADER_EXTENDED_DATA_ITEM helpers
+     * @{
+     */
+    /**
+     * @brief Query the related activity id from extended data.
+     * @param[out] out_guid Receives the GUID when present.
+     * @return True if the GUID was present and written, false otherwise.
+     */
+    _Success_(return) bool queryRelatedActivityId(_Out_ GUID* out_guid) const noexcept;
+
+    /**
+     * @brief Query the SID extended data.
+     * @param[out] out_sid_buf Receives a deep-copied buffer containing the SID.
+     * @param[out] out_size Receives the size of the buffer in bytes.
+     * @return True if the SID extended data was present and copied, false otherwise.
+     */
+    _Success_(return) bool querySID(_Out_ std::shared_ptr<BYTE[]>& out_sid_buf, _Out_ size_t* out_size) const;
+
+    /**
+     * @brief Query the terminal session id from extended data.
+     * @param[out] out_session_id Receives the session id when present.
+     * @return True if the value was present and written, false otherwise.
+     */
+    _Success_(return) bool queryTerminalSessionId(_Out_ ULONG* out_session_id) const noexcept;
+
+    /**
+     * @brief Query the transaction instance id from extended data.
+     * @param[out] out_instance Receives the instance id when present.
+     * @return True if the value was present and written, false otherwise.
+     */
+    _Success_(return) bool queryTransactionInstanceId(_Out_ ULONG* out_instance) const noexcept;
+
+    /**
+     * @brief Query the transaction parent instance id from extended data.
+     * @param[out] out_parent_instance Receives the parent instance id when present.
+     * @return True if the value was present and written, false otherwise.
+     */
+    _Success_(return) bool queryTransactionParentInstanceId(_Out_ ULONG* out_parent_instance) const noexcept;
+
+    /**
+     * @brief Query the transaction parent GUID from extended data.
+     * @param[out] out_parent_guid Receives the parent GUID when present.
+     * @return True if the GUID was present and written, false otherwise.
+     */
+    _Success_(return) bool queryTransactionParentGuid(_Out_ GUID* out_parent_guid) const noexcept;
+
+    /** @} */
+
+    /**
+     * @name TRACE_EVENT_INFO helpers
+     * @{
+     */
+    /**
+     * @brief Query the provider GUID from a deep-copied TRACE_EVENT_INFO.
+     * @param[out] out_guid Receives the provider GUID on success.
+     * @return True if TRACE_EVENT_INFO was present and GUID written.
+     */
+    _Success_(return) bool queryProviderGuid(_Out_ GUID* out_guid) const noexcept;
+
+    /**
+     * @brief Query the decoding source for the event from TRACE_EVENT_INFO.
+     * @param[out] out_source Receives the decoding source on success.
+     * @return True if TRACE_EVENT_INFO was present and value written.
+     */
+    _Success_(return) bool queryDecodingSource(_Out_ DECODING_SOURCE* out_source) const noexcept;
+
+    /**
+     * @brief Obtain the provider name string from TRACE_EVENT_INFO.
+     * @param[out] out_name Receives the provider name when available.
+     * @return True if the provider name exists and was written to out_name.
+     */
+    _Success_(return) bool queryProviderName(_Out_ std::wstring& out_name) const;
+
+    /**
+     * @brief Obtain the human-readable level name.
+     * @param[out] out_name Receives the level name when available.
+     * @return True if the level name exists and was written.
+     */
+    _Success_(return) bool queryLevelName(_Out_ std::wstring& out_name) const;
+
+    /**
+     * @brief Obtain the human-readable channel name.
+     * @param[out] out_name Receives the channel name when available.
+     * @return True if the channel name exists and was written.
+     */
+    _Success_(return) bool queryChannelName(_Out_ std::wstring& out_name) const;
+
+    /**
+     * @brief Retrieve keywords associated with this event as strings.
+     * @param[out] out_keywords Receives the list of keyword names.
+     * @return True if keyword information was present and written.
+     */
+    _Success_(return) bool queryKeywords(_Out_ std::vector<std::wstring>& out_keywords) const;
+
+    /**
+     * @brief Obtain the task name associated with the event.
+     * @param[out] out_name Receives the task name when available.
+     * @return True if the task name exists and was written.
+     */
+    _Success_(return) bool queryTaskName(_Out_ std::wstring& out_name) const;
+
+    /**
+     * @brief Obtain the opcode name associated with the event.
+     * @param[out] out_name Receives the opcode name when available.
+     * @return True if the opcode name exists and was written.
+     */
+    _Success_(return) bool queryOpcodeName(_Out_ std::wstring& out_name) const;
+
+    /**
+     * @brief Retrieve the event message format string from TRACE_EVENT_INFO.
+     * @param[out] out_message Receives the event message format string.
+     * @return True if the event message was present and written.
+     */
+    _Success_(return) bool queryEventMessage(_Out_ std::wstring& out_message) const;
+
+    /**
+     * @brief Retrieve the provider message name (if present).
+     * @param[out] out_name Receives the provider message name.
+     * @return True if the provider message name was present and written.
+     */
+    _Success_(return) bool queryProviderMessageName(_Out_ std::wstring& out_name) const;
+
+    /**
+     * @brief Query the number of properties for the event.
+     * @param[out] out_count Receives the property count on success.
+     * @return True if property information was present and written.
+     */
+    _Success_(return) bool queryPropertyCount(_Out_ ULONG* out_count) const noexcept;
+
+    /**
+     * @brief Query the number of top-level properties for the event.
+     * @param[out] out_count Receives the top-level property count on success.
+     * @return True if top-level property information was present and written.
+     */
+    _Success_(return) bool queryTopLevelPropertyCount(_Out_ ULONG* out_count) const noexcept;
+
+    /**
+     * @brief Retrieve the event property string value (concatenated) when available.
+     * @param[out] out_value Receives the event property string.
+     * @return True if the string value was present and written.
+     */
+    _Success_(return) bool queryEventPropertyStringValue(_Out_ std::wstring& out_value) const;
+
+    /**
+     * @brief Query the name of the event property at index.
+     * @param[in] ulIndex Index of the property to query.
+     * @param[out] out_wsPropertyName Receives the property name.
+     * @return True if available and written.
+     */
     _Success_(return) bool queryEventPropertyName(
         _In_ unsigned long ulIndex, _Out_ std::wstring& out_wsPropertyName) const;
-    _Success_(return) bool queryEventProperty(_In_ PCWSTR, _Out_ std::wstring&) const;
-    _Success_(return) bool queryEventProperty(_In_ PCWSTR, _Out_ ctPropertyPair&) const;
-    _Success_(return) bool queryEventProperty(_In_ unsigned long, _Out_ std::wstring&) const;
+
+    /** @brief Query a property value by name as a string. */
+    _Success_(return) bool queryEventProperty(_In_ PCWSTR name, _Out_ std::wstring& out_value) const;
+
+    /**
+     * @brief Query a property value by name returning a deep-copied buffer.
+     * @param[in] name Property name.
+     * @param[out] out_pair Receives the deep-copied buffer and size.
+     * @return True if the property was found and copied.
+     */
+    _Success_(return) bool queryEventProperty(_In_ PCWSTR name, _Out_ ctPropertyPair& out_pair) const;
+
+    /** @brief Query a property value by index as a string. */
+    _Success_(return) bool queryEventProperty(_In_ unsigned long index, _Out_ std::wstring& out_value) const;
 
   private:
-    // private method to build a formatted string from the specified property offset
-    std::wstring buildEventPropertyString(ULONG) const;
-    // eventHeader and etwBufferContext are just shallow-copies
-    //      of the EVENT_HEADER and ETW_BUFFER_CONTEXT structs.
+    /**
+     * @brief Build a formatted string for the specified property index.
+     * @param[in] ulProperty The zero-based index of the top-level property to format.
+     * @return A std::wstring with the formatted property value.
+     * @throws std::runtime_error if the requested property index is out of range.
+     */
+    std::wstring buildEventPropertyString(ULONG ulProperty) const;
+    /**
+     * @brief Shallow copy of the source EVENT_HEADER for this record.
+     *
+     * This is a direct copy of the EVENT_HEADER contained in the original
+     * EVENT_RECORD passed into the constructor.
+     */
     EVENT_HEADER m_eventHeader{};
+
+    /**
+     * @brief Shallow copy of the ETW buffer context associated with the record.
+     */
     ETW_BUFFER_CONTEXT m_etwBufferContext{};
 
-    // v_eventHeaderExtendedData and v_pEventHeaderData stores a deep-copy
-    //      of the EVENT_HEADER_EXTENDED_DATA_ITEM struct.
+    /**
+     * @brief Deep-copied extended data items from the original EVENT_RECORD.
+     *
+     * Each element corresponds to an ENTRY in the source ExtendedData array
+     * and may reference a buffer stored in m_eventHeaderData.
+     */
     std::vector<EVENT_HEADER_EXTENDED_DATA_ITEM> m_eventHeaderExtendedData;
+
+    /**
+     * @brief Owning buffers for the extended-data items (deep copies).
+     *
+     * Each element holds the raw bytes pointed to by the corresponding
+     * element in m_eventHeaderExtendedData.
+     */
     std::vector<std::shared_ptr<BYTE[]>> m_eventHeaderData;
 
-    // ptraceEventInfo stores a deep copy of the TRACE_EVENT_INFO struct.
+    /**
+     * @brief Deep-copied TRACE_EVENT_INFO payload (when present).
+     *
+     * If the event is not string-only, this buffer owns the TRACE_EVENT_INFO
+     * block returned by TdhGetEventInformation.
+     */
     std::shared_ptr<BYTE[]> m_traceEventInfo;
+
+    /**
+     * @brief Size, in bytes, of the TRACE_EVENT_INFO payload in m_traceEventInfo.
+     */
     ULONG m_cbTraceEventInfo{0};
 
-    // vPropertyInfo stores an array of all properties
+    /**
+     * @brief Deep-copied property buffers for each top-level event property.
+     *
+     * Each element is a pair of (buffer, size) holding the raw property
+     * value as returned by TdhGetProperty.
+     */
     std::vector<ctPropertyPair> m_traceProperties;
 
+    /**
+     * @brief Internal pair storing a deep-copied formatted mapping string and its size.
+     *
+     * First element: shared pointer to a WCHAR[] holding a formatted mapping value.
+     * Second element: size in bytes of the buffer.
+     */
     typedef std::pair<std::shared_ptr<WCHAR[]>, ULONG> ctMappingPair;
+
+    /**
+     * @brief Formatted mapping values for each property (parallel to m_traceProperties).
+     */
     std::vector<ctMappingPair> m_traceMapping;
-    //
-    // need to allow a default empty constructor, so must track initialization status
-    //
+
+    /**
+     * @brief Flag indicating whether the object has been initialized by a constructor.
+     *
+     * The default constructor leaves the object uninitialized; this flag tracks
+     * if a deep-copy constructor has populated member data.
+     */
     bool m_initialized{false};
 };
 
@@ -562,6 +847,11 @@ ctEtwRecord::swap(ctEtwRecord& in_event) noexcept
 //  - Implementing the non-member swap to be usable generically
 //
 ////////////////////////////////////////////////////////////////////////////////
+/**
+ * @brief Non-member swap for ctEtwRecord to enable ADL and generic algorithms.
+ * @param[in,out] a First record to swap.
+ * @param[in,out] b Second record to swap.
+ */
 inline void
 swap(ctEtwRecord& a, ctEtwRecord& b) noexcept
 {

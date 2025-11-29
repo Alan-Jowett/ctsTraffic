@@ -35,12 +35,16 @@ ctsMediaStreamServerConnectedSocket::ctsMediaStreamServerConnectedSocket(
     std::weak_ptr<ctsSocket> weakSocket,
     SOCKET sendingSocket,
     ctSockaddr remoteAddr,
-    ctsMediaStreamConnectedSocketIoFunctor ioFunctor) :
+    ctsMediaStreamConnectedSocketIoFunctor ioFunctor,
+    ctsMediaStreamConnectedSocketStartFunctor startFunctor,
+    ctsMediaStreamConnectedSocketCompleteFunctor completeFunctor) :
     m_weakSocket(std::move(weakSocket)),
     m_ioFunctor(std::move(ioFunctor)),
     m_sendingSocket(sendingSocket),
     m_remoteAddr(std::move(remoteAddr)),
-    m_connectTime(ctTimer::snap_qpc_as_msec())
+    m_connectTime(ctTimer::snap_qpc_as_msec()),
+    m_startFunctor(std::move(startFunctor)),
+    m_completeFunctor(std::move(completeFunctor))
 {
     m_taskTimer.reset(CreateThreadpoolTimer(MediaStreamTimerCallback, this, ctsConfig::g_configSettings->pTpEnvironment));
     THROW_LAST_ERROR_IF(!m_taskTimer);
@@ -50,6 +54,33 @@ ctsMediaStreamServerConnectedSocket::~ctsMediaStreamServerConnectedSocket() noex
 {
     // stop the TP before letting the destructor delete any member objects
     m_taskTimer.reset();
+}
+
+void ctsMediaStreamServerConnectedSocket::Start(const ctl::ctSockaddr& localAddr) noexcept
+{
+    try
+    {
+        if (m_startFunctor)
+        {
+            m_startFunctor(localAddr);
+        }
+        else
+        {
+            // No start functor provided; fallback to best-effort behavior
+            if (const auto sharedSocket = m_weakSocket.lock())
+            {
+                ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), m_remoteAddr);
+                sharedSocket->SetLocalSockaddr(localAddr);
+                sharedSocket->SetRemoteSockaddr(m_remoteAddr);
+                sharedSocket->CompleteState(NO_ERROR);
+                ctsConfig::PrintNewConnection(localAddr, m_remoteAddr);
+            }
+        }
+    }
+    catch (...)
+    {
+        ctsConfig::PrintThrownException();
+    }
 }
 
 void ctsMediaStreamServerConnectedSocket::ScheduleTask(const ctsTask& task) noexcept
@@ -77,6 +108,12 @@ void ctsMediaStreamServerConnectedSocket::ScheduleTask(const ctsTask& task) noex
 
 void ctsMediaStreamServerConnectedSocket::CompleteState(uint32_t errorCode) const noexcept
 {
+    if (m_completeFunctor)
+    {
+        m_completeFunctor(errorCode);
+        return;
+    }
+
     if (const auto sharedSocket = m_weakSocket.lock())
     {
         sharedSocket->CompleteState(errorCode);
