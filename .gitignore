@@ -22,6 +22,8 @@
 /ctsPerf/ARM64
 /ctsPerf/*.csv
 /ctsPerf/ctsPerf.log
+/**/Debug
+/**/Release
 *.db
 *.ipch
 *.opendb

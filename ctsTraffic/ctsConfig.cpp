@@ -40,8 +40,8 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsPrintStatus.hpp"
 // project headers
 #include "ctsTCPFunctions.h"
-#include "ctsMediaStreamClient.h"
-#include "ctsMediaStreamServer.h"
+#include "ctsMediaStreamReceiver.h"
+#include "ctsMediaStreamSender.h"
 #include "ctsWinsockLayer.h"
 // wil headers always included last
 #include <ctCpuAffinity.hpp>
@@ -569,10 +569,10 @@ namespace ctsTraffic::ctsConfig
 			}
 
 			const auto* const value = ParseArgument(*foundArg, L"-conn");
-			if (ctString::iordinal_equals(L"ConnectEx", value))
+			if (ctString::iordinal_equals(L"MediaStream Client Connect", value))
 			{
-				g_configSettings->ConnectFunction = ctsConnectEx;
-				g_connectFunctionName = L"ConnectEx";
+				g_configSettings->ConnectFunction = ctsMediaStreamReceiverConnect;
+				g_connectFunctionName = L"MediaStream Receiver Connect";
 			}
 			else if (ctString::iordinal_equals(L"connect", value))
 			{
@@ -596,13 +596,13 @@ namespace ctsTraffic::ctsConfig
 		{
 			if (g_configSettings->IoPattern != IoPatternType::MediaStream)
 			{
-				g_configSettings->ConnectFunction = ctsConnectEx;
-				g_connectFunctionName = L"ConnectEx";
+				g_configSettings->ConnectFunction = ctsMediaStreamReceiverConnect;
+				g_connectFunctionName = L"MediaStream Receiver Connect";
 			}
 			else
 			{
-				g_configSettings->ConnectFunction = ctsMediaStreamClientConnect;
-				g_connectFunctionName = L"MediaStream Client Connect";
+				g_configSettings->ConnectFunction = ctsMediaStreamReceiverConnect;
+				g_connectFunctionName = L"MediaStream Receiver Connect";
 			}
 		}
 
@@ -662,7 +662,7 @@ namespace ctsTraffic::ctsConfig
 			}
 			else
 			{
-				g_configSettings->AcceptFunction = ctsMediaStreamServerListener;
+				g_configSettings->AcceptFunction = ctsMediaStreamSenderListener;
 				g_acceptFunctionName = L"MediaStream Server Listener";
 			}
 		}
@@ -731,20 +731,20 @@ namespace ctsTraffic::ctsConfig
 			{
 				if (IsListening())
 				{
-					g_configSettings->IoFunction = ctsMediaStreamServerIo;
+					g_configSettings->IoFunction = ctsMediaStreamSenderIo;
 					// server also has a closing function to remove the closed socket
-					g_configSettings->ClosingFunction = ctsMediaStreamServerClose;
+					g_configSettings->ClosingFunction = ctsMediaStreamSenderClose;
 					g_ioFunctionName = L"MediaStream Server";
 				}
 				else
 				{
-					constexpr auto udpRecvBuff = 1048576ul; // 1 MB
-					g_configSettings->IoFunction = ctsMediaStreamClient;
+					const auto udpRecvBuff = 1048576ul; // 1 MB
+					g_configSettings->IoFunction = ctsMediaStreamReceiver;
 					g_configSettings->Options |= SetRecvBuf;
 					g_configSettings->RecvBufValue = udpRecvBuff;
 					g_configSettings->Options |= HandleInlineIocp;
 					g_configSettings->Options |= EnableCircularQueueing;
-					g_ioFunctionName = L"MediaStream Client";
+					g_ioFunctionName = L"MediaStream Receiver";
 				}
 			}
 		}

@@ -60,7 +60,7 @@
     <ClCompile Include="ctsMediaStreamServerListeningSocket.cpp">
       <Filter>MediaStreaming</Filter>
     </ClCompile>
-    <ClCompile Include="ctsMediaStreamClient.cpp">
+    <ClCompile Include="ctsMediaStreamReceiver.cpp">
       <Filter>MediaStreaming</Filter>
     </ClCompile>
     <ClCompile Include="ctsWinsockLayer.cpp">
@@ -69,7 +69,7 @@
     <ClCompile Include="ctsIOPatternMediaStream.cpp">
       <Filter>MediaStreaming</Filter>
     </ClCompile>
-    <ClCompile Include="ctsMediaStreamServer.cpp">
+    <ClCompile Include="ctsMediaStreamSender.cpp">
       <Filter>MediaStreaming</Filter>
     </ClCompile>
     <ClCompile Include="ctsWSASocket.cpp">
@@ -181,10 +181,10 @@
     <ClInclude Include="ctsMediaStreamServerListeningSocket.h">
       <Filter>MediaStreaming</Filter>
     </ClInclude>
-    <ClInclude Include="ctsMediaStreamServer.h">
+    <ClInclude Include="ctsMediaStreamSender.h">
       <Filter>MediaStreaming</Filter>
     </ClInclude>
-    <ClInclude Include="ctsMediaStreamClient.h">
+    <ClInclude Include="ctsMediaStreamReceiver.h">
       <Filter>MediaStreaming</Filter>
     </ClInclude>
     <ClInclude Include="ctsWinsockLayer.h">

@@ -22,15 +22,15 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsIOTask.hpp"
 
 // We register both of these functions with ctsConfig:
-// - ctsMediaStreamServerListener is the "Accepting" function
+// - ctsMediaStreamSenderListener is the "Accepting" function
 //   - it will complete 'Create' ctsSocket requests as clients send in START requests
 //     it will be assumed that a client is unique when its IP:PORT are unique
 //
-// - ctsMediaStreamServerIo is the 'IO' function
+// - ctsMediaStreamSenderIo is the 'IO' function
 //   - it queues up IO to a central prioritized queue of work
 //     since all IO is triggered to occur at a future point, the queue is sorted by work that comes soonest
 
-namespace ctsTraffic { namespace ctsMediaStreamServerImpl
+namespace ctsTraffic { namespace ctsMediaStreamSenderImpl
     {
         void InitOnce();
 
@@ -67,11 +67,16 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
     }
 
     // Called to 'accept' incoming connections
-    void ctsMediaStreamServerListener(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
+    void ctsMediaStreamSenderListener(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
 
     // Called initiate IO on a datagram socket
-    void ctsMediaStreamServerIo(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
+    void ctsMediaStreamSenderIo(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
 
     // Called to remove that socket from the tracked vector of connected sockets
-    void ctsMediaStreamServerClose(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
+    void ctsMediaStreamSenderClose(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
+
+    // Client-side helper: send a START and begin sending media from this socket
+    // - minimal wrapper to allow client code to start transmitting using the server's
+    //   connected-socket implementation
+    void ctsMediaStreamSenderClientStart(const std::weak_ptr<ctsSocket>& weakSocket) noexcept;
 }

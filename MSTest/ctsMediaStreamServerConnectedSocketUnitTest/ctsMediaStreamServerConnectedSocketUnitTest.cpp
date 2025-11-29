@@ -25,7 +25,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsSocket.h"
 #include "ctsSocketState.h"
 
-#include "ctsMediaStreamServer.h"
+#include "ctsMediaStreamSender.h"
 #include "ctsMediaStreamServerConnectedSocket.h"
 
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
@@ -167,59 +167,59 @@ ctsIoStatus ctsIoPattern::CompleteIo(const ctsTask&, uint32_t, uint32_t _status_
 }
 
 // test IO pattern for fakes for this test
-class ctsMediaStreamServerUnitTestIOPattern : public ctsIoPattern
+class ctsMediaStreamSenderUnitTestIOPattern : public ctsIoPattern
 {
 public:
     // default the base class 1 recv buffer
-    ctsMediaStreamServerUnitTestIOPattern() :
+    ctsMediaStreamSenderUnitTestIOPattern() :
         ctsIoPattern(1)
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::ctsMediaStreamServerUnitTestIOPattern\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::ctsMediaStreamSenderUnitTestIOPattern\n");
     }
 
     // none of these are called - required to be defined
     void PrintStatistics(const ctl::ctSockaddr&, const ctl::ctSockaddr&) noexcept override
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::print_stats\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::print_stats\n");
         Assert::IsFalse(true);
     }
 
     ctsTask GetNextTaskFromPattern() override
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::next_task\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::next_task\n");
         Assert::IsFalse(true);
         return ctsTask();
     }
 
     ctsIoPatternError CompleteTaskBackToPattern(const ctsTask&, uint32_t) noexcept override
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::completed_task\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::completed_task\n");
         Assert::IsFalse(true);
         return ctsIoPatternError::NoError;
     }
 
     void StartStatistics() noexcept override
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::start_stats\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::start_stats\n");
         Assert::IsFalse(true);
     }
 
     void EndStatistics() noexcept override
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::end_stats\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::end_stats\n");
         Assert::IsFalse(true);
     }
 
     char* GetConnectionIdentifier() noexcept override
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::connection_id\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::connection_id\n");
         Assert::IsFalse(true);
         return nullptr;
     }
 
     void PrintTcpInfo(const ctl::ctSockaddr&, const ctl::ctSockaddr&, SOCKET) noexcept override
     {
-        Logger::WriteMessage(L"ctsMediaStreamServerUnitTestIOPattern::PrintTcpInfo\n");
+        Logger::WriteMessage(L"ctsMediaStreamSenderUnitTestIOPattern::PrintTcpInfo\n");
     }
 
 };
@@ -236,7 +236,7 @@ ctsSocketState::~ctsSocketState() noexcept
 // ctsSocket fakes
 ctsSocket::ctsSocket(std::weak_ptr<ctsSocketState>) noexcept
 {
-    m_pattern = std::make_shared<ctsMediaStreamServerUnitTestIOPattern>();
+    m_pattern = std::make_shared<ctsMediaStreamSenderUnitTestIOPattern>();
 }
 
 ctsSocket::~ctsSocket() noexcept
@@ -258,8 +258,8 @@ ctsSocket::SocketReference ctsSocket::AcquireSocketLock() const noexcept
     return SocketReference({}, m_socket.get(), m_pattern);
 }
 
-// one callout fake to ctsMediaStreamServerImpl
-void ctsMediaStreamServerImpl::RemoveSocket(const ctl::ctSockaddr&)
+// one callout fake to ctsMediaStreamSenderImpl
+void ctsMediaStreamSenderImpl::RemoveSocket(const ctl::ctSockaddr&)
 {
 }
 }

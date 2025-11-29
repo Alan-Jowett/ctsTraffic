@@ -26,7 +26,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // local headers
 #include "ctsConfig.h"
 #include "ctsSocketBroker.h"
-#include "ctsMediaStreamServer.h"
+#include "ctsMediaStreamSender.h"
 
 using namespace ctsTraffic;
 using namespace ctl;
@@ -207,7 +207,7 @@ int __cdecl wmain(int argc, _In_reads_z_(argc) const wchar_t** argv)
         {
 
             // If using the media-stream server, print per-listener connection counts
-            const auto listenerInfos = ctsMediaStreamServerImpl::GetListenerInfos();
+            const auto listenerInfos = ctsMediaStreamSenderImpl::GetListenerInfos();
             if (!listenerInfos.empty())
             {
                 ctsConfig::PrintSummary(L"\n  Connections per listener (shard):\n");

@@ -24,7 +24,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <ctSockaddr.hpp>
 // project headers
 #include "ctsMediaStreamServerListeningSocket.h"
-#include "ctsMediaStreamServer.h"
+#include "ctsMediaStreamSender.h"
 #include "ctsMediaStreamProtocol.hpp"
 #include "ctsConfig.h"
 // wil headers always included last
@@ -150,7 +150,7 @@ void ctsMediaStreamServerListeningSocket::InitiateRecv() noexcept
 
             FAIL_FAST_IF_MSG(
                 0 == failureCounter % 10,
-                "ctsMediaStreamServer has failed to post another recv - it cannot accept any more client connections");
+                "ctsMediaStreamSender has failed to post another recv - it cannot accept any more client connections");
 
             Sleep(10);
         }
@@ -184,14 +184,14 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
                 {
                     if (!m_priorFailureWasConnectionReset)
                     {
-                        ctsConfig::PrintErrorInfo(L"ctsMediaStreamServer - WSARecvFrom failed as a prior WSASendTo from this socket silently failed with port unreachable");
+                        ctsConfig::PrintErrorInfo(L"ctsMediaStreamSender - WSARecvFrom failed as a prior WSASendTo from this socket silently failed with port unreachable");
                     }
                     m_priorFailureWasConnectionReset = true;
                 }
                 else
                 {
                     ctsConfig::PrintErrorInfo(
-                        L"ctsMediaStreamServer - WSARecvFrom failed [%d]", WSAGetLastError());
+                        L"ctsMediaStreamSender - WSARecvFrom failed [%d]", WSAGetLastError());
                     ctsConfig::g_configSettings->UdpStatusDetails.m_errorFrames.Increment();
                     m_priorFailureWasConnectionReset = false;
                 }
@@ -206,19 +206,19 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
                 {
                     case MediaStreamAction::START:
                         PRINT_DEBUG_INFO(
-                            L"\t\tctsMediaStreamServer - processing START from %ws\n",
+                            L"\t\tctsMediaStreamSender - processing START from %ws\n",
                             m_remoteAddr.writeCompleteAddress().c_str());
                         IncrementConnectionCount();
 #ifndef TESTING_IGNORE_START
                     // Cannot be holding the object_guard when calling into any pimpl-> methods
                         pimplOperation = [this] {
-                            ctsMediaStreamServerImpl::Start(m_listeningSocket.get(), m_listeningAddr, m_remoteAddr);
+                            ctsMediaStreamSenderImpl::Start(m_listeningSocket.get(), m_listeningAddr, m_remoteAddr);
                         };
 #endif
                         break;
 
                     default: // NOLINT(clang-diagnostic-covered-switch-default)
-                        FAIL_FAST_MSG("ctsMediaStreamServer - received an unexpected Action: %d (%p)\n", message.m_action, m_recvBuffer.data());
+                        FAIL_FAST_MSG("ctsMediaStreamSender - received an unexpected Action: %d (%p)\n", message.m_action, m_recvBuffer.data());
                 }
             }
         }
