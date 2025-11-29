@@ -51,7 +51,7 @@ ctsMediaStreamServerConnectedSocket::~ctsMediaStreamServerConnectedSocket() noex
     m_taskTimer.reset();
 }
 
-void ctsMediaStreamServerConnectedSocket::ScheduleTask(const ctsTask& task) noexcept
+void ctsMediaStreamServerConnectedSocket::QueueTask(const ctsTask& task) noexcept
 {
     if (const auto sharedSocket = m_weakSocket.lock())
     {
@@ -72,6 +72,23 @@ void ctsMediaStreamServerConnectedSocket::ScheduleTask(const ctsTask& task) noex
         }
         _Analysis_assume_lock_released_(m_objectGuard);
     }
+}
+
+void ctsMediaStreamServerConnectedSocket::Start() noexcept
+{
+    const auto lock = m_objectGuard.lock();
+    _Analysis_assume_lock_acquired_(m_objectGuard);
+    if (m_nextTask.m_timeOffsetMilliseconds < 2)
+    {
+        // immediate
+        MediaStreamTimerCallback(nullptr, this, nullptr);
+    }
+    else
+    {
+        FILETIME ftDueTime{ctTimer::convert_ms_to_relative_filetime(m_nextTask.m_timeOffsetMilliseconds)};
+        SetThreadpoolTimer(m_taskTimer.get(), &ftDueTime, 0, 0);
+    }
+    _Analysis_assume_lock_released_(m_objectGuard);
 }
 
 void ctsMediaStreamServerConnectedSocket::CompleteState(uint32_t errorCode) const noexcept
@@ -132,7 +149,7 @@ VOID CALLBACK ctsMediaStreamServerConnectedSocket::MediaStreamTimerCallback(PTP_
                 }
                 else
                 {
-                    thisPtr->ScheduleTask(thisPtr->m_nextTask);
+                    thisPtr->QueueTask(thisPtr->m_nextTask);
                 }
                 break;
 

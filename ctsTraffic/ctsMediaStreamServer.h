@@ -21,6 +21,9 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include "ctsSocket.h"
 #include "ctsIOTask.hpp"
 
+// Forward declarations
+namespace ctsTraffic { class ctsMediaStreamServerConnectedSocket; }
+
 // We register both of these functions with ctsConfig:
 // - ctsMediaStreamServerListener is the "Accepting" function
 //   - it will complete 'Create' ctsSocket requests as clients send in START requests
@@ -34,8 +37,7 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
     {
         void InitOnce();
 
-        // Schedule the first IO on the specified ctsSocket
-        void ScheduleIo(const std::weak_ptr<ctsSocket>& weakSocket, const ctsTask& task);
+        // Scheduling is performed inline in `ctsMediaStreamServerIo`.
 
         // Process a new ctsSocket from the ctsSocketBroker
         // - accept_socket takes the ctsSocket to create a new entry
@@ -70,6 +72,9 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
 
         // Return detailed listener info including address and shard index for reporting
         std::vector<ListenerInfo> GetListenerInfos() noexcept;
+
+        // Lookup a connected socket by remote address. Returns nullptr if not found.
+        std::shared_ptr<ctsMediaStreamServerConnectedSocket> FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
     }
 
     // Called to 'accept' incoming connections

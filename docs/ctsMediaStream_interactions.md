@@ -45,7 +45,7 @@ sequenceDiagram
     %% ctsSocket actively asks to accept later
     ctsSocket->>Server: ctsMediaStreamServerListener(weakSocket) -> AcceptSocket(weakSocket)
     alt awaiting endpoint exists
-        Server->>Connected: create ctsMediaStreamServerConnectedSocket(weakSocket, socket, remoteAddr, ConnectedSocketIo)
+      Server->>Connected: create ctsMediaStreamServerConnectedSocket(weakSocket, socket, remoteAddr)
         Server->>ctsSocket: CompleteState(NO_ERROR)
     else no awaiting endpoint
         Server->>Server: push weakSocket to g_acceptingSockets
@@ -56,19 +56,18 @@ sequenceDiagram
     Server->>Pattern: lockedPattern->InitiateIo()  (loop until None)
     Pattern-->>Server: returns ctsTask (Send / Recv etc.)
     Server->>Server: ScheduleIo(weakSocket, task)
-    Server->>Connected: find connected socket by remoteAddr and call ScheduleTask(task)
+    Server->>Connected: find connected socket by remoteAddr and call QueueTask(task)
 
     Connected->>Connected: schedule or immediate MediaStreamTimerCallback
-      Connected->>Connected: invoke PerformIo() (previously ConnectedSocketIo)
+      Connected->>Connected: invoke PerformIo() (owns send logic)
       Connected->>Connected: WSASendTo(...) (synchronous sends performed inside `PerformIo`)
-    Server->>Connected: WSASendTo(...) (synchronous sends)  %% inside ConnectedSocketIo
 
     Connected->>Pattern: lockedPattern->CompleteIo(bytes, error)
     Pattern-->>Connected: CompleteIo result (ctsIoStatus)
     loop while ContinueIo
         Connected->>Pattern: InitiateIo()
         Pattern-->>Connected: returns next ctsTask
-        Connected->>Connected: ScheduleTask or run immediate send
+        Connected->>Connected: QueueTask or run immediate send
     end
 
     alt CompletedIo
@@ -84,21 +83,27 @@ sequenceDiagram
 
 **Notes / observations**
 - **Who owns what:** `ctsMediaStreamServerImpl` manages global vectors:
-  - `g_listeningSockets`, `g_connectedSockets`, `g_acceptingSockets`, `g_awaitingEndpoints`.
-  - `ctsMediaStreamServerListeningSocket` performs low-level recv and directly calls
-    `ctsMediaStreamServerImpl::Start(...)` when it parses a START message.
+    - `g_listeningSockets`, `g_connectedSockets`, `g_acceptingSockets`, `g_awaitingEndpoints`.
+    - `ctsMediaStreamServerListeningSocket` performs low-level recv and forwards raw packets
+      to the server via a callback (`m_packetCallback`). The server implements
+      `OnPacketReceived(...)` which parses packets and invokes `Start(...)` for START messages.
+    - `g_connectedSockets` is now an `std::unordered_map` keyed by `ctl::ctSockaddr` for O(1)
+      lookups instead of a vector scan.
   - `ctsMediaStreamServerConnectedSocket` owns per-connection timers and scheduling.
 
- **Direct coupling points (before refactor / remaining):**
- - The listening socket still directly invokes the static `Server::Start(...)` API.
- - The connected socket no longer depends on a server-supplied `ConnectedSocketIo` functor —
-   its send logic is self-contained in `ctsMediaStreamServerConnectedSocket::PerformIo()`.
- - ServerImpl still holds and mutates the global connection vectors protected by a single lock,
-   making the server the central coordinator and a hotspot for coupling.
+**Direct coupling points (after refactor / remaining):**
+- The listening socket is protocol-agnostic and forwards raw datagrams via an injected
+  callback (`m_packetCallback`) — parsing and decision logic now live in `Server::OnPacketReceived`.
+- The connected socket no longer depends on a server-supplied `ConnectedSocketIo` functor —
+  its send logic is self-contained in `ctsMediaStreamServerConnectedSocket::PerformIo()`.
+- `ServerImpl` still holds and mutates the global connection containers (now including an
+  unordered_map for `g_connectedSockets`) protected by a single lock, making the server
+  the central coordinator and potential contention hotspot.
 
 **Suggestions to reduce coupling**
-- Introduce interfaces/events: make `ListeningSocket` emit a "StartReceived" event (interface)
-  instead of calling `Server::Start(...)` directly. Inject a `IStartHandler` into listeners.
+- Introduce interfaces/events: the current change injects a callback; consider defining a small
+  interface (e.g., `IListenerHandler::OnPacketReceived(...)`) if you prefer compile-time
+  decoupling over `std::function`.
 - Replace global vectors with an injected ConnectionManager (interface) to avoid static globals
   and allow unit-testable, pluggable implementations.
  - Use a factory or builder to create `ConnectedSocket` instances (inject `IConnectedSocketFactory`),

@@ -56,29 +56,6 @@ private:
     int64_t m_sequenceNumber = 0LL;
     const int64_t m_connectTime = 0LL;
 
-public:
-    ctsMediaStreamServerConnectedSocket(
-        std::weak_ptr<ctsSocket> weakSocket,
-        SOCKET sendingSocket,
-        ctl::ctSockaddr remoteAddr);
-
-    ~ctsMediaStreamServerConnectedSocket() noexcept;
-
-    const ctl::ctSockaddr& GetRemoteAddress() const noexcept
-    {
-        return m_remoteAddr;
-    }
-
-    SOCKET GetSendingSocket() const noexcept
-    {
-        return m_sendingSocket;
-    }
-
-    int64_t GetStartTime() const noexcept
-    {
-        return m_connectTime;
-    }
-
     ctsTask GetNextTask() const noexcept
     {
         const auto lock = m_objectGuard.lock();
@@ -90,9 +67,41 @@ public:
         return InterlockedIncrement64(&m_sequenceNumber);
     }
 
-    void ScheduleTask(const ctsTask& task) noexcept;
+    SOCKET GetSendingSocket() const noexcept
+    {
+        return m_sendingSocket;
+    }
+
+    const ctl::ctSockaddr& GetRemoteAddress() const noexcept
+    {
+        return m_remoteAddr;
+    }
+
+
+    int64_t GetStartTime() const noexcept
+    {
+        return m_connectTime;
+    }
 
     void CompleteState(uint32_t errorCode) const noexcept;
+
+public:
+    ctsMediaStreamServerConnectedSocket(
+        std::weak_ptr<ctsSocket> weakSocket,
+        SOCKET sendingSocket,
+        ctl::ctSockaddr remoteAddr);
+
+    ~ctsMediaStreamServerConnectedSocket() noexcept;
+
+    // Enqueue a task produced by the IO pattern for this connection.
+    // This sets the next task and either posts an immediate send or schedules
+    // the threadpool timer as appropriate.
+    void QueueTask(const ctsTask& task) noexcept;
+
+    // Start processing the currently queued task (no parameters).
+    // Useful when the connected socket already has m_nextTask set and the
+    // server wants the connected socket to perform scheduling itself.
+    void Start() noexcept;
 
     // non-copyable
     ctsMediaStreamServerConnectedSocket(const ctsMediaStreamServerConnectedSocket&) = delete;

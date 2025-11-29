@@ -12,10 +12,16 @@ class ctsMediaStreamClientConnectedSocket
 {
 public:
     explicit ctsMediaStreamClientConnectedSocket(const std::shared_ptr<ctsSocket>& socket) noexcept;
+    ~ctsMediaStreamClientConnectedSocket() noexcept = default;
 
     // Start processing IO on the connected socket using IOCP
     void Start() noexcept;
 
+    // non-copyable
+    ctsMediaStreamClientConnectedSocket(const ctsMediaStreamClientConnectedSocket&) = delete;
+    ctsMediaStreamClientConnectedSocket& operator=(const ctsMediaStreamClientConnectedSocket&) = delete;
+    ctsMediaStreamClientConnectedSocket(ctsMediaStreamClientConnectedSocket&&) = delete;
+    ctsMediaStreamClientConnectedSocket& operator=(ctsMediaStreamClientConnectedSocket&&) = delete;
 private:
     std::shared_ptr<ctsSocket> m_socket;
 
