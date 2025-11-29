@@ -436,6 +436,32 @@ namespace ctsTraffic
             }
         }
 
+        // Notified by listening sockets when any datagram is received.
+        // The server implementation is responsible for parsing the packet contents
+        // and taking appropriate action (for example, calling `Start` when a START
+        // message is received).
+        void OnPacketReceived(SOCKET socket, const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& remoteAddr, const char* buffer, uint32_t bufferLength)
+        {
+            try
+            {
+                const ctsMediaStreamMessage message = ctsMediaStreamMessage::Extract(buffer, bufferLength);
+                switch (message.m_action)
+                {
+                    case MediaStreamAction::START:
+                        PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer - parsed START from %ws\n", remoteAddr.writeCompleteAddress().c_str());
+                        Start(socket, localAddr, remoteAddr);
+                        break;
+
+                    default:
+                        ctsConfig::PrintErrorInfo(L"ctsMediaStreamServer::OnPacketReceived - unexpected action %d from %ws", static_cast<int>(message.m_action), remoteAddr.writeCompleteAddress().c_str());
+                }
+            }
+            catch (...)
+            {
+                ctsConfig::PrintThrownException();
+            }
+        }
+
         // Processes the incoming START request from the client
         // - if we have a waiting ctsSocket to accept it, will add it to connected_sockets
         // - else we'll queue it to awaiting_endpoints

@@ -54,6 +54,12 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
         // - else we'll queue it to awaiting_endpoints
         void Start(SOCKET socket, const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& targetAddr);
 
+        // Notified by listening sockets when any datagram is received.
+        // The server implementation is responsible for parsing the packet contents
+        // and taking appropriate action (for example, calling `Start` when a START
+        // message is received).
+        void OnPacketReceived(SOCKET socket, const ctl::ctSockaddr& localAddr, const ctl::ctSockaddr& remoteAddr, const char* buffer, uint32_t bufferLength);
+
         // Information about a listening socket (used for final reporting)
         struct ListenerInfo
         {

@@ -201,25 +201,18 @@ void ctsMediaStreamServerListeningSocket::RecvCompletion(OVERLAPPED* pOverlapped
             else
             {
                 m_priorFailureWasConnectionReset = false;
-                const ctsMediaStreamMessage message(ctsMediaStreamMessage::Extract(m_recvBuffer.data(), bytesReceived));
-                switch (message.m_action)
-                {
-                    case MediaStreamAction::START:
-                        PRINT_DEBUG_INFO(
-                            L"\t\tctsMediaStreamServer - processing START from %ws\n",
-                            m_remoteAddr.writeCompleteAddress().c_str());
-                        IncrementConnectionCount();
-#ifndef TESTING_IGNORE_START
-                    // Cannot be holding the object_guard when calling into any pimpl-> methods
-                        pimplOperation = [this] {
-                            ctsMediaStreamServerImpl::Start(m_listeningSocket.get(), m_listeningAddr, m_remoteAddr);
-                        };
-#endif
-                        break;
+                // Forward the raw packet to the server implementation and let it parse/handle contents
+                const char* buf = m_recvBuffer.data();
+                const uint32_t len = static_cast<uint32_t>(bytesReceived);
+                // capture local variables for use outside the lock
+                const SOCKET listeningSocket = m_listeningSocket.get();
+                const auto localAddr = m_listeningAddr;
 
-                    default: // NOLINT(clang-diagnostic-covered-switch-default)
-                        FAIL_FAST_MSG("ctsMediaStreamServer - received an unexpected Action: %d (%p)\n", message.m_action, m_recvBuffer.data());
-                }
+                IncrementConnectionCount();
+
+                pimplOperation = [listeningSocket, localAddr, remote = m_remoteAddr, buf, len]() {
+                    ctsMediaStreamServerImpl::OnPacketReceived(listeningSocket, localAddr, remote, buf, len);
+                };
             }
         }
 
