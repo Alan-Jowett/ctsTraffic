@@ -546,6 +546,12 @@ namespace ctsTraffic::ctsConfig
 		}
 	}
 
+	static bool IsMediaStreamIoPattern()
+	{
+		return (ctsConfig::IoPatternType::MediaStreamPull == g_configSettings->IoPattern) ||
+			(ctsConfig::IoPatternType::MediaStreamPush == g_configSettings->IoPattern);
+	}
+
 	//
 	// Parses for the connect function to use
 	//
@@ -594,7 +600,7 @@ namespace ctsTraffic::ctsConfig
 		}
 		else
 		{
-			if (g_configSettings->IoPattern != IoPatternType::MediaStreamPull)
+			if (!IsMediaStreamIoPattern())
 			{
 				g_configSettings->ConnectFunction = ctsConnectEx;
 				g_connectFunctionName = L"ConnectEx";
@@ -606,7 +612,7 @@ namespace ctsTraffic::ctsConfig
 			}
 		}
 
-		if (IoPatternType::MediaStreamPull == g_configSettings->IoPattern && connectSpecified)
+		if (IsMediaStreamIoPattern() && connectSpecified)
 		{
 			throw invalid_argument("-conn (MediaStream has its own internal connection handler)");
 		}
@@ -654,7 +660,7 @@ namespace ctsTraffic::ctsConfig
 		}
 		else if (!g_configSettings->ListenAddresses.empty())
 		{
-			if (IoPatternType::MediaStreamPull != g_configSettings->IoPattern)
+			if (!IsMediaStreamIoPattern())
 			{
 				// only default an Accept function if listening
 				g_configSettings->AcceptFunction = ctsAcceptEx;
@@ -995,26 +1001,44 @@ namespace ctsTraffic::ctsConfig
 			});
 		if (foundArgument != end(args))
 		{
-			if (g_configSettings->Protocol != ProtocolType::TCP)
-			{
-				throw invalid_argument("-pattern (only applicable to TCP)");
-			}
 
 			const auto* const value = ParseArgument(*foundArgument, L"-pattern");
 			if (ctString::iordinal_equals(L"push", value))
 			{
-				g_configSettings->IoPattern = IoPatternType::Push;
+				if (g_configSettings->Protocol == ProtocolType::TCP)
+				{
+					g_configSettings->IoPattern = IoPatternType::Push;
+				}
+				else
+				{
+					g_configSettings->IoPattern = IoPatternType::MediaStreamPush;
+				}
 			}
 			else if (ctString::iordinal_equals(L"pull", value))
 			{
-				g_configSettings->IoPattern = IoPatternType::Pull;
+				if (g_configSettings->Protocol == ProtocolType::TCP)
+				{
+					g_configSettings->IoPattern = IoPatternType::Pull;
+				}
+				else
+				{
+					g_configSettings->IoPattern = IoPatternType::MediaStreamPull;
+				}
 			}
 			else if (ctString::iordinal_equals(L"pushpull", value))
 			{
+			if (g_configSettings->Protocol != ProtocolType::TCP)
+			{
+				throw invalid_argument("-pattern (only applicable to TCP)");
+			}
 				g_configSettings->IoPattern = IoPatternType::PushPull;
 			}
 			else if (ctString::iordinal_equals(L"flood", value) || ctString::iordinal_equals(L"duplex", value))
 			{
+			if (g_configSettings->Protocol != ProtocolType::TCP)
+			{
+				throw invalid_argument("-pattern (only applicable to TCP)");
+			}
 				// the old name for this was 'flood'
 				g_configSettings->IoPattern = IoPatternType::Duplex;
 			}
@@ -3254,7 +3278,7 @@ namespace ctsTraffic::ctsConfig
 		ParseForThreadpool(args);
 		// validate protocol & pattern combinations
 		if (ProtocolType::UDP == g_configSettings->Protocol &&
-			IoPatternType::MediaStreamPull != g_configSettings->IoPattern)
+			!IsMediaStreamIoPattern())
 		{
 			throw invalid_argument("UDP only supports the MediaStream IO Pattern");
 		}
@@ -5292,6 +5316,9 @@ namespace ctsTraffic::ctsConfig
 			break;
 		case IoPatternType::MediaStreamPull:
 			settingString.append(L"MediaStream <UDP controlled stream from server to client>\n");
+			break;
+		case IoPatternType::MediaStreamPush:
+			settingString.append(L"MediaStream <UDP controlled stream from client to server>\n");
 			break;
 
 		case IoPatternType::NoIoSet:
