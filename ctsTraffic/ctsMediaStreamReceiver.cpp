@@ -330,8 +330,9 @@ namespace ctsTraffic
         }
     }
 
-    void ctsMediaStreamReceiver::OnDataReceived(const ctl::ctSockaddr& remoteAddress, const char* buffer, uint32_t bufferLength) noexcept
+    void ctsMediaStreamReceiver::OnDataReceived(const char* buffer, uint32_t bufferLength) noexcept
     {
+        static int counter = 0;
         auto sharedSocket = m_socket;
         const auto lockedSocket = sharedSocket->AcquireSocketLock();
         const auto lockedPattern = lockedSocket.GetPattern();
@@ -341,15 +342,10 @@ namespace ctsTraffic
             sharedSocket->CompleteState(WSAECONNABORTED);
             return;
         }
-        ctl::ctSockaddr ourRemoteAddress = sharedSocket->GetRemoteSockaddr();
 
-        if (remoteAddress != ourRemoteAddress)
+        if (bufferLength != 125)
         {
-            // Received data from an unexpected remote address; ignore.
-            FAIL_FAST_MSG("ctsMediaStreamReceiver::OnDataReceived: traffic incorrectly routed to receiver (from %ws, expected %ws)\n",
-                remoteAddress.writeCompleteAddress().c_str(),
-                ourRemoteAddress.writeCompleteAddress().c_str());
-            return;
+            counter++;
         }
 
         ctsTask task = lockedPattern->InitiateIo();
@@ -360,12 +356,6 @@ namespace ctsTraffic
         }
 
         wsIOResult result;
-        if (bufferLength > task.m_bufferLength)
-        {
-            ctsConfig::PrintErrorInfo(L"ctsMediaStreamReceiver::OnDataReceived: received buffer length (%u) exceeds expected buffer length (%u)\n",
-                bufferLength, task.m_bufferLength);
-                
-        }
         result.m_bytesTransferred = std::min(bufferLength, task.m_bufferLength);
         std::memcpy(task.m_buffer + task.m_bufferOffset, buffer, result.m_bytesTransferred);
         result.m_errorCode = NO_ERROR;

@@ -23,7 +23,7 @@ public:
     ctsMediaStreamReceiver(ctsMediaStreamReceiver&&) = delete;
     ctsMediaStreamReceiver& operator=(ctsMediaStreamReceiver&&) = delete;
 
-    void OnDataReceived(const ctl::ctSockaddr& remoteAddress, const char* buffer, uint32_t bufferLength) noexcept;
+    void OnDataReceived(const char* buffer, uint32_t bufferLength) noexcept;
 
 private:
     std::shared_ptr<ctsSocket> m_socket;

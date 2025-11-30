@@ -252,6 +252,7 @@ ctsIoPatternError ctsIoPatternMediaStreamReceiver::CompleteTaskBackToPattern(con
                 if (static_cast<uint32_t>(receivedSequenceNumber) == m_finalFrame)
                 {
                     EndStatistics();
+                    return ctsIoPatternError::SuccessfullyCompleted;
                 }
             }
             else

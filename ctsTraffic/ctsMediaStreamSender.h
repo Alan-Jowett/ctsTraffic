@@ -106,9 +106,8 @@ public:
     // server from protocol internals.
     void Start() noexcept;
 
-    void OnDataReceived(const ctl::ctSockaddr& remoteAddress, const char* buffer, uint32_t bufferLength) noexcept {
+    void OnDataReceived(const char* buffer, uint32_t bufferLength) noexcept {
         // Sender does not receive data; ignore.
-        (void)remoteAddress;
         (void)buffer;
         (void)bufferLength;
     }

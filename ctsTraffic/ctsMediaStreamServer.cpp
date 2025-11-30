@@ -427,7 +427,7 @@ namespace ctsTraffic
                     {
                         if (arg)
                         {
-                            arg->OnDataReceived(remoteAddr, buffer, bufferLength);
+                            arg->OnDataReceived(buffer, bufferLength);
                         }
                     }, connectedSocket);
                     return;
