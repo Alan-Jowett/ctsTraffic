@@ -349,54 +349,55 @@ namespace ctsTraffic
 
                     const ctl::ctSockaddr waitingKey = waitingEndpoint->second;
 
-                    
+
                     const auto existingSocket = FindConnectedSocket(waitingKey);
-                    if (std::visit([&](auto &&arg) -> bool
-                                   {
-                        if (arg)
+                    if (std::visit([&](auto&& arg) -> bool
                         {
-                            ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
-                            PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::accept_socket - socket with remote address %ws asked to be Started but was already established",
-                                waitingEndpoint->second.writeCompleteAddress().c_str());
-                            // return early if this was a duplicate request: this can happen if there is latency or drops
-                            // between the client and server as they attempt to negotiating starting a new stream
-                            return true;
-                        }
-                        return false; }, existingSocket))
+                            if (arg)
+                            {
+                                ctsConfig::g_configSettings->UdpStatusDetails.m_duplicateFrames.Increment();
+                                PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer::accept_socket - socket with remote address %ws asked to be Started but was already established",
+                                    waitingEndpoint->second.writeCompleteAddress().c_str());
+                                // return early if this was a duplicate request: this can happen if there is latency or drops
+                                // between the client and server as they attempt to negotiating starting a new stream
+                                return true;
+                            }
+                            return false; }, existingSocket))
                     {
                         return;
                     }
                     {
-                    auto lockMap = g_socketMapGuard.lock_exclusive();
-                    auto mediaStreamer = AddMediaStreamer(
-                        weakSocket,
-                        waitingEndpoint->first,
-                        waitingEndpoint->second,
-                        sharedSocket);
+                        auto lockMap = g_socketMapGuard.lock_exclusive();
+                        auto mediaStreamer = AddMediaStreamer(
+                            weakSocket,
+                            waitingEndpoint->first,
+                            waitingEndpoint->second,
+                            sharedSocket);
+
+                        // now complete the ctsSocket 'Create' request
+                        const auto foundSocket = std::ranges::find_if(
+                            g_listeningSockets,
+                            [&waitingEndpoint](const std::unique_ptr<ctsMediaStreamServerListeningSocket>& listener) noexcept {
+                                return listener->GetSocket() == waitingEndpoint->first;
+                            });
+                        FAIL_FAST_IF_MSG(
+                            foundSocket == g_listeningSockets.end(),
+                            "Could not find the socket (%Iu) in the waiting_endpoint from our listening sockets (%p)\n",
+                            waitingEndpoint->first, &g_listeningSockets);
+
+
+                        ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), waitingEndpoint->second);
+
+                        sharedSocket->SetLocalSockaddr((*foundSocket)->GetListeningAddress());
+                        sharedSocket->SetRemoteSockaddr(waitingEndpoint->second);
+                        ctsConfig::PrintNewConnection(sharedSocket->GetLocalSockaddr(), sharedSocket->GetRemoteSockaddr());
+
+                        sharedSocket->CompleteState(NO_ERROR);
+                        // if added to connected_sockets, can then safely remove it from the waiting endpoint
+                        g_awaitingEndpoints.pop_back();
                     }
 
-                    // now complete the ctsSocket 'Create' request
-                    const auto foundSocket = std::ranges::find_if(
-                        g_listeningSockets,
-                        [&waitingEndpoint](const std::unique_ptr<ctsMediaStreamServerListeningSocket>& listener) noexcept {
-                            return listener->GetSocket() == waitingEndpoint->first;
-                        });
-                    FAIL_FAST_IF_MSG(
-                        foundSocket == g_listeningSockets.end(),
-                        "Could not find the socket (%Iu) in the waiting_endpoint from our listening sockets (%p)\n",
-                        waitingEndpoint->first, &g_listeningSockets);
 
-
-                ctsConfig::SetPostConnectOptions(sharedSocket->AcquireSocketLock().GetSocket(), waitingEndpoint->second);
-
-                sharedSocket->SetLocalSockaddr((*foundSocket)->GetListeningAddress());
-                sharedSocket->SetRemoteSockaddr(waitingEndpoint->second);
-                sharedSocket->CompleteState(NO_ERROR);
-
-                    ctsConfig::PrintNewConnection(sharedSocket->GetLocalSockaddr(), sharedSocket->GetRemoteSockaddr());
-                    // if added to connected_sockets, can then safely remove it from the waiting endpoint
-                    g_awaitingEndpoints.pop_back();
-                    
                 }
             }
         }
