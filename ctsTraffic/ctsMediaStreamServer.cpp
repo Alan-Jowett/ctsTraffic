@@ -394,10 +394,6 @@ namespace ctsTraffic
                     // if added to connected_sockets, can then safely remove it from the waiting endpoint
                     g_awaitingEndpoints.pop_back();
                     
-                    std::visit([&](auto&& arg)
-                    {
-                        arg->Start();
-                    }, mediaStreamer);
                 }
             }
         }
@@ -418,8 +414,14 @@ namespace ctsTraffic
         {
             try
             {
-                const ctsMediaStreamMessage message = ctsMediaStreamMessage::Extract(buffer, bufferLength);
-                switch (message.m_action)
+                const auto message = ctsMediaStreamMessage::Extract(buffer, bufferLength);
+                // Data packet - for now drop them on the floor.
+                if (!message.has_value())
+                {
+                    ctsConfig::PrintErrorInfo(L"ctsMediaStreamServer::OnPacketReceived - received data packet from %ws", remoteAddr.writeCompleteAddress().c_str());
+                    return;
+                }
+                switch (message->m_action)
                 {
                     case MediaStreamAction::START:
                         PRINT_DEBUG_INFO(L"\t\tctsMediaStreamServer - parsed START from %ws\n", remoteAddr.writeCompleteAddress().c_str());
@@ -427,7 +429,7 @@ namespace ctsTraffic
                         break;
 
                     default:
-                        ctsConfig::PrintErrorInfo(L"ctsMediaStreamServer::OnPacketReceived - unexpected action %d from %ws", static_cast<int>(message.m_action), remoteAddr.writeCompleteAddress().c_str());
+                        ctsConfig::PrintErrorInfo(L"ctsMediaStreamServer::OnPacketReceived - unexpected action %d from %ws", static_cast<int>(message->m_action), remoteAddr.writeCompleteAddress().c_str());
                 }
             }
             catch (...)
@@ -501,10 +503,6 @@ namespace ctsTraffic
                 sharedInstance->CompleteState(NO_ERROR);
 
                     ctsConfig::PrintNewConnection(localAddr, targetAddr);
-                    std::visit([&](auto&& arg)
-                    {
-                        arg->Start();
-                    }, mediaStreamer);
 
                     break;
                 }
