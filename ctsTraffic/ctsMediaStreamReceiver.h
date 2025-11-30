@@ -11,7 +11,7 @@ namespace ctsTraffic
 class ctsMediaStreamReceiver
 {
 public:
-    explicit ctsMediaStreamReceiver(const std::shared_ptr<ctsSocket>& socket) noexcept;
+    explicit ctsMediaStreamReceiver(const std::shared_ptr<ctsSocket>& socket, bool passiveReceive = false) noexcept;
     ~ctsMediaStreamReceiver() noexcept = default;
 
     // Start processing IO on the connected socket using IOCP
@@ -22,8 +22,13 @@ public:
     ctsMediaStreamReceiver& operator=(const ctsMediaStreamReceiver&) = delete;
     ctsMediaStreamReceiver(ctsMediaStreamReceiver&&) = delete;
     ctsMediaStreamReceiver& operator=(ctsMediaStreamReceiver&&) = delete;
+
+    void OnDataReceived(const ctl::ctSockaddr& remoteAddress, const char* buffer, uint32_t bufferLength) noexcept;
+
 private:
     std::shared_ptr<ctsSocket> m_socket;
+
+    bool m_passiveReceive = false;
 
     // internal helpers copied from former ctsMediaStreamClient implementation
     struct IoImplStatus

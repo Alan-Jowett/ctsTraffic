@@ -90,6 +90,7 @@ private:
     // the threadpool timer as appropriate.
     void QueueTask(const ctsTask& task) noexcept;
 
+
 public:
     ctsMediaStreamSender(
         std::weak_ptr<ctsSocket> weakSocket,
@@ -104,6 +105,13 @@ public:
     // tasks. This moves InitiateIo into the connected socket to decouple the
     // server from protocol internals.
     void Start() noexcept;
+
+    void OnDataReceived(const ctl::ctSockaddr& remoteAddress, const char* buffer, uint32_t bufferLength) noexcept {
+        // Sender does not receive data; ignore.
+        (void)remoteAddress;
+        (void)buffer;
+        (void)bufferLength;
+    }
 
     // non-copyable
     ctsMediaStreamSender(const ctsMediaStreamSender&) = delete;

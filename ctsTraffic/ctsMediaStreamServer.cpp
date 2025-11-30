@@ -109,8 +109,9 @@ namespace ctsTraffic
         static std::vector<std::unique_ptr<ctsMediaStreamServerListeningSocket>> g_listeningSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         static wil::critical_section g_socketVectorGuard{ ctsConfig::ctsConfigSettings::c_CriticalSectionSpinlock }; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
+        static wil::srwlock g_socketMapGuard; // NOLINT(cppcoreguidelines-interfaces-global-init, clang-diagnostic-exit-time-destructors)
 
-        _Guarded_by_(g_socketVectorGuard) static std::unordered_map<ctl::ctSockaddr, mediaStreamerPtr> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
+        _Guarded_by_(g_socketMapGuard) static std::unordered_map<ctl::ctSockaddr, mediaStreamerPtr> g_connectedSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
 
         // weak_ptr<> to ctsSocket objects ready to accept a connection
         _Guarded_by_(g_socketVectorGuard) static std::vector<std::weak_ptr<ctsSocket>> g_acceptingSockets; // NOLINT(clang-diagnostic-exit-time-destructors)
@@ -317,7 +318,7 @@ namespace ctsTraffic
 
         mediaStreamerPtr FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept
         {
-            const auto lockConnectedObject = g_socketVectorGuard.lock();
+            const auto lockConnectedObject = g_socketMapGuard.lock_shared();
             const auto foundSocket = g_connectedSockets.find(remoteAddr);
             if (foundSocket == g_connectedSockets.end())
             {
@@ -365,12 +366,14 @@ namespace ctsTraffic
                     {
                         return;
                     }
-
+                    {
+                    auto lockMap = g_socketMapGuard.lock_exclusive();
                     auto mediaStreamer = AddMediaStreamer(
                         weakSocket,
                         waitingEndpoint->first,
                         waitingEndpoint->second,
                         sharedSocket);
+                    }
 
                     // now complete the ctsSocket 'Create' request
                     const auto foundSocket = std::ranges::find_if(
@@ -402,7 +405,7 @@ namespace ctsTraffic
         // - remove_socket takes the remote address to find the socket
         void RemoveSocket(const ctl::ctSockaddr& targetAddr)
         {
-            const auto lockConnectedObject = g_socketVectorGuard.lock();
+            const auto lockConnectedObject = g_socketMapGuard.lock_exclusive();
             g_connectedSockets.erase(targetAddr);
         }
 
@@ -418,7 +421,15 @@ namespace ctsTraffic
                 // Data packet - for now drop them on the floor.
                 if (!message.has_value())
                 {
-                    ctsConfig::PrintErrorInfo(L"ctsMediaStreamServer::OnPacketReceived - received data packet from %ws", remoteAddr.writeCompleteAddress().c_str());
+                    // Find the connected socket and pass it along for processing.
+                    auto connectedSocket = FindConnectedSocket(remoteAddr);
+                    std::visit([&](auto&& arg)
+                    {
+                        if (arg)
+                        {
+                            arg->OnDataReceived(remoteAddr, buffer, bufferLength);
+                        }
+                    }, connectedSocket);
                     return;
                 }
                 switch (message->m_action)
@@ -541,7 +552,7 @@ namespace ctsTraffic
                 auto [foundSocket, inserted] =
                 g_connectedSockets.emplace(
                     remoteAddr,
-                    std::make_shared<ctsMediaStreamReceiver>(sharedSocket));
+                    std::make_shared<ctsMediaStreamReceiver>(sharedSocket, true));
                 PRINT_DEBUG_INFO(L"\t\tctsMediaStreamReceiver::start - socket with remote address %ws added to connected_sockets",
                     remoteAddr.writeCompleteAddress().c_str());
                 return foundSocket->second;

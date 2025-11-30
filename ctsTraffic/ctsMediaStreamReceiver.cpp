@@ -23,13 +23,19 @@ Implementation of ctsMediaStreamReceiver
 
 namespace ctsTraffic
 {
-    ctsMediaStreamReceiver::ctsMediaStreamReceiver(const std::shared_ptr<ctsSocket>& socket) noexcept
-        : m_socket(socket)
+    ctsMediaStreamReceiver::ctsMediaStreamReceiver(const std::shared_ptr<ctsSocket>& socket, bool passiveReceive) noexcept
+        : m_socket(socket), m_passiveReceive(passiveReceive)
     {
     }
 
     void ctsMediaStreamReceiver::Start() noexcept
     {
+        // If in passive receive mode, do not start IO processing.
+        if (m_passiveReceive)
+        {
+            return;
+        }
+
         const auto sharedSocket = m_socket;
         if (!sharedSocket)
         {
@@ -323,5 +329,68 @@ namespace ctsTraffic
             sharedSocket->CompleteState(gle);
         }
     }
+
+    void ctsMediaStreamReceiver::OnDataReceived(const ctl::ctSockaddr& remoteAddress, const char* buffer, uint32_t bufferLength) noexcept
+    {
+        auto sharedSocket = m_socket;
+        const auto lockedSocket = sharedSocket->AcquireSocketLock();
+        const auto lockedPattern = lockedSocket.GetPattern();
+        if (!lockedPattern)
+        {
+            sharedSocket->DecrementIo();
+            sharedSocket->CompleteState(WSAECONNABORTED);
+            return;
+        }
+        ctl::ctSockaddr ourRemoteAddress = sharedSocket->GetRemoteSockaddr();
+
+        if (remoteAddress != ourRemoteAddress)
+        {
+            // Received data from an unexpected remote address; ignore.
+            FAIL_FAST_MSG("ctsMediaStreamReceiver::OnDataReceived: traffic incorrectly routed to receiver (from %ws, expected %ws)\n",
+                remoteAddress.writeCompleteAddress().c_str(),
+                ourRemoteAddress.writeCompleteAddress().c_str());
+            return;
+        }
+
+        ctsTask task = lockedPattern->InitiateIo();
+
+        if (task.m_ioAction != ctsTaskAction::Recv)
+        {
+            return;
+        }
+
+        wsIOResult result;
+        if (bufferLength > task.m_bufferLength)
+        {
+            ctsConfig::PrintErrorInfo(L"ctsMediaStreamReceiver::OnDataReceived: received buffer length (%u) exceeds expected buffer length (%u)\n",
+                bufferLength, task.m_bufferLength);
+                
+        }
+        result.m_bytesTransferred = std::min(bufferLength, task.m_bufferLength);
+        std::memcpy(task.m_buffer + task.m_bufferOffset, buffer, result.m_bytesTransferred);
+        result.m_errorCode = NO_ERROR;
+
+        switch (const auto protocolStatus = lockedPattern->CompleteIo(
+            task, result.m_bytesTransferred, result.m_errorCode))
+        {
+        case ctsIoStatus::ContinueIo:
+            break;
+
+        case ctsIoStatus::CompletedIo:
+            sharedSocket->CloseSocket();
+            sharedSocket->CompleteState(NO_ERROR);
+            break;
+
+        case ctsIoStatus::FailedIo:
+            ctsConfig::PrintErrorIfFailed("OnDataReceived", result.m_errorCode);
+            sharedSocket->CloseSocket();
+            sharedSocket->CompleteState(lockedPattern->GetLastPatternError());
+            break;
+
+        default:
+            FAIL_FAST_MSG("ctsMediaStreamReceiver::IoImpl: unknown ctsSocket::IOStatus - %d\n", protocolStatus);
+        }
+    }
+
 
 } // namespace ctsTraffic
