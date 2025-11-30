@@ -99,6 +99,9 @@
     <ClCompile Include="ctsConnectByName.cpp">
       <Filter>TCPFunctions</Filter>
     </ClCompile>
+    <ClCompile Include="ctsMediaStreamReceiver.cpp">
+      <Filter>MediaStreaming</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
@@ -235,6 +238,9 @@
     <ClInclude Include="..\ctl\ctThreadIocp_shard.hpp">
       <Filter>ctl</Filter>
     </ClInclude>
+    <ClInclude Include="ctsMediaStreamReceiver.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\TestScripts\ctsTraffic_acceptance_test.cmd">
@@ -254,5 +260,9 @@
     <Manifest Include="ctsTraffic.exe.manifest">
       <Filter>Resource Files</Filter>
     </Manifest>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
   </ItemGroup>
 </Project>

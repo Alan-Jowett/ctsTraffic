@@ -125,7 +125,7 @@ namespace ctsTraffic
         static INIT_ONCE g_initImpl = INIT_ONCE_STATIC_INIT;
 
         _Requires_lock_held_(g_socketVectorGuard)
-        void AddMediaStreamer(
+        mediaStreamerPtr AddMediaStreamer(
             std::weak_ptr<ctsSocket> weakSocket,
             SOCKET sendingSocket,
             const ctl::ctSockaddr& remoteAddr, 
@@ -366,7 +366,7 @@ namespace ctsTraffic
                         return;
                     }
 
-                    AddMediaStreamer(
+                    auto mediaStreamer = AddMediaStreamer(
                         weakSocket,
                         waitingEndpoint->first,
                         waitingEndpoint->second,
@@ -393,6 +393,11 @@ namespace ctsTraffic
                     ctsConfig::PrintNewConnection(sharedSocket->GetLocalSockaddr(), sharedSocket->GetRemoteSockaddr());
                     // if added to connected_sockets, can then safely remove it from the waiting endpoint
                     g_awaitingEndpoints.pop_back();
+                    
+                    std::visit([&](auto&& arg)
+                    {
+                        arg->Start();
+                    }, mediaStreamer);
                 }
             }
         }
@@ -478,7 +483,7 @@ namespace ctsTraffic
                 auto weakInstance = *g_acceptingSockets.rbegin();
                 if (const auto sharedInstance = weakInstance.lock())
                 {
-                    AddMediaStreamer(
+                    auto mediaStreamer = AddMediaStreamer(
                         weakInstance,
                         socket,
                         targetAddr,
@@ -496,6 +501,11 @@ namespace ctsTraffic
                 sharedInstance->CompleteState(NO_ERROR);
 
                     ctsConfig::PrintNewConnection(localAddr, targetAddr);
+                    std::visit([&](auto&& arg)
+                    {
+                        arg->Start();
+                    }, mediaStreamer);
+
                     break;
                 }
             }
@@ -511,7 +521,7 @@ namespace ctsTraffic
             }
         }
 
-        void AddMediaStreamer(
+        mediaStreamerPtr AddMediaStreamer(
             std::weak_ptr<ctsSocket> weakSocket,
             SOCKET sendingSocket,
             const ctl::ctSockaddr& remoteAddr, 
@@ -519,20 +529,24 @@ namespace ctsTraffic
         {
             if (ctsConfig::g_configSettings->IoPattern == ctsConfig::IoPatternType::MediaStreamPull)
             {
+                auto [foundSocket, inserted] =
                 g_connectedSockets.emplace(
                     remoteAddr,
                     std::make_shared<ctsMediaStreamSender>(weakSocket, sendingSocket, remoteAddr));
 
                 PRINT_DEBUG_INFO(L"\t\tctsMediaStreamSender::start - socket with remote address %ws added to connected_sockets",
                     remoteAddr.writeCompleteAddress().c_str());
+                return foundSocket->second;
             }
             else
             {
+                auto [foundSocket, inserted] =
                 g_connectedSockets.emplace(
                     remoteAddr,
                     std::make_shared<ctsMediaStreamReceiver>(sharedSocket));
                 PRINT_DEBUG_INFO(L"\t\tctsMediaStreamReceiver::start - socket with remote address %ws added to connected_sockets",
                     remoteAddr.writeCompleteAddress().c_str());
+                return foundSocket->second;
             }
         }
     }
