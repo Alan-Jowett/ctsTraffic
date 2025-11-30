@@ -77,7 +77,7 @@ namespace ctsTraffic { namespace ctsMediaStreamServerImpl
         std::vector<ListenerInfo> GetListenerInfos() noexcept;
 
         // Lookup a connected socket by remote address. Returns nullptr if not found.
-        mediaStreamerPtr FindConnectedSocket(const ctl::ctSockaddr& remoteAddr) noexcept;
+        mediaStreamerPtr FindMediaStreamer(const ctl::ctSockaddr& remoteAddr) noexcept;
     }
 
     // Called to 'accept' incoming connections

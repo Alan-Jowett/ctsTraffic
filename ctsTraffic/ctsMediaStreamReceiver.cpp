@@ -332,20 +332,12 @@ namespace ctsTraffic
 
     void ctsMediaStreamReceiver::OnDataReceived(const char* buffer, uint32_t bufferLength) noexcept
     {
-        static int counter = 0;
         auto sharedSocket = m_socket;
         const auto lockedSocket = sharedSocket->AcquireSocketLock();
         const auto lockedPattern = lockedSocket.GetPattern();
-        if (!lockedPattern)
+        if (!lockedPattern || m_closed)
         {
-            sharedSocket->DecrementIo();
-            sharedSocket->CompleteState(WSAECONNABORTED);
             return;
-        }
-
-        if (bufferLength != 125)
-        {
-            counter++;
         }
 
         ctsTask task = lockedPattern->InitiateIo();
@@ -369,12 +361,14 @@ namespace ctsTraffic
         case ctsIoStatus::CompletedIo:
             sharedSocket->CloseSocket();
             sharedSocket->CompleteState(NO_ERROR);
+            m_closed = true;
             break;
 
         case ctsIoStatus::FailedIo:
             ctsConfig::PrintErrorIfFailed("OnDataReceived", result.m_errorCode);
             sharedSocket->CloseSocket();
             sharedSocket->CompleteState(lockedPattern->GetLastPatternError());
+            m_closed = true;
             break;
 
         default:

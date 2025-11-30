@@ -29,6 +29,7 @@ private:
     std::shared_ptr<ctsSocket> m_socket;
 
     bool m_passiveReceive = false;
+    bool m_closed = false;
 
     // internal helpers copied from former ctsMediaStreamClient implementation
     struct IoImplStatus
