@@ -31,11 +31,6 @@ namespace ctsTraffic
     void ctsMediaStreamReceiver::Start() noexcept
     {
         // If in passive receive mode, do not start IO processing.
-        if (m_passiveReceive)
-        {
-            return;
-        }
-
         const auto sharedSocket = m_socket;
         if (!sharedSocket)
         {
@@ -50,9 +45,19 @@ namespace ctsTraffic
         }
 
         // always register our ctsIOPattern callback since it's necessary for this IO Pattern
+        // For passive mode, register a "safe" callback that ignores Recv tasks so the
+        // application remains responsible for posting receives via OnDataReceived.
+        const bool passiveContext = m_passiveReceive;
         lockedPattern->RegisterCallback(
-            [weakSocket = std::weak_ptr<ctsSocket>(sharedSocket)](const ctsTask& task) noexcept
+            [weakSocket = std::weak_ptr<ctsSocket>(sharedSocket), passiveContext](const ctsTask& task) noexcept
             {
+                // If this receiver is configured passive, ignore pattern-driven Recv tasks.
+                if (passiveContext && task.m_ioAction == ctsTaskAction::Recv)
+                {
+                    PRINT_DEBUG_INFO(L"\t\tctsMediaStreamReceiver: ignoring pattern Recv in passive mode\n");
+                    return;
+                }
+
                 const auto lambdaSharedSocket = weakSocket.lock();
                 if (!lambdaSharedSocket)
                 {
@@ -80,6 +85,11 @@ namespace ctsTraffic
                     lambdaSharedSocket->DecrementIo();
                 }
             });
+
+        if (m_passiveReceive)
+        {
+            return;
+        }
 
         sharedSocket->IncrementIo();
         IoImplStatus status = IoImpl(
