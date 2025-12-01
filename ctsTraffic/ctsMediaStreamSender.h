@@ -29,10 +29,9 @@ See the Apache Version 2.0 License for specific language governing permissions a
 
 namespace ctsTraffic
 {
-class ctsMediaStreamServerConnectedSocket;
-using ctsMediaStreamConnectedSocketIoFunctor = std::function<wsIOResult (ctsMediaStreamServerConnectedSocket*)>;
+class ctsMediaStreamSender;
 
-class ctsMediaStreamServerConnectedSocket
+class ctsMediaStreamSender
 {
 private:
     // the CS is mutable, so we can take a lock / release a lock in const methods
@@ -45,8 +44,8 @@ private:
     // used to complete the state when finished and take a shared_ptr when needing to take a reference
     const std::weak_ptr<ctsSocket> m_weakSocket;
 
-    // invoked to do actual IO on the socket
-    const ctsMediaStreamConnectedSocketIoFunctor m_ioFunctor;
+    // perform IO on the socket (previously delegated to server via ConnectedSocketIo)
+    wsIOResult PerformIo() noexcept;
 
     // sending_socket is a shared socket from the datagram server
     // that (potentially) many connected datagram sockets will send from
@@ -56,30 +55,6 @@ private:
 
     int64_t m_sequenceNumber = 0LL;
     const int64_t m_connectTime = 0LL;
-
-public:
-    ctsMediaStreamServerConnectedSocket(
-        std::weak_ptr<ctsSocket> weakSocket,
-        SOCKET sendingSocket,
-        ctl::ctSockaddr remoteAddr,
-        ctsMediaStreamConnectedSocketIoFunctor ioFunctor);
-
-    ~ctsMediaStreamServerConnectedSocket() noexcept;
-
-    const ctl::ctSockaddr& GetRemoteAddress() const noexcept
-    {
-        return m_remoteAddr;
-    }
-
-    SOCKET GetSendingSocket() const noexcept
-    {
-        return m_sendingSocket;
-    }
-
-    int64_t GetStartTime() const noexcept
-    {
-        return m_connectTime;
-    }
 
     ctsTask GetNextTask() const noexcept
     {
@@ -92,15 +67,56 @@ public:
         return InterlockedIncrement64(&m_sequenceNumber);
     }
 
-    void ScheduleTask(const ctsTask& task) noexcept;
+    SOCKET GetSendingSocket() const noexcept
+    {
+        return m_sendingSocket;
+    }
+
+    const ctl::ctSockaddr& GetRemoteAddress() const noexcept
+    {
+        return m_remoteAddr;
+    }
+
+
+    int64_t GetStartTime() const noexcept
+    {
+        return m_connectTime;
+    }
 
     void CompleteState(uint32_t errorCode) const noexcept;
 
+    // Enqueue a task produced by the IO pattern for this connection.
+    // This sets the next task and either posts an immediate send or schedules
+    // the threadpool timer as appropriate.
+    void QueueTask(const ctsTask& task) noexcept;
+
+
+public:
+    ctsMediaStreamSender(
+        std::weak_ptr<ctsSocket> weakSocket,
+        SOCKET sendingSocket,
+        const ctl::ctSockaddr& remoteAddr);
+
+    ~ctsMediaStreamSender() noexcept;
+
+
+    // Called by the server to let the connected socket acquire the socket lock,
+    // call the IO pattern's InitiateIo repeatedly, and enqueue any resulting
+    // tasks. This moves InitiateIo into the connected socket to decouple the
+    // server from protocol internals.
+    void Start() noexcept;
+
+    void OnDataReceived(const char* buffer, uint32_t bufferLength) noexcept {
+        // Sender does not receive data; ignore.
+        (void)buffer;
+        (void)bufferLength;
+    }
+
     // non-copyable
-    ctsMediaStreamServerConnectedSocket(const ctsMediaStreamServerConnectedSocket&) = delete;
-    ctsMediaStreamServerConnectedSocket& operator=(const ctsMediaStreamServerConnectedSocket&) = delete;
-    ctsMediaStreamServerConnectedSocket(ctsMediaStreamServerConnectedSocket&&) = delete;
-    ctsMediaStreamServerConnectedSocket& operator=(ctsMediaStreamServerConnectedSocket&&) = delete;
+    ctsMediaStreamSender(const ctsMediaStreamSender&) = delete;
+    ctsMediaStreamSender& operator=(const ctsMediaStreamSender&) = delete;
+    ctsMediaStreamSender(ctsMediaStreamSender&&) = delete;
+    ctsMediaStreamSender& operator=(ctsMediaStreamSender&&) = delete;
 
 private:
     static VOID CALLBACK MediaStreamTimerCallback(PTP_CALLBACK_INSTANCE, PVOID context, PTP_TIMER) noexcept;

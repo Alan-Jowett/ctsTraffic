@@ -103,7 +103,13 @@ namespace ctsTraffic
         return error;
     }
 
-    const shared_ptr<ctThreadIocp>& ctsSocket::GetIocpThreadpool()
+    void ctsSocket::SetIocpThreadpool(const shared_ptr<ctThreadIocp_base>& tpIocp) noexcept
+    {
+        const auto lock = m_lock.lock();
+        m_tpIocp = tpIocp;
+    }
+
+    const shared_ptr<ctThreadIocp_base>& ctsSocket::GetIocpThreadpool()
     {
         // use the SOCKET cs to also guard creation of this TP object
         const auto lock = m_lock.lock();
