@@ -169,7 +169,7 @@ namespace ctsTraffic
             try
             {
                 // attempt to allocate an IO thread-pool object
-                const std::shared_ptr<ctl::ctThreadIocp>& ioThreadPool(sharedSocket->GetIocpThreadpool());
+                const std::shared_ptr<ctl::ctThreadIocp_base>& ioThreadPool(sharedSocket->GetIocpThreadpool());
                 OVERLAPPED* const pOverlapped = ioThreadPool->new_request(
                     [weak_reference = std::weak_ptr(sharedSocket), nextIo](OVERLAPPED* pCallbackOverlapped) noexcept {
                         ctsSendRecvCompletionCallback(pCallbackOverlapped, weak_reference, nextIo);

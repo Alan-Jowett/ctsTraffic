@@ -363,7 +363,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\ctsTraffic\ctsMediaStreamServerConnectedSocket.cpp" />
+    <ClCompile Include="..\..\ctsTraffic\ctsMediaStreamSender.cpp" />
     <ClCompile Include="ctsMediaStreamServerConnectedSocketUnitTest.cpp" />
   </ItemGroup>
   <ItemGroup>

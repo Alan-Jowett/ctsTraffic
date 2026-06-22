@@ -22,6 +22,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 #include <Windows.h>
 #include <WinSock2.h>
 // ctl headers
+#include <ctThreadIocp_base.hpp>
 #include <ctThreadIocp.hpp>
 #include <ctSockaddr.hpp>
 // project headers
@@ -116,7 +117,9 @@ public:
     // This can fail under low-resource conditions
     // - can throw std::bad_alloc or wil::ResultException
     //
-    const std::shared_ptr<ctl::ctThreadIocp>& GetIocpThreadpool();
+    const std::shared_ptr<ctl::ctThreadIocp_base>& GetIocpThreadpool();
+
+    void SetIocpThreadpool(const std::shared_ptr<ctl::ctThreadIocp_base>& tpIocp) noexcept;
 
     //
     // Callers are expected to call this when their 'stage' is complete for this SOCKET
@@ -196,7 +199,7 @@ private:
     std::shared_ptr<ctsIoPattern> m_pattern;
 
     /// only guarded when returning to the caller
-    std::shared_ptr<ctl::ctThreadIocp> m_tpIocp;
+    std::shared_ptr<ctl::ctThreadIocp_base> m_tpIocp;
     wil::unique_threadpool_timer m_tpTimer;
     ctsTask m_timerTask{};
     std::function<void(std::weak_ptr<ctsSocket>, const ctsTask&)> m_timerCallback;

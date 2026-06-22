@@ -111,7 +111,7 @@ void ctsConnectEx(const std::weak_ptr<ctsSocket>& weakSocket) noexcept
             const ctl::ctSockaddr& targetAddress = sharedSocket->GetRemoteSockaddr();
 
             // get a new IO request from the socket's TP
-            const std::shared_ptr<ctl::ctThreadIocp>& connectIocp = sharedSocket->GetIocpThreadpool();
+            const std::shared_ptr<ctl::ctThreadIocp_base>& connectIocp = sharedSocket->GetIocpThreadpool();
 
             OVERLAPPED* const pOverlapped = connectIocp->new_request(
                 [weakSocket, targetAddress](OVERLAPPED* pCallbackOverlapped) noexcept { ctsConnectExIoCompletionCallback(pCallbackOverlapped, weakSocket, targetAddress); });

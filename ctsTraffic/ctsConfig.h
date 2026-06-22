@@ -81,7 +81,8 @@ namespace ctsTraffic
             Pull,
             PushPull,
             Duplex,
-            MediaStream
+            MediaStreamPull,
+            MediaStreamPush
         };
 
         enum class AffinityPolicy : std::uint8_t
@@ -308,18 +309,15 @@ namespace ctsTraffic
                     "The BitsPerSecond value (%lld) must be evenly divisible by 8", BitsPerSecond);
 
                 // number of frames to keep buffered - only relevant on the client
-                if (!IsListening())
-                {
-                    FAIL_FAST_IF_MSG(
-                        0 == BufferDepthSeconds,
-                        "BufferDepthSeconds cannot be set to zero");
+                FAIL_FAST_IF_MSG(
+                    0 == BufferDepthSeconds,
+                    "BufferDepthSeconds cannot be set to zero");
 
-                    BufferedFrames = BufferDepthSeconds * FramesPerSecond;
-                    if (BufferedFrames < BufferDepthSeconds || BufferedFrames < FramesPerSecond)
-                    {
-                        throw std::invalid_argument(
-                            "The total buffered frames exceed the maximum allowed : review -BufferDepth and -FrameRate");
-                    }
+                BufferedFrames = BufferDepthSeconds * FramesPerSecond;
+                if (BufferedFrames < BufferDepthSeconds || BufferedFrames < FramesPerSecond)
+                {
+                    throw std::invalid_argument(
+                        "The total buffered frames exceed the maximum allowed : review -BufferDepth and -FrameRate");
                 }
 
                 const auto totalStreamLengthFrames = StreamLengthSeconds * FramesPerSecond;

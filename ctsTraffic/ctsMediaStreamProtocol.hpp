@@ -424,7 +424,7 @@ struct ctsMediaStreamMessage
         return returnTask;
     }
 
-    static ctsMediaStreamMessage Extract(_In_reads_bytes_(inputLength) const char* inputBuffer, uint32_t inputLength)
+    static std::optional<ctsMediaStreamMessage> Extract(_In_reads_bytes_(inputLength) const char* inputBuffer, uint32_t inputLength)
     {
         if (inputLength == c_udpDatagramStartStringLength)
         {
@@ -433,10 +433,11 @@ struct ctsMediaStreamMessage
                 return ctsMediaStreamMessage(MediaStreamAction::START);
             }
         }
+        return std::nullopt;
 
-        THROW_HR_MSG(HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-            "Invalid MediaStream message: %hs",
-            std::string(inputBuffer, inputLength).c_str());
+        //THROW_HR_MSG(HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+        //    "Invalid MediaStream message: %hs",
+        //    std::string(inputBuffer, inputLength).c_str());
     }
 };
 }

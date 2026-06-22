@@ -136,11 +136,11 @@ namespace ctl
 				SetThreadGroupAffinity(GetCurrentThread(), &gaff, nullptr);
 				// TODO: leaving in the printf for now until I find a better way to
 				// communicate how threads are being created and affinitized
-			    wprintf(L"Worker thread %lu : index %zu set to Group %u, Mask 0x%llx\n",
-					GetCurrentThreadId(),
-					index,
-					static_cast<unsigned>(gaff.Group),
-					static_cast<unsigned long long>(gaff.Mask));
+			    // wprintf(L"Worker thread %lu : index %zu set to Group %u, Mask 0x%llx\n",
+				// 	GetCurrentThreadId(),
+				// 	index,
+				// 	static_cast<unsigned>(gaff.Group),
+				// 	static_cast<unsigned long long>(gaff.Mask));
 			}
 
 			try

@@ -21,6 +21,7 @@ See the Apache Version 2.0 License for specific language governing permissions a
 // ctl headers
 #include <ctSockaddr.hpp>
 #include <ctThreadIocp_base.hpp>
+#include <functional>
 // project headers
 #include "ctsConfig.h"
 
@@ -42,8 +43,11 @@ private:
     ctl::ctSockaddr m_remoteAddr;
     int m_remoteAddrLen{};
     bool m_priorFailureWasConnectionReset = false;
+    std::function<void(SOCKET, const ctl::ctSockaddr&, const ctl::ctSockaddr&, const char*, uint32_t)> m_packetCallback;
 
     void RecvCompletion(OVERLAPPED* pOverlapped) noexcept;
+
+    void InitiateRecv() noexcept;
 
     // number of established connections accepted on this listening socket
     std::atomic<uint32_t> m_connectionCount{0};
@@ -57,7 +61,8 @@ public:
     ctsMediaStreamServerListeningSocket(
         wil::unique_socket&& listeningSocket,
         ctl::ctSockaddr listeningAddr,
-        std::shared_ptr<ctl::ctThreadIocp_base> threadIocp);
+        std::shared_ptr<ctl::ctThreadIocp_base> threadIocp,
+        std::function<void(SOCKET, const ctl::ctSockaddr&, const ctl::ctSockaddr&, const char*, uint32_t)> packetCallback);
 
     ~ctsMediaStreamServerListeningSocket() noexcept;
 
@@ -65,7 +70,9 @@ public:
 
     ctl::ctSockaddr GetListeningAddress() const noexcept;
 
-    void InitiateRecv() noexcept;
+    // Start the listening socket's receive loop. Public entry point used by
+    // server initialization. Internally posts the first WSARecvFrom.
+    void Start() noexcept;
 
     // non-copyable
     ctsMediaStreamServerListeningSocket(const ctsMediaStreamServerListeningSocket&) = delete;

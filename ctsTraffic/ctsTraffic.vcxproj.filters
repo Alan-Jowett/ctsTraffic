@@ -54,7 +54,7 @@
     <ClCompile Include="ctsTraffic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ctsMediaStreamServerConnectedSocket.cpp">
+    <ClCompile Include="ctsMediaStreamSender.cpp">
       <Filter>MediaStreaming</Filter>
     </ClCompile>
     <ClCompile Include="ctsMediaStreamServerListeningSocket.cpp">
@@ -98,6 +98,9 @@
     </ClCompile>
     <ClCompile Include="ctsConnectByName.cpp">
       <Filter>TCPFunctions</Filter>
+    </ClCompile>
+    <ClCompile Include="ctsMediaStreamReceiver.cpp">
+      <Filter>MediaStreaming</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -175,7 +178,7 @@
     <ClInclude Include="ctsMediaStreamProtocol.hpp">
       <Filter>MediaStreaming</Filter>
     </ClInclude>
-    <ClInclude Include="ctsMediaStreamServerConnectedSocket.h">
+    <ClInclude Include="ctsMediaStreamSender.h">
       <Filter>MediaStreaming</Filter>
     </ClInclude>
     <ClInclude Include="ctsMediaStreamServerListeningSocket.h">
@@ -235,6 +238,9 @@
     <ClInclude Include="..\ctl\ctThreadIocp_shard.hpp">
       <Filter>ctl</Filter>
     </ClInclude>
+    <ClInclude Include="ctsMediaStreamReceiver.h">
+      <Filter>MediaStreaming</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\TestScripts\ctsTraffic_acceptance_test.cmd">
@@ -254,5 +260,9 @@
     <Manifest Include="ctsTraffic.exe.manifest">
       <Filter>Resource Files</Filter>
     </Manifest>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
   </ItemGroup>
 </Project>

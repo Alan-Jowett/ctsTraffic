@@ -109,12 +109,19 @@ namespace ctsTraffic
         case ctsConfig::IoPatternType::Duplex:
             return make_shared<ctsIoPatternDuplex>();
 
-        case ctsConfig::IoPatternType::MediaStream:
+        case ctsConfig::IoPatternType::MediaStreamPull:
             if (ctsConfig::IsListening())
             {
-                return make_shared<ctsIoPatternMediaStreamServer>();
+                return make_shared<ctsIoPatternMediaStreamSender>(false);
             }
-            return make_shared<ctsIoPatternMediaStreamClient>();
+            return make_shared<ctsIoPatternMediaStreamReceiver>(true);
+
+        case ctsConfig::IoPatternType::MediaStreamPush:
+            if (ctsConfig::IsListening())
+            {
+                return make_shared<ctsIoPatternMediaStreamReceiver>(false);
+            }
+            return make_shared<ctsIoPatternMediaStreamSender>(true);
 
         case ctsConfig::IoPatternType::NoIoSet: // fall through
         default: // NOLINT(clang-diagnostic-covered-switch-default)
@@ -1097,78 +1104,4 @@ namespace ctsTraffic
         return ctsIoPatternError::NoError;
     }
 
-    //
-    // ctsIoPatternMediaStreamServer
-    // - ctsIOPatternMediaStream (Server) Pattern
-    //   - UDP-only
-    //   - The server sends data at a specified rate
-    //   - The client receives data continuously
-    //     After a 'buffer period' of data has been received,
-    //     The client starts as timer to 'process' a time-slice of data
-    //
-    ctsIoPatternMediaStreamServer::ctsIoPatternMediaStreamServer() noexcept :
-        ctsIoPatternStatistics(1), // the pattern will use the recv writeable-buffer for sending a connection ID
-        m_frameSizeBytes(ctsConfig::GetMediaStream().FrameSizeBytes),
-        m_frameRateFps(ctsConfig::GetMediaStream().FramesPerSecond)
-    {
-        PRINT_DEBUG_INFO(L"\t\tctsIOPatternMediaStreamServer - frame rate in milliseconds per frame : %lld\n", static_cast<int64_t>(1000UL / m_frameRateFps));
-    }
-
-    // required virtual functions
-    ctsTask ctsIoPatternMediaStreamServer::GetNextTaskFromPattern() noexcept
-    {
-        ctsTask returnTask;
-        switch (m_state)
-        {
-        case ServerState::NotStarted:
-            // get a writable buffer (i.e. Recv), then update the fields in the task for the connection_id
-            returnTask = ctsMediaStreamMessage::MakeConnectionIdTask(
-                CreateUntrackedTask(ctsTaskAction::Recv, c_udpDatagramConnectionIdHeaderLength),
-                GetConnectionIdentifier());
-            m_state = ServerState::IdSent;
-            break;
-
-        case ServerState::IdSent:
-            m_baseTimeMilliseconds = ctTimer::snap_qpc_as_msec();
-            m_state = ServerState::IoStarted;
-            [[fallthrough]];
-        case ServerState::IoStarted:
-            if (m_currentFrameRequested < m_frameSizeBytes)
-            {
-                returnTask = CreateTrackedTask(ctsTaskAction::Send, m_frameSizeBytes);
-                // calculate the future time to initiate the IO
-                // - then subtract the start time to give the difference
-                // ReSharper disable CppRedundantParentheses
-                returnTask.m_timeOffsetMilliseconds =
-                    m_baseTimeMilliseconds
-                    + (m_currentFrame * 1000LL / m_frameRateFps)
-                    - ctTimer::snap_qpc_as_msec();
-                // ReSharper restore CppRedundantParentheses
-
-                m_currentFrameRequested += returnTask.m_bufferLength;
-            }
-            break;
-        }
-        return returnTask;
-    }
-
-    ctsIoPatternError ctsIoPatternMediaStreamServer::CompleteTaskBackToPattern(const ctsTask& task, uint32_t currentTransfer) noexcept
-    {
-        if (task.m_bufferType != ctsTask::BufferType::UdpConnectionId)
-        {
-            const int64_t currentTransferBits = static_cast<int64_t>(currentTransfer) * 8LL;
-
-            ctsConfig::g_configSettings->UdpStatusDetails.m_bitsReceived.Add(currentTransferBits);
-            m_statistics.m_bitsReceived.Add(currentTransferBits);
-
-            m_currentFrameCompleted += currentTransfer;
-            if (m_currentFrameCompleted == m_frameSizeBytes)
-            {
-                ++m_currentFrame;
-                m_currentFrameRequested = 0UL;
-                m_currentFrameCompleted = 0UL;
-            }
-        }
-        return ctsIoPatternError::NoError;
-    }
 } //namespace
